@@ -169,7 +169,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if flat_c:
-      
+
         printc('-->>>>>>> Reading Flats                    ',color=bcolors.OKGREEN)
         printc('          Input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
 
@@ -485,55 +485,12 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 
-    if rte == 'cog':
-        printc('---------------------RUNNING COG --------------------------',color=bcolors.OKGREEN)
-        wavelength = 6173.3356
-        v_los,b_los = cog(data,wavelength,wave_axis,lande_factor=3,cpos = cpos)
 
-
-        #-----------------
-        # MASK DATA AND SAVE
-        #-----------------
-
-        v_los = v_los * mask
-        b_los = b_los * mask
-        plib.show_one(v_los,vmin=-1.5,vmax=1.5)
-        plib.show_one(b_los,vmin=-150,vmax=150)
-        if verbose == 1:
-            plib.show_one(v_los,vmin=-2.5,vmax=2.5)
-            plib.show_one(b_los,vmin=-150,vmax=150)
-
-        with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = b_los
-            hdu_list.writeto(outfile+'_blos_ce.fits', clobber=True)
-
-        with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = v_los
-            hdu_list.writeto(outfile+'_vlos_ce.fits', clobber=True)
 
     return
+
     #-----------------
     # CORRECT CAVITY
     #-----------------
 
-    try:
-        if cavity == 0:
-            cavity=np.zeros_like(vl)
-            print("zerooooooooooo")
-    except:
-        # cavity = cavity[ry[0]:ry[1],rx[0]:rx[1]]
-        pass
-
-    factor = 0.5
-    rrx = [int(c[1]-r*factor),int(c[1]+r*factor)]
-    rry = [int(c[0]-r*factor),int(c[0]+r*factor)]
-    print(rrx,rry,' check these for los vel calib')
-    off = np.mean(vl[rry[0]:rry[1],rrx[0]:rrx[1]])
-    vl = vl - off #- cavity
-    print('velocity offset ',off)
-
-    # cavity,h = phi.fits_read('HRT_cavity_map_IP5.fits')
-    # cavity = cavity * 0.3513e-3/6173.*300000. #A/V 
-    # cavity = cavity - np.median(cavity[800:1200,800:1200])
     
-    return vl
