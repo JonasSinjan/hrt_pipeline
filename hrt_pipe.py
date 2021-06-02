@@ -28,39 +28,66 @@ def get_data(path):
     return data, header
 
 
-def demod_phi(data,pmp_temp,demod=False):
+def demod(data,pmp_temp,const_demod=False):
     '''
     Use demodulation matrices to demodulate data
     '''
 
-    if pmp_temp == 'HRT40':
-        pass
+    try:
+        demod_data = load_fits(f'./demod_matrices/demod_fitted_for_upload_HRT{pmp_temp}degC.fits')
 
-    elif pmp_temp == 'HRT45':
-        pass
-
-    else:
+    except:
         printc('No demod available',color = bcolors.FAIL)
         raise SystemError()
 
     printc('Demodulation matrix for ', pmp_temp,color = bcolors.WARNING)
     
-    if demod:
-#extract the demod matrix
-      demod_data = demod_data.reshape((2048,2048,4,4)) #change into the required shape
+    if const_demod:
 
-      demod_avg = np.mean(demod_data[512:1536,512:1536,:,:], axis = (0,1))
-      demod_new_test = np.tile(demod_avg, (shape[0],shape[1],1,1))
+        printc(f"Applying constant demodulation matrix for temp: {pmp_temp}",color=bcolors.OKGREEN)
 
-      
-      sciencedata = sciencedata.reshape(shape[0],shape[1],6,4,num_of_scans) #separate 24 images, into 6 wavelengths, with each 4 pol states
-      sciencedata = np.moveaxis(sciencedata, 2,-2) #swap order
+        demod_data = demod_data.reshape((2048,2048,4,4)) #change into the required shape
+        demod_avg = np.mean(demod_data[512:1536,512:1536,:,:], axis = (0,1))
 
-      sciencedata = np.moveaxis(sciencedata,-1,0) #moving number of scans to first dimension
-      stokes_arr = np.matmul(demod_new_test,sciencedata)
-      stokes_arr = np.moveaxis(stokes_arr,0,-1)
+        shape = data.shape
+        demod = np.tile(demod_avg, (shape[0],shape[1],1,1))
 
-      return stokes_arr
+    else:
+
+        printc(f"Applying original (non constant) demodulation matrix for temp: {pmp_temp}",color=bcolors.OKGREEN)
+
+        shape = data.shape
+        diff = 2048-shape[0] 
+    
+        if np.abs(diff) > 0: #for cropped datasets
+
+            start_row = int((2048-shape[0])/2) #assuming the crop is always based from the central section (ie with centre of fov in centre of cropped data)
+            start_col = int((2048-shape[1])/2)
+
+        else:
+            start_row, start_col = 0, 0
+        
+        demod_data = demod_data.reshape((2048,2048,4,4)) #change into the required shape
+        demod_data = demod_data[start_row:start_row + shape[0],start_col:start_col + shape[1],...]
+
+
+    if data.ndim == 5:
+        #if data array has more than one scan
+        data = data.reshape(shape[0],shape[1],6,4,shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
+        data = np.moveaxis(data, 2,-2) #swap order
+        data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
+
+        stokes_arr = np.matmul(demod,data)
+        stokes_arr = np.moveaxis(stokes_arr,0,-1) #move scans back to the end
+    
+    elif data.ndim == 4:
+        #for if data has just one scan
+        data = data.reshape(shape[0],shape[1],6,4)
+        data = np.moveaxis(data,-2,-1)
+
+        stokes_arr = np.matmul(demod,data)
+    
+    return stokes_arr
     
 
 
@@ -197,8 +224,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             flat /= norm_fac[..., np.newaxis, np.newaxis]
         except Exception:
             printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
-        if verbose:
-            plib.show_one(flat[0,0,:,:],vmax=None,vmin=None,xlabel='pixel',ylabel='pixel',title='Flat first wave',cbarlabel='DN',save=None,cmap='gray')
+   
 
     #-----------------
     # READ AND CORRECT DARK FIELD
@@ -209,8 +235,23 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         printc('          Input should be [y-dim,x-dim].',color=bcolors.OKGREEN)
         printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
         try:
-            dark,h = fits_get(dark_f)
-            
+            dark,h = get_data(dark_f)
+
+            dark_shape = dark.shape
+
+            if dark_shape != (2048,2048):
+                
+                printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
+                printc("Attempting to correct ",color=bcolors.WARNING)
+
+                
+                try:
+                    if dark_shape[0] > 2048:
+                        dark = dark[dark_shape[0]-2048:,:]
+                
+                except:
+                    printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
+
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
 
