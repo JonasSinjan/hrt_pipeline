@@ -93,8 +93,8 @@ def demod(data,pmp_temp,const_demod=False):
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
                 pmp_temp = '50',flat_c = True,dark_c = True, normalize = 1., 
-                outdirectory = './',  outdemodfile=None,  correct_ghost = False, 
-                ItoQUV = False, rte = False, outrtefile = None):
+                out_dir = './',  out_demod_file=None,  correct_ghost = False, 
+                ItoQUV = False, rte = False, out_rte_file = None):
 
     '''
     PHI-HRT data reduction pipeline
@@ -131,7 +131,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         Number of flat fields to be applied, options are 0,4,6,24
     correct_ghost = False
 
-    directory = './' : string
+    out_dir = './' : string
 
     vqu = False : bool
 
@@ -290,9 +290,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
-        
-
-    rlabel='DN',save=None,cmap='gray')
 
 
     
@@ -310,7 +307,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     printc('-->>>>>>> Demodulating data...         ',color=bcolors.OKGREEN)
 
-    data = demod_phi(data, pmp_temp, demod = True)
+    data = demod(data, pmp_temp, demod = True)
 
     #-----------------
     # APPLY NORMALIZATION 
@@ -340,7 +337,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
     if outfile == None:
         outfile = data_f[:-4]
-    printc(' Saving data to: ',directory+outfile+'_red.fits')
+    printc(' Saving data to: ',out_dir+outfile+'_red.fits')
 
     # hdu = pyfits.PrimaryHDU(data)
     # hdul = pyfits.HDUList([hdu])
@@ -348,7 +345,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     with pyfits.open(data_f) as hdu_list:
         hdu_list[0].data = data
-        hdu_list.writeto(directory+outfile+'_red.fits', clobber=True)
+        hdu_list.writeto(out_dir+outfile+'_red.fits', clobber=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
@@ -438,7 +435,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
         rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
-        np.savez_compressed(directory+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
+        np.savez_compressed(out_dir+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
         
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         print(del_dummy)
@@ -456,15 +453,15 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = b_los
-            hdu_list.writeto(directory+outfile+'_blos_rte.fits', clobber=True)
+            hdu_list.writeto(out_dir+outfile+'_blos_rte.fits', clobber=True)
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = v_los
-            hdu_list.writeto(directory+outfile+'_vlos_rte.fits', clobber=True)
+            hdu_list.writeto(out_dir+outfile+'_vlos_rte.fits', clobber=True)
 
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
-            hdu_list.writeto(directory+outfile+'_Icont_rte.fits', clobber=True)
+            hdu_list.writeto(out_dir+outfile+'_Icont_rte.fits', clobber=True)
 
         printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
 
