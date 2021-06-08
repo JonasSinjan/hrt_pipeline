@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import time
 
 from .utils import *
-from plot_lib import plib
+#from plot_lib import plib
 
 def get_data(path):
     """load science data from path"""
