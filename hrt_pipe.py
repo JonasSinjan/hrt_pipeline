@@ -5,6 +5,7 @@ import random, statistics
 import subprocess
 from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
+import time
 
 from .utils import *
 from plot_lib import plib
@@ -92,9 +93,9 @@ def demod(data,pmp_temp,const_demod=False):
 
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
-                pmp_temp = '50',flat_c = True,dark_c = True, normalize = 1., 
-                out_dir = './',  out_demod_file=None,  correct_ghost = False, 
-                ItoQUV = False, rte = False, out_rte_file = None):
+                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
+                out_dir = './',  out_demod_file = False,  correct_ghost = False, 
+                ItoQUV = False, rte = False, out_rte_file = False):
 
     '''
     PHI-HRT data reduction pipeline
@@ -107,10 +108,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     7. apply flat field
     8. read in field stop
     9. apply field stop
-    10. read in demod matrix
-    11. demodulate
-    12. normalise to quiet sun
-    13. calibration
+    10. demodulate
+    11. normalise to quiet sun
+    12. calibration
         a) ghost correction (still needs to be finalised)
         b) cross talk correction (including offset)
     14. rte inversion with sophism (atm still using sophism)
@@ -162,29 +162,87 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN)
     printc('          Data is divided by 256.   ',color=bcolors.OKGREEN)         
 
-   
+    start_time = time.time()
 
     if isinstance(data_f, list):
-      printc(' -- Input contains several science scans -- ',color=bcolors.OKGREEN)
-      
-      number_of_scans = len(data_f)
+        #if the data_f contains several scans
+        printc(' -- Input contains several science scans -- ',color=bcolors.OKGREEN)
+        
+        number_of_scans = len(data_f)
 
-      output_arr = [0]*number_of_scans
-      hdr_arr = [0]*number_of_scans
+        data_arr = [0]*number_of_scans
+        hdr_arr = [0]*number_of_scans
 
-      for scan in range(number_of_scans):
-        output_arr[scan], hdr_arr[scan] = get_data(data_f[scan])
+        for scan in range(number_of_scans):
+            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan])
 
-      data = np.stack(output_arr, axis = -1)
-      data = np.moveaxis(data, 0,-2)
+            if hdr_arr[scan]['BITPIX'] == 16:
+
+                print(f"This scan: {data_f[scan]} has a bits per pixel is: 16 \n Performing the extra scaling")
+
+                data_arr[scan] *= 81920/127 #conversion factor if 16 bits
+
+        #test if the scans have different sizes
+        first_shape = data_arr[scan].shape
+
+        result = all(element.shape == first_shape for element in data_arr)
+        if (result):
+            print("All the scans have the same dimensions")
+
+        else:
+            print("The scans have different dimensions! \n Ending process")
+
+            exit()
+
+        data = np.stack(data_arr, axis = -1)
+        data = np.moveaxis(data, 0,-2) #so that it is [y,x,24,scans]
+
+        print(f"Data shape is {data.shape}")
 
     elif isinstance(data_f, str):
-      data, header = get_data(data_f)
-      data = np.moveaxis(data, 0, -1)
+        #case when data f is just one file
+        data, header = get_data(data_f)
+        data = np.expand_dims(data, axis = -1) #so that it has the same dimensions as several scans
+        data = np.moveaxis(data, 0, -2) #so that it is [y,x,24,1]
+
+        if header['BITPIX'] == 16:
+    
+            print(f"This scan: {data_f} has a bits per pixel is: 16 \n Performing the extra scaling")
+
+            data *= 81920/127 #conversion factor if 16 bits
+
   
+        print(f"Data shape is {data.shape}")
+
     else:
-      printc("ERROR, data_f argument is neither a string nor list containing strings: {}",data_f,color=bcolors.FAIL)
+      printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
+      exit()
+
+    print(f"--- Load science data time: {np.round(time.time() - start_time,3)} seconds ---")
       
+    data_shape = data.shape
+
+    data_size = data_shape[:2]
+    
+    #converting to [y,x,pol,wv,scans]
+
+    data = data.reshape(data_size[0],data_size[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
+    data = np.moveaxis(data, 2,-2) #need to swap back to work
+
+    #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
+
+
+    diff = 2048-data_size(0) #handling 0/2 errors
+    
+    print(data_size, diff)
+    
+    if np.abs(diff) > 0:
+    
+        start_row = int((2048-data_size[0])/2)
+        start_col = int((2048-data_size[1])/2)
+        
+    else:
+        start_row, start_col = 0, 0
 
     #-----------------
     # TODO: Could check data dimensions? As an extra fail safe before progressing?
@@ -197,43 +255,58 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     if flat_c:
 
-        printc('-->>>>>>> Reading Flats                    ',color=bcolors.OKGREEN)
-        printc('          Input should be [wave X Stokes,y-dim,x-dim].',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
 
+        start_time = time.time()
+    
         try:
-            flat,header_flat = load_fits(flat_f)
-            fz,fy,fx = flat.shape
-            flat = np.reshape(flat,(fz//4,4,fy,fx))
-            printc('-->>>>>>> Reshaping Flat to [wave,Stokes,y-dim,x-dim] ',color=bcolors.OKGREEN)
+            flat,header_flat = get_data(flat_f)
+
+            print(f"Flat field shape is {flat.shape}")
+            
+            if header_flat[0].header['BITPIX'] == 16:
+    
+                print("Number of bits per pixel is: 16")
+
+                flat *= 614400/128
+
+            flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
+            flat = flat.reshape(data_size[0],data_size[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
+            flat = np.moveaxis(flat, 2,-2)
+
+            print(f"--- Load flats time: {np.round(time.time() - start_time,3)} seconds ---")
+
         except Exception:
             printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
 
 
     else:
-        printc('-->>>>>>> No flats mode                    ',color=bcolors.WARNING)
+        printc('-->>>>>>> No flats mode',color=bcolors.WARNING)
 
-    
+
     #-----------------
-    # NORM FLAT FIELDS
+    # OPTIONAL Unsharp Masking clean the flat field stokes V images
     #-----------------
 
-    if norm_f and flat_c:
-        printc('-->>>>>>> Normalising Flats                    ',color=bcolors.OKGREEN)
-        try:
-            norm_fac = np.mean(flat[:,:,512:1536,512:1536], axis = (2,3))  #mean of the central 1k x 1k
-            flat /= norm_fac[..., np.newaxis, np.newaxis]
-        except Exception:
-            printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
-   
+    if clean_f:
+
+        printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
+        
+        #call the clean function (not yet built)
 
     #-----------------
     # READ AND CORRECT DARK FIELD
     #-----------------
+
     if dark_c:
 
         printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
-        printc('          Input should be [y-dim,x-dim].',color=bcolors.OKGREEN)
         printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
+
+        start_time = time.time()
+
+        #load the darks
+
         try:
             dark,h = get_data(dark_f)
 
@@ -249,13 +322,47 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                     if dark_shape[0] > 2048:
                         dark = dark[dark_shape[0]-2048:,:]
                 
-                except:
+                except Exception:
                     printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
+
+            print(f"--- Load darks time: {np.round(time.time() - start_time,3)} seconds ---")
 
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
 
+        #-----------------
+        # APPLY DARK CORRECTION 
+        #-----------------    
 
+        print("~Subtracting dark field")
+
+        start_time = time.time()
+
+        flat -= dark[..., np.newaxis, np.newaxis] #subtracting dark from avg flat field
+        
+        data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] #subtracting dark from each science image
+
+        print(f"--- Subtract darks time: {np.round(time.time() - start_time,3)} seconds ---")
+
+
+    #-----------------
+    # NORM FLAT FIELDS
+    #-----------------
+
+    if norm_f and flat_c:
+
+        printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
+
+        start_time = time.time()
+
+        try:
+            norm_fac = np.mean(flat[:,:,512:1536,512:1536], axis = (2,3))  #mean of the central 1k x 1k
+            flat /= norm_fac[..., np.newaxis, np.newaxis]
+
+            print(f"--- Normalising flats time: {np.round(time.time() - start_time,3)} seconds ---")
+
+        except Exception:
+            printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
 
     #-----------------
     # APPLY FLAT CORRECTION 
@@ -263,63 +370,88 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     if flat_c:
         printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
-        try:
-          if flat_states == 6:
-        
-            printc("Dividing by six flats, one for each wavelength",color=bcolors.OKGREEN)
-        
-            for j in range(4):
-                
-                tmp = np.mean(flat[:,i,:,:],axis=-1)
-                data[:,:,j:j+4,:] /= tmp[np.newaxis, np.newaxis, start_row:start_row + shape[0],start_col:start_col + shape[1]] #divide science data by normalised flats for each wavelength (avg over pol states)
-          
-          elif flat_states == 0:
-              pass
 
-          elif flat_states == 24:
-              
-              data[:,:,:,:] /= flatfield_avg[start_row:start_row + shape[0],start_col:start_col + shape[1], :, np.newaxis]
-                #only one new axis for the scans
-                  
-          elif flat_states == 4:
-              for i in range(4):
-                  tmp = np.mean(flatfield_avg[:,:,i::4],axis=-1)
-                  sciencedata[:,:,i::4,:] /= tmp[start_row:start_row + shape[0],start_col:start_col + shape[1], np.newaxis, np.newaxis]
+        start_time = time.time()
+
+        try:
+
+            if flat_states == 6:
         
-          print(f"--- Divide by flats time: {np.round(time.time() - start_time,3)} seconds ---")
+                printc("Dividing by 6 flats, one for each wavelength",color=bcolors.OKGREEN)
+                    
+                tmp = np.mean(flat,axis=-2) #avg over pol states for the wavelength
+
+                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis] #divide science data by normalised flats for each wavelength (avg over pol states)
+
+
+            elif flat_states == 24:
+
+                printc("Dividing by 24 flats, one for each image",color=bcolors.OKGREEN)
+
+                data /= flat[start_row:start_row + data_size[0],start_col:start_col + data_size[1], :, :, np.newaxis] #only one new axis for the scans
+                    
+            elif flat_states == 4:
+
+                printc("Dividing by 4 flats, one for each pol state",color=bcolors.OKGREEN)
+
+                tmp = np.mean(flat,axis=-1) #avg over wavelength
+
+                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis]
+        
+            print(f"--- Flat correction time: {np.round(time.time() - start_time,3)} seconds ---")
 
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
+    #-----------------
+    # FIELD STOP 
+    #-----------------
 
+    print("~Applying field stop")
+
+    start_time = time.time()
     
+    field_stop = load_fits('./field_stop/HRT_field_stop.fits')
+
+    field_stop = np.where(field_stop > 0,1,0)
+
+    data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
+
+    print(f"--- Field Stop time: {np.round(time.time() - start_time,3)} seconds ---")
+
     #-----------------
     # GHOST CORRECTION  
     #-----------------
 
-    if correct_ghost:
-        printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
+    # if correct_ghost:
+    #     printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
 
   
     #-----------------
     # APPLY DEMODULATION 
     #-----------------
 
-    printc('-->>>>>>> Demodulating data...         ',color=bcolors.OKGREEN)
+    if demod:
 
-    data = demod(data, pmp_temp, demod = True)
+        printc('-->>>>>>> Demodulating data...         ',color=bcolors.OKGREEN)
+
+        data = demod(data, pmp_temp, demod = True)
 
     #-----------------
     # APPLY NORMALIZATION 
     #-----------------
 
-    printc('-->>>>>>> Applying normalization --',color=bcolors.OKGREEN)
+    if norm_stokes:
+
+        printc('-->>>>>>> Applying normalization --',color=bcolors.OKGREEN)
    
 
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
-    printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
+    if ItoQUV:
+
+        printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
    
 
     
@@ -334,18 +466,32 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
     #-----------------
+
     printc('---------------------------------------------------------',color=bcolors.OKGREEN)
-    if outfile == None:
-        outfile = data_f[:-4]
-    printc(' Saving data to: ',out_dir+outfile+'_red.fits')
+    printc('------------------Reduction Complete---------------------',color=bcolors.OKGREEN)
+    printc('---------------------------------------------------------',color=bcolors.OKGREEN)
+    
+    if out_demod_file:
+        
+        if isinstance(data_f, list):
 
-    # hdu = pyfits.PrimaryHDU(data)
-    # hdul = pyfits.HDUList([hdu])
-    # hdul.writeto(outfile, overwrite=True)
+            printc(' Saving demodulated data to one file per scan: ')
 
-    with pyfits.open(data_f) as hdu_list:
-        hdu_list[0].data = data
-        hdu_list.writeto(out_dir+outfile+'_red.fits', clobber=True)
+            for scan in data_f:
+
+                with fits.open(scan) as hdu_list:
+
+                    hdu_list[0].data = data
+                    hdu_list.writeto(out_dir + scan + '_reduced.fits', clobber=True)
+
+        if isinstance(data_f, str):
+
+            printc(' Saving demodulated data to one file: ')
+
+            with fits.open(data_f) as hdu_list:
+
+                hdu_list[0].data = data
+                hdu_list.writeto(out_dir + scan + '_reduced.fits', clobber=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
@@ -355,19 +501,24 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
 
         try:
-            CMILOS_LOC = os.path.realpath(__file__) 
-            CMILOS_LOC = CMILOS_LOC[:-14] + 'cmilos/'
+            CMILOS_LOC = os.path.realpath(__file__)
+
+            CMILOS_LOC = CMILOS_LOC[:-11] + 'cmilos/' #11 as hrt_pipe.py is 11 characters
+
             if os.path.isfile(CMILOS_LOC+'milos'):
                 printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
+
             else:
                 raise ValueError('Cannot find cmilos:', CMILOS_LOC)
+
         except ValueError as err:
             printc(err.args[0],color=bcolors.FAIL)
             printc(err.args[1],color=bcolors.FAIL)
             return        
 
         wavelength = 6173.3356
-        #OJO, REMOVE. NEED TO CHECK THE REF WAVE FROM S/C-PHI H/K
+        
+
         shift_w =  wave_axis[3] - wavelength
         wave_axis = wave_axis - shift_w
         #wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
@@ -423,34 +574,20 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         noise_in_V =  np.mean(data[0,3,rry[0]:rry[1],rrx[0]:rrx[1]])
         low_values_flags = np.max(np.abs(data[:,3,:,:]),axis=0) < noise_in_V*umbral  # Where values are low
+        
         rte_invs[2,low_values_flags] = 0
         rte_invs[3,low_values_flags] = 0
         rte_invs[4,low_values_flags] = 0
-        for i in range(12):
-            rte_invs[i,:,:] = rte_invs[i,:,:] * mask
-        #save plots!!!!
-        if verbose:
-            plib.show_four_row(rte_invs_noth[2,:,:],rte_invs_noth[3,:,:],rte_invs_noth[4,:,:],rte_invs_noth[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'_VLoS.png')
-            plib.show_four_row(rte_invs[2,:,:],rte_invs[3,:,:],rte_invs[4,:,:],rte_invs[8,:,:],svmin=[0,0,0,-6.],svmax=[1200,180,180,+6.],title=['Field strengh [Gauss]','Field inclination [degree]','Field azimuth [degree]','LoS velocity [km/s]'],xlabel='Pixel',ylabel='Pixel')#,save=outfile+'BLoS.png')
-        rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - np.mean(rte_invs_noth[8,rry[0]:rry[1],rrx[0]:rrx[1]])
-        rte_invs[8,:,:] = rte_invs[8,:,:] - np.mean(rte_invs[8,rry[0]:rry[1],rrx[0]:rrx[1]])
 
+    
         np.savez_compressed(out_dir+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
         
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         print(del_dummy)
 
-        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)*mask
-        # b_los = np.zeros((2048,2048))
-        # b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = b_los_cropped
-
-        v_los = rte_invs_noth[8,:,:] * mask
-        # v_los = np.zeros((2048,2048))
-        # v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1] = v_los_cropped
-        if verbose:
-            plib.show_one(v_los,vmin=-2.5,vmax=2.5,title='LoS velocity')
-            plib.show_one(b_los,vmin=-30,vmax=30,title='LoS magnetic field')
-
+        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)
+  
+        
         with pyfits.open(data_f) as hdu_list:
             hdu_list[0].data = b_los
             hdu_list.writeto(out_dir+outfile+'_blos_rte.fits', clobber=True)
@@ -463,72 +600,11 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
             hdu_list.writeto(out_dir+outfile+'_Icont_rte.fits', clobber=True)
 
-        printc('  ---- >>>>> Saving plots.... ',color=bcolors.OKGREEN)
-
-        #-----------------
-        # PLOTS VLOS
-        #-----------------
-        Zm = np.ma.masked_where(mask == 1, mask)
-
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT LoS velocity',size=20)
-
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-    #        im = ax.imshow(np.fliplr(rotate(v_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='bwr',vmin=-3.,vmax=3.)
-        im = ax.imshow(v_los, cmap='bwr',vmin=-3.,vmax=3.)
-
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        cbar.set_label('[km/s]')
-        cbar.ax.tick_params(labelsize=16)
-
-        #ax.imshow(Zm, cmap='gray')
-        plt.savefig('imagenes/velocity-map-'+outfile+'.png',dpi=300)
-        plt.close()
-
-        #-----------------
-        # PLOTS BLOS
-        #-----------------
-
-        plt.figure(figsize=(10, 10))
-        ax = plt.gca()
-        plt.title('PHI-FDT Magnetogram',size=20)
-
-        # Hide grid lines
-        ax.grid(False)
-        # Hide axes ticks
-        ax.set_xticks([])
-        ax.set_yticks([])
-                    
-        #im = ax.imshow(np.fliplr(rotate(b_los[PXBEG2:PXEND2+1,PXBEG1:PXEND1+1], 52, reshape=False)), cmap='gray',vmin=-100,vmax=100) 
-        im = ax.imshow(b_los, cmap='gray',vmin=-100,vmax=100)
-
-        divider = plib.make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plib.plt.colorbar(im, cax=cax)
-        # cbar.set_label('Stokes V amplitude [%]')
-        cbar.set_label('LoS magnetic field [Mx/cm$^2$]')
-        cbar.ax.tick_params(labelsize=16)
-        #ax.imshow(Zm, cmap='gray')
-
-        plt.savefig('imagenes/Blos-map-'+outfile+'.png',dpi=300)
-        plt.close()
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 
 
 
     return
-
-    #-----------------
-    # CORRECT CAVITY
-    #-----------------
 
     
