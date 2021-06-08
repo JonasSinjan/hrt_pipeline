@@ -497,6 +497,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     # INVERSION OF DATA WITH CMILOS
     #-----------------
 
+    """
+
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
@@ -605,6 +607,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
 
+    """
 
 
     return
