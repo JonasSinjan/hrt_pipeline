@@ -498,6 +498,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
 
         try:
@@ -517,7 +518,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             return        
 
         wavelength = 6173.3356
-        
+
+        #get wave_axis from the header information of the science scans
 
         shift_w =  wave_axis[3] - wavelength
         wave_axis = wave_axis - shift_w
