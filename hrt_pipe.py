@@ -238,7 +238,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     data = np.moveaxis(data, 2,-2) #need to swap back to work
 
     #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
-    print("Data reshaped to: ", data.shape)
+    print(f"Data reshaped to {data.shape}")
 
     diff = 2048-data_size[0] #handling 0/2 errors
     
@@ -280,7 +280,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             flat = flat.reshape(data_size[0],data_size[1],6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
             flat = np.moveaxis(flat, 2,-1)
             
-            print(flat.shape)
+            print(f"Flat reshaped to {flat.shape}")
             
             if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits':
                 
