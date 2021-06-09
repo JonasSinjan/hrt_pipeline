@@ -80,7 +80,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     PHI-HRT data reduction pipeline
     1. read in science data (+scaling) open path option + open for several scans at once
     2. read in flat field - just one, so any averaging must be done before
-    3. option to clean flat field with unsharp masking
+    3. option to clean flat field with unsharp masking - not implemented yet
     4. read in dark field
     5. apply dark field
     6. normalise flat field
@@ -90,9 +90,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     10. demodulate with const demod matrix
     11. normalise to quiet sun
     12. calibration
-        a) ghost correction (still needs to be finalised)
-        b) cross talk correction (including offset)
-    14. rte inversion with sophism (atm still using sophism)
+        a) ghost correction - not implemented yet
+        b) cross talk correction - not implemented yet
+    14. rte inversion with sophism - not implemented yet
 
     Parameters
     ----------
@@ -105,25 +105,39 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         Fits file of a HRT flatfield (ONLY ONE FILE)
 
     ** Options:
-  
-    flat_states = 24 : int
-        Number of flat fields to be applied, options are 0,4,6,24
-    correct_ghost = False
-
-    out_dir = './' : string
-
-    vqu = False : bool
-
-    rte = False : bool
+    norm_f: bool, DEFAULT: True
+        to normalise the flat fields before applying
+    clean_f: bool, DEFAULT: False
+        clean the flat field with unsharp masking   
+    flat_states: int, DEFAULT: 24
+        Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)
+    pmp_temp: str, DEFAULT: '50'
+        temperature of the PMP, to select the correct demodulation matrix
+    flat_c: bool, DEFAULT: True
+        apply flat field correction
+    dark_c: bool, DEFAULT: True
+        apply dark field correction
+    demod: bool, DEFAULT: True
+        apply demodulate to the stokes
+    norm_stokes: bool, DEFAULT: True
+        normalise the stokes vector to the quiet sun (I_continuum)
+    out_dir : string, DEFUALT: './'
+        directory for the output files
+    out_demod_file: bool, DEFAULT: False
+        output file with the stokes vectors to fits file
+    correct_ghost: bool, DEFAULT: False 
+        correct the ghost in bottom left corner
+    ItoQUV: bool, DEFAULT: False 
+        apply I -> Q,U,V correction
+    rte: bool, DEFAULT: False 
+        invert using cmilos
+    out_rte_file: bool, DEFAULT: False
+        output of rte result to fits file
     
-    debug = False : bool
-
     Returns
     -------
-    None 
-
-    Raises
-    ------
+    data: nump array
+        stokes vector 
 
     References
     ----------
@@ -135,9 +149,11 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+
     #-----------------
     # READ DATA
     #-----------------
+
     printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN) 
 
     start_time = time.time()
@@ -222,6 +238,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     else:
         start_row, start_col = 0, 0
 
+
     #-----------------
     # TODO: Could check data dimensions? As an extra fail safe before progressing?
     #-----------------
@@ -281,6 +298,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         
         #call the clean function (not yet built)
 
+
     #-----------------
     # READ AND CORRECT DARK FIELD
     #-----------------
@@ -315,6 +333,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+
 
         #-----------------
         # APPLY DARK CORRECTION 
@@ -351,6 +370,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         except Exception:
             printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+
 
     #-----------------
     # APPLY FLAT CORRECTION 
@@ -391,6 +411,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
+
     #-----------------
     # FIELD STOP 
     #-----------------
@@ -406,6 +427,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
 
     print(f"--- Field Stop time: {np.round(time.time() - start_time,3)} seconds ---")
+
 
     #-----------------
     # GHOST CORRECTION  
@@ -425,6 +447,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         data = demod_hrt(data, pmp_temp)
 
+
     #-----------------
     # APPLY NORMALIZATION 
     #-----------------
@@ -442,14 +465,13 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
    
 
-    
-
     #-----------------
     #CHECK FOR INFs
     #-----------------
 
     data[np.isinf(data)] = 0
     data[np.isnan(data)] = 0
+
 
     #-----------------
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
