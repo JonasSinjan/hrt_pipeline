@@ -7,8 +7,7 @@ from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 import time
 
-from .utils import *
-#from plot_lib import plib
+from utils import *
 
 def get_data(path):
     """load science data from path"""
@@ -22,20 +21,24 @@ def get_data(path):
         data /= accu
 
         printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
+        
+        return data, header
 
     except Exception:
         printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
 
-    return data, header
+   
 
-
-def demod(data,pmp_temp,const_demod=False):
+def demod_hrt(data,pmp_temp,const_demod=False):
     '''
     Use demodulation matrices to demodulate data
     '''
 
     try:
-        demod_data = load_fits(f'./demod_matrices/demod_fitted_for_upload_HRT{pmp_temp}degC.fits')
+        path = os.path.realpath(__file__) 
+        hrt_pipeline_path = path[:-11]
+        
+        demod_data,_ = load_fits(hrt_pipeline_path + f'demod_matrices/demod_fitted_for_upload_HRT{pmp_temp}degC.fits')
 
     except:
         printc('No demod available',color = bcolors.FAIL)
@@ -93,7 +96,7 @@ def demod(data,pmp_temp,const_demod=False):
 
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
-                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
+                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, const_demod = True, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, 
                 ItoQUV = False, rte = False, out_rte_file = False):
 
@@ -159,14 +162,13 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
     # READ DATA
     #-----------------
-    printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN)
-    printc('          Data is divided by 256.   ',color=bcolors.OKGREEN)         
+    printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN) 
 
     start_time = time.time()
 
     if isinstance(data_f, list):
         #if the data_f contains several scans
-        printc(' -- Input contains several science scans -- ',color=bcolors.OKGREEN)
+        printc(f' -- Input contains {len(data_f)} scan(s) -- ',color=bcolors.OKGREEN)
         
         number_of_scans = len(data_f)
 
@@ -230,9 +232,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     data = np.moveaxis(data, 2,-2) #need to swap back to work
 
     #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
+    print(data.shape)
 
-
-    diff = 2048-data_size(0) #handling 0/2 errors
+    diff = 2048-data_size[0] #handling 0/2 errors
     
     print(data_size, diff)
     
@@ -260,19 +262,28 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         start_time = time.time()
     
         try:
-            flat,header_flat = get_data(flat_f)
+            flat, header_flat = get_data(flat_f)
 
             print(f"Flat field shape is {flat.shape}")
             
-            if header_flat[0].header['BITPIX'] == 16:
+            if header_flat['BITPIX'] == 16:
     
                 print("Number of bits per pixel is: 16")
 
                 flat *= 614400/128
 
             flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
-            flat = flat.reshape(data_size[0],data_size[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
-            flat = np.moveaxis(flat, 2,-2)
+            flat = flat.reshape(data_size[0],data_size[1],6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
+            flat = np.moveaxis(flat, 2,-1)
+            
+            print(flat.shape)
+            
+            if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits':
+                
+                print("This flat needs to be rolled")
+                
+                flat = np.roll(flat, 1, axis = -1)
+                
 
             print(f"--- Load flats time: {np.round(time.time() - start_time,3)} seconds ---")
 
@@ -301,7 +312,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     if dark_c:
 
         printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
-        printc('          DARK IS DIVIDED by 256.   ',color=bcolors.OKGREEN)
 
         start_time = time.time()
 
@@ -335,6 +345,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         #-----------------    
 
         print("~Subtracting dark field")
+        
+        print(flat.shape)
 
         start_time = time.time()
 
@@ -356,8 +368,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         start_time = time.time()
 
         try:
-            norm_fac = np.mean(flat[:,:,512:1536,512:1536], axis = (2,3))  #mean of the central 1k x 1k
-            flat /= norm_fac[..., np.newaxis, np.newaxis]
+            norm_fac = np.mean(flat[512:1536,512:1536, :, :], axis = (0,1))  #mean of the central 1k x 1k
+            flat /= norm_fac[np.newaxis, np.newaxis, ...]
 
             print(f"--- Normalising flats time: {np.round(time.time() - start_time,3)} seconds ---")
 
@@ -411,7 +423,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     start_time = time.time()
     
-    field_stop = load_fits('./field_stop/HRT_field_stop.fits')
+    field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
 
@@ -435,7 +447,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         printc('-->>>>>>> Demodulating data...         ',color=bcolors.OKGREEN)
 
-        data = demod(data, pmp_temp, demod = True)
+        data = demod_hrt(data, pmp_temp, const_demod = const_demod)
 
     #-----------------
     # APPLY NORMALIZATION 
@@ -477,12 +489,12 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
             printc(' Saving demodulated data to one file per scan: ')
 
-            for scan in data_f:
+            for count, scan in enumerate(data_f):
 
                 with fits.open(scan) as hdu_list:
 
-                    hdu_list[0].data = data
-                    hdu_list.writeto(out_dir + scan + '_reduced.fits', clobber=True)
+                    hdu_list[0].data = data[:,:,:,:,count]
+                    hdu_list.writeto(out_dir + str(scan.split('.fits')[0]) + '_reduced.fits', overwrite=True)
 
         if isinstance(data_f, str):
 
@@ -491,7 +503,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             with fits.open(data_f) as hdu_list:
 
                 hdu_list[0].data = data
-                hdu_list.writeto(out_dir + scan + '_reduced.fits', clobber=True)
+                hdu_list.writeto(out_dir + str(data_) + '_reduced.fits', overwrite=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
@@ -610,6 +622,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     """
 
 
-    return
+    return data
 
     
