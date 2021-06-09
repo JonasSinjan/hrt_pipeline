@@ -30,56 +30,34 @@ def get_data(path):
 
    
 
-def demod_hrt(data,pmp_temp,const_demod=False):
+def demod_hrt(data,pmp_temp):
     '''
-    Use demodulation matrices to demodulate data
+    Use constant demodulation matrices to demodulate data
     '''
-
-    try:
-        path = os.path.realpath(__file__) 
-        hrt_pipeline_path = path[:-11]
+ 
+    if pmp_temp == '50':
+        demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
+                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
+                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
+                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
         
-        demod_data,_ = load_fits(hrt_pipeline_path + f'demod_matrices/demod_fitted_for_upload_HRT{pmp_temp}degC.fits')
-
-    except:
-        printc('No demod available',color = bcolors.FAIL)
-        raise SystemError()
-
-    printc('Demodulation matrix for ', pmp_temp,color = bcolors.WARNING)
+    elif pmp_temp == '40':
+        demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
     
-    if const_demod:
-
-        printc(f"Applying constant demodulation matrix for temp: {pmp_temp}",color=bcolors.OKGREEN)
-
-        demod_data = demod_data.reshape((2048,2048,4,4)) #change into the required shape
-        demod_avg = np.mean(demod_data[512:1536,512:1536,:,:], axis = (0,1))
-
-        shape = data.shape
-        demod = np.tile(demod_avg, (shape[0],shape[1],1,1))
-
     else:
+        printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
 
-        printc(f"Applying original (non constant) demodulation matrix for temp: {pmp_temp}",color=bcolors.OKGREEN)
-
-        shape = data.shape
-        diff = 2048-shape[0] 
+    printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
     
-        if np.abs(diff) > 0: #for cropped datasets
-
-            start_row = int((2048-shape[0])/2) #assuming the crop is always based from the central section (ie with centre of fov in centre of cropped data)
-            start_col = int((2048-shape[1])/2)
-
-        else:
-            start_row, start_col = 0, 0
-        
-        demod_data = demod_data.reshape((2048,2048,4,4)) #change into the required shape
-        demod_data = demod_data[start_row:start_row + shape[0],start_col:start_col + shape[1],...]
-
+    demod_data = demod_data.reshape((4,4))
+    shape = data.shape
+    demod = np.tile(demod_data, (shape[0],shape[1],1,1))
 
     if data.ndim == 5:
         #if data array has more than one scan
-        data = data.reshape(shape[0],shape[1],6,4,shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
-        data = np.moveaxis(data, 2,-2) #swap order
         data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
 
         stokes_arr = np.matmul(demod,data)
@@ -87,9 +65,6 @@ def demod_hrt(data,pmp_temp,const_demod=False):
     
     elif data.ndim == 4:
         #for if data has just one scan
-        data = data.reshape(shape[0],shape[1],6,4)
-        data = np.moveaxis(data,-2,-1)
-
         stokes_arr = np.matmul(demod,data)
     
     return stokes_arr
@@ -97,7 +72,7 @@ def demod_hrt(data,pmp_temp,const_demod=False):
 
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
-                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, const_demod = True, norm_stokes = True, 
+                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, 
                 ItoQUV = False, rte = False, out_rte_file = False):
 
@@ -112,7 +87,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     7. apply flat field
     8. read in field stop
     9. apply field stop
-    10. demodulate
+    10. demodulate with const demod matrix
     11. normalise to quiet sun
     12. calibration
         a) ghost correction (still needs to be finalised)
@@ -181,7 +156,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
             if hdr_arr[scan]['BITPIX'] == 16:
 
-                print(f"This scan: {data_f[scan]} has a bits per pixel is: 16 \n Performing the extra scaling")
+                print(f"This scan: {data_f[scan]} has a bits per pixel of: 16 \nPerforming the extra scaling")
 
                 data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
@@ -448,7 +423,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         printc('-->>>>>>> Demodulating data...         ',color=bcolors.OKGREEN)
 
-        data = demod_hrt(data, pmp_temp, const_demod = const_demod)
+        data = demod_hrt(data, pmp_temp)
 
     #-----------------
     # APPLY NORMALIZATION 
