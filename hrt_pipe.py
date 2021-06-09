@@ -72,7 +72,7 @@ def demod_hrt(data,pmp_temp):
 
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
-                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
+                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, continuum_wavelength = 0, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, 
                 ItoQUV = False, rte = False, out_rte_file = False):
 
@@ -119,6 +119,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         apply dark field correction
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
+    continuum_wavelength: int, DEFAULT: 0
+        index of the continuum wavelength in the science data, assumes that the flat field has the same
     norm_stokes: bool, DEFAULT: True
         normalise the stokes vector to the quiet sun (I_continuum)
     out_dir : string, DEFUALT: './'
@@ -149,18 +151,19 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-
+    overall_time = time.time()
     #-----------------
     # READ DATA
     #-----------------
-
+    
+    print(" ")
     printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN) 
 
     start_time = time.time()
 
     if isinstance(data_f, list):
         #if the data_f contains several scans
-        printc(f' -- Input contains {len(data_f)} scan(s) -- ',color=bcolors.OKGREEN)
+        printc(f'Input contains {len(data_f)} scan(s)',color=bcolors.OKGREEN)
         
         number_of_scans = len(data_f)
 
@@ -181,7 +184,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         result = all(element.shape == first_shape for element in data_arr)
         if (result):
-            print("All the scans have the same dimensions")
+            print("All the scans have the same dimension")
 
         else:
             print("The scans have different dimensions! \n Ending process")
@@ -212,7 +215,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
       printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
       exit()
 
-    print(f"--- Load science data time: {np.round(time.time() - start_time,3)} seconds ---")
+    
       
     data_shape = data.shape
 
@@ -224,11 +227,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     data = np.moveaxis(data, 2,-2) #need to swap back to work
 
     #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
-    print(data.shape)
+    print("Data reshaped to: ", data.shape)
 
     diff = 2048-data_size[0] #handling 0/2 errors
-    
-    print(data_size, diff)
     
     if np.abs(diff) > 0:
     
@@ -237,7 +238,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         
     else:
         start_row, start_col = 0, 0
-
+        
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     #-----------------
     # TODO: Could check data dimensions? As an extra fail safe before progressing?
@@ -249,7 +253,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if flat_c:
-
+        print(" ")
         printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
 
         start_time = time.time()
@@ -278,13 +282,16 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                 flat = np.roll(flat, 1, axis = -1)
                 
 
-            print(f"--- Load flats time: {np.round(time.time() - start_time,3)} seconds ---")
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         except Exception:
             printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
 
 
     else:
+        print(" ")
         printc('-->>>>>>> No flats mode',color=bcolors.WARNING)
 
 
@@ -293,7 +300,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if clean_f:
-
+        print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
         
         #call the clean function (not yet built)
@@ -304,12 +311,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if dark_c:
-
+        print(" ")
         printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
 
         start_time = time.time()
-
-        #load the darks
 
         try:
             dark,h = get_data(dark_f)
@@ -329,7 +334,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                 except Exception:
                     printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
 
-            print(f"--- Load darks time: {np.round(time.time() - start_time,3)} seconds ---")
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
@@ -338,18 +345,18 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         #-----------------
         # APPLY DARK CORRECTION 
         #-----------------    
-
-        print("~Subtracting dark field")
+        print(" ")
+        print("'-->>>>>>> Subtracting dark field")
         
-        print(flat.shape)
-
         start_time = time.time()
 
-        flat -= dark[..., np.newaxis, np.newaxis] #subtracting dark from avg flat field
+        flat -= dark[..., np.newaxis, np.newaxis]
         
-        data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] #subtracting dark from each science image
+        data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
 
-        print(f"--- Subtract darks time: {np.round(time.time() - start_time,3)} seconds ---")
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
     #-----------------
@@ -357,7 +364,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if norm_f and flat_c:
-
+        
+        print(" ")
         printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
 
         start_time = time.time()
@@ -366,7 +374,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             norm_fac = np.mean(flat[512:1536,512:1536, :, :], axis = (0,1))  #mean of the central 1k x 1k
             flat /= norm_fac[np.newaxis, np.newaxis, ...]
 
-            print(f"--- Normalising flats time: {np.round(time.time() - start_time,3)} seconds ---")
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         except Exception:
             printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
@@ -377,6 +387,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if flat_c:
+        print(" ")
         printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
 
         start_time = time.time()
@@ -389,7 +400,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                     
                 tmp = np.mean(flat,axis=-2) #avg over pol states for the wavelength
 
-                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis] #divide science data by normalised flats for each wavelength (avg over pol states)
+                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis]
 
 
             elif flat_states == 24:
@@ -406,7 +417,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
                 data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis]
         
-            print(f"--- Flat correction time: {np.round(time.time() - start_time,3)} seconds ---")
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
@@ -415,8 +428,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
     # FIELD STOP 
     #-----------------
-
-    print("~Applying field stop")
+    
+    print(" ")
+    printc("-->>>>>>>  Applying field stop",color=bcolors.OKGREEN)
 
     start_time = time.time()
     
@@ -426,7 +440,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
 
-    print(f"--- Field Stop time: {np.round(time.time() - start_time,3)} seconds ---")
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
     #-----------------
@@ -443,9 +459,14 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
     if demod:
 
-        printc('-->>>>>>> Demodulating data...         ',color=bcolors.OKGREEN)
+        print(" ")
+        printc('-->>>>>>> Demodulating data         ',color=bcolors.OKGREEN)
 
         data = demod_hrt(data, pmp_temp)
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
     #-----------------
@@ -453,16 +474,26 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     #-----------------
 
     if norm_stokes:
-
-        printc('-->>>>>>> Applying normalization --',color=bcolors.OKGREEN)
-   
+        
+        print(" ")
+        printc('-->>>>>>> Normalising Stokes to Quiet Sun',color=bcolors.OKGREEN)
+        
+        for scan in range(data_shape[-1]):
+            
+            I_c = np.mean(data[512:1536,512:1536,0,continuum_wavelength,scan], axis = (0,1)) #mean of central 1k x 1k of continuum stokes I
+            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
+       
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
     if ItoQUV:
-
-        printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V --',color=bcolors.OKGREEN)
+        
+        print(" ")
+        printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V ',color=bcolors.OKGREEN)
    
 
     #-----------------
@@ -477,15 +508,13 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
     #-----------------
 
-    printc('---------------------------------------------------------',color=bcolors.OKGREEN)
-    printc('------------------Reduction Complete---------------------',color=bcolors.OKGREEN)
-    printc('---------------------------------------------------------',color=bcolors.OKGREEN)
+
     
     if out_demod_file:
         
         if isinstance(data_f, list):
-
-            printc(' Saving demodulated data to one file per scan: ')
+            print(" ")
+            printc('Saving demodulated data to one file per scan: ')
 
             for count, scan in enumerate(data_f):
 
@@ -495,8 +524,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                     hdu_list.writeto(out_dir + str(scan.split('.fits')[0]) + '_reduced.fits', overwrite=True)
 
         if isinstance(data_f, str):
-
-            printc(' Saving demodulated data to one file: ')
+            print(" ")
+            printc('Saving demodulated data to one file: ')
 
             with fits.open(data_f) as hdu_list:
 
@@ -615,9 +644,14 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             hdu_list.writeto(out_dir+outfile+'_Icont_rte.fits', clobber=True)
 
 
-        printc('--------------------- END  ----------------------------',color=bcolors.FAIL)
+        printc('--------------------- RTE END ----------------------------',color=bcolors.FAIL)
 
     """
+    
+    print(" ")
+    printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
+    printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
     return data
