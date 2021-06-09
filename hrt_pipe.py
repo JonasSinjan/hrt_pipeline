@@ -152,6 +152,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     #-----------------
     # TODO: read continuum position from header from data and flat, and roll so that they agree (to position 0) - important for I_c normalisation + inversion
     #-----------------
+
+    Notes
+    -----
+    When clean_f is True, assumes same PMP temp as the science data
     '''
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -338,7 +342,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         # APPLY DARK CORRECTION 
         #-----------------    
         print(" ")
-        print("'-->>>>>>> Subtracting dark field")
+        print("-->>>>>>> Subtracting dark field")
         
         start_time = time.time()
 
@@ -369,7 +373,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         #demod the flats
 
-        flat_demod, demod = demod_hrt(flat, pmp_temp)
+        flat_demod, demod_mat = demod_hrt(flat, pmp_temp)
 
         norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,continuum_wavelength])
 
@@ -396,7 +400,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
                 new_demod_flats[:,:,pol,wv] = c
 
-        inv = np.linalg.inv(demod)
+        inv = np.linalg.inv(demod_mat)
 
         flat = np.matmul(inv, new_demod_flats*norm_factor)
 
@@ -470,6 +474,11 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
+
+
+    #-----------------
+    # TODO: PREFILTER CORRECTION
+    #-----------------
 
 
     #-----------------
@@ -556,8 +565,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
     #-----------------
 
-
-    
     if out_demod_file:
         
         if isinstance(data_f, list):
