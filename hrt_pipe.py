@@ -362,7 +362,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         start_time = time.time()
 
         #cleaning the stripe in the flats for a particular flat
-        
+
         if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
             flat[1345, 296:, 0, 2] = flat[1344, 296:, 0, 2]
             flat[1346, :291, 0, 2] = flat[1345, :291, 0, 2]
@@ -371,7 +371,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         flat_demod, demod = demod_hrt(flat, pmp_temp)
 
-        norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
+        norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,continuum_wavelength])
 
         flat_demod /= norm_factor
 
