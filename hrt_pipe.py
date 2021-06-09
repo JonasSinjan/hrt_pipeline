@@ -9,6 +9,7 @@ import time
 
 from utils import *
 
+
 def get_data(path):
     """load science data from path"""
     try:
