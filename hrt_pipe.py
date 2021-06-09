@@ -576,7 +576,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                 with fits.open(scan) as hdu_list:
 
                     hdu_list[0].data = data[:,:,:,:,count]
-                    hdu_list.writeto(out_dir + str(scan.split('.fits')[0]) + '_reduced.fits', overwrite=True)
+                    hdu_list.writeto(out_dir + str(scan.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
 
         if isinstance(data_f, str):
             print(" ")
@@ -585,7 +585,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             with fits.open(data_f) as hdu_list:
 
                 hdu_list[0].data = data
-                hdu_list.writeto(out_dir + str(data_f.split('.fits')[0]) + '_reduced.fits', overwrite=True)
+                hdu_list.writeto(out_dir + str(data_f.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
