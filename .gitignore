@@ -1,0 +1,8 @@
+demod_matrices/demod_fitted_for_upload_HRT40degC.fits
+demod_matrices/demod_fitted_for_upload_HRT50degC.fits
+debug_hrt_pipe.ipynb
+test_hrt_pipeline.ipynb
+.ipynb_checkpoints/debug_hrt_pipe-checkpoint.ipynb
+.ipynb_checkpoints/test_hrt_pipeline-checkpoint.ipynb
+__pycache__/hrt_pipe.cpython-36.pyc
+__pycache__/utils.cpython-36.pyc

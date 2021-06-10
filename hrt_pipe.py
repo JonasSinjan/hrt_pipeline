@@ -6,7 +6,6 @@ import subprocess
 from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 import time
-from scipy.ndimage import gaussian_filter
 
 from utils import *
 
@@ -68,11 +67,11 @@ def demod_hrt(data,pmp_temp):
         #for if data has just one scan
         stokes_arr = np.matmul(demod,data)
     
-    return stokes_arr, demod
+    return stokes_arr
     
 
 
-def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59, flat_states = 24, 
+def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
                 pmp_temp = '50',flat_c = True,dark_c = True, demod = True, continuum_wavelength = 0, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, 
                 ItoQUV = False, rte = False, out_rte_file = False):
@@ -81,17 +80,16 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     PHI-HRT data reduction pipeline
     1. read in science data (+scaling) open path option + open for several scans at once
     2. read in flat field - just one, so any averaging must be done before
-    3. option to clean flat field with unsharp masking
+    3. option to clean flat field with unsharp masking - not implemented yet
     4. read in dark field
     5. apply dark field
     6. normalise flat field
     7. apply flat field
-    8. prefilter correction - not implemented yet
-    9. read in field stop
-    10. apply field stop
-    11. demodulate with const demod matrix
-    12. normalise to quiet sun
-    13. calibration
+    8. read in field stop
+    9. apply field stop
+    10. demodulate with const demod matrix
+    11. normalise to quiet sun
+    12. calibration
         a) ghost correction - not implemented yet
         b) cross talk correction - not implemented yet
     14. rte inversion with sophism - not implemented yet
@@ -110,9 +108,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     norm_f: bool, DEFAULT: True
         to normalise the flat fields before applying
     clean_f: bool, DEFAULT: False
-        clean the flat field with unsharp masking
-    sigma: int, DEFAULT: 59
-        sigma of the gaussian convolution used for unsharp masking if clean_f == True   
+        clean the flat field with unsharp masking   
     flat_states: int, DEFAULT: 24
         Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)
     pmp_temp: str, DEFAULT: '50'
@@ -149,13 +145,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     ----------
     SPGYlib
 
-    #-----------------
-    # TODO: read continuum position from header from data and flat, and roll so that they agree (to position 0) - important for I_c normalisation + inversion
-    #-----------------
-
-    Notes
-    -----
-    When clean_f is True, assumes same PMP temp as the science data
     '''
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -238,7 +227,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     data = np.moveaxis(data, 2,-2) #need to swap back to work
 
     #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
-    print(f"Data reshaped to {data.shape}")
+    print("Data reshaped to: ", data.shape)
 
     diff = 2048-data_size[0] #handling 0/2 errors
     
@@ -253,6 +242,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    #-----------------
+    # TODO: Could check data dimensions? As an extra fail safe before progressing?
+    #-----------------
     
     
     #-----------------
@@ -280,7 +273,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             flat = flat.reshape(data_size[0],data_size[1],6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
             flat = np.moveaxis(flat, 2,-1)
             
-            print(f"Flat reshaped to {flat.shape}")
+            print(flat.shape)
             
             if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits':
                 
@@ -300,6 +293,17 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     else:
         print(" ")
         printc('-->>>>>>> No flats mode',color=bcolors.WARNING)
+
+
+    #-----------------
+    # OPTIONAL Unsharp Masking clean the flat field stokes V images
+    #-----------------
+
+    if clean_f:
+        print(" ")
+        printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
+        
+        #call the clean function (not yet built)
 
 
     #-----------------
@@ -342,7 +346,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         # APPLY DARK CORRECTION 
         #-----------------    
         print(" ")
-        print("-->>>>>>> Subtracting dark field")
+        print("'-->>>>>>> Subtracting dark field")
         
         start_time = time.time()
 
@@ -352,61 +356,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
-
-    #-----------------
-    # OPTIONAL Unsharp Masking clean the flat field stokes V images
-    #-----------------
-
-    if clean_f:
-        print(" ")
-        printc('-->>>>>>> Cleaning flats with Unsharp Masking (Stokes V only)',color=bcolors.OKGREEN)
-        
-        start_time = time.time()
-
-        #cleaning the stripe in the flats for a particular flat
-
-        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-            flat[1345, 296:, 0, 2] = flat[1344, 296:, 0, 2]
-            flat[1346, :291, 0, 2] = flat[1345, :291, 0, 2]
-
-        #demod the flats
-
-        flat_demod, demod_mat = demod_hrt(flat, pmp_temp)
-
-        norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,continuum_wavelength])
-
-        flat_demod /= norm_factor
-
-        new_demod_flats = np.copy(flat_demod)
-
-        b_arr = np.zeros((2048,2048,3,5))
-
-        if continuum_wavelength == 0:
-            wv_range = range(1,6)
-
-        elif continuum_wavelength == 5:
-            wv_range = range(5)
-
-        for pol in range(3,4):
-            
-            for wv in wv_range: #not the continuum
-                
-                a = np.copy(np.clip(flat_demod[:,:,pol,wv], -0.02, 0.02))
-                b = a - gaussian_filter(a,sigma)
-                b_arr[:,:,pol-1,wv-1] = b
-                c = a - b
-
-                new_demod_flats[:,:,pol,wv] = c
-
-        inv = np.linalg.inv(demod_mat)
-
-        flat = np.matmul(inv, new_demod_flats*norm_factor)
-
-
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
@@ -477,11 +426,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
 
     #-----------------
-    # TODO: PREFILTER CORRECTION
-    #-----------------
-
-
-    #-----------------
     # FIELD STOP 
     #-----------------
     
@@ -518,7 +462,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         print(" ")
         printc('-->>>>>>> Demodulating data         ',color=bcolors.OKGREEN)
 
-        data,_ = demod_hrt(data, pmp_temp)
+        data = demod_hrt(data, pmp_temp)
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -543,7 +487,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
@@ -565,6 +508,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     # SAVE DATA TODO: CMILOS FORMAT AND FITS
     #-----------------
 
+
+    
     if out_demod_file:
         
         if isinstance(data_f, list):
@@ -576,7 +521,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                 with fits.open(scan) as hdu_list:
 
                     hdu_list[0].data = data[:,:,:,:,count]
-                    hdu_list.writeto(out_dir + str(scan.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
+                    hdu_list.writeto(out_dir + str(scan.split('.fits')[0]) + '_reduced.fits', overwrite=True)
 
         if isinstance(data_f, str):
             print(" ")
@@ -585,7 +530,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             with fits.open(data_f) as hdu_list:
 
                 hdu_list[0].data = data
-                hdu_list.writeto(out_dir + str(data_f.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
+                hdu_list.writeto(out_dir + str(data_f.split('.fits')[0]) + '_reduced.fits', overwrite=True)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
