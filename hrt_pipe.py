@@ -74,7 +74,7 @@ def demod_hrt(data,pmp_temp):
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
                 pmp_temp = '50',flat_c = True,dark_c = True, demod = True, continuum_wavelength = 0, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, 
-                ItoQUV = False, rte = False, out_rte_file = False):
+                ItoQUV = False, rte = False):
 
     '''
     PHI-HRT data reduction pipeline
@@ -563,9 +563,14 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         for scan in range(data_shape[-1]):
 
+            if isinstance(data_f, str):
+                file_path = data_f
+            elif isinstance(data_f, list):
+                file_path = data_f[scan]
+
             #must invert each scan independently, as cmilos only takes in one dataset at a time
 
-            wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(file,verbose = True) #get wave_axis from the header information of the science scans
+            wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(file_path,verbose = True) #get wave_axis from the header information of the science scans
 
             shift_w =  wave_axis[3] - wavelength
             wave_axis = wave_axis - shift_w
@@ -626,7 +631,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             rte_invs[3,low_values_flags] = 0
             rte_invs[4,low_values_flags] = 0
 
-            np.savez_compressed(out_dir+out_rte_file+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
+            np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
             
             del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
             print(del_dummy)
@@ -634,22 +639,18 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)
             v_los = rte_invs_noth[8,:,:]
 
-            if isinstance(data_f, str):
-                file_path = data_f
-            elif isinstance(data_f, list):
-                file_path = data_f[scan]
             
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = b_los
-                hdu_list.writeto(out_dir+out_rte_file+'_blos_rte.fits', overwrite=True)
+                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_blos_rte.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = v_los
-                hdu_list.writeto(out_dir+out_rte_file+'_vlos_rte.fits', overwrite=True)
+                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_vlos_rte.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
-                hdu_list.writeto(out_dir+out_rte_file+'_Icont_rte.fits', overwrite=True)
+                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_Icont_rte.fits', overwrite=True)
 
 
             printc('--------------------- RTE END ----------------------------',color=bcolors.FAIL)

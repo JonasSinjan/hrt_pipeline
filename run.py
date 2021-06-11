@@ -15,4 +15,4 @@ if folder != None:
     flatfield_fits_filename = folder + flatfield_fits_filename
     darkfield_fits_filename = folder + darkfield_fits_filename
 
-data = phihrt_pipe(sciencedata_fits_filenames, darkfield_fits_filename, flatfield_fits_filename, continuum_wavelength = 0, norm_stokes = True, clean_f = True, out_demod_file = True, out_dir = '')
+data = phihrt_pipe(sciencedata_fits_filenames, darkfield_fits_filename, flatfield_fits_filename, continuum_wavelength = 0, norm_stokes = True, clean_f = True, out_demod_file = True, out_dir = '', rte = 'RTE')
