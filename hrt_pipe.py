@@ -507,12 +507,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     data[np.isinf(data)] = 0
     data[np.isnan(data)] = 0
 
-
-    #-----------------
-    # SAVE DATA TODO: CMILOS FORMAT AND FITS
-    #-----------------
-
-
     
     if out_demod_file:
         
@@ -536,11 +530,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                 hdu_list[0].data = data
                 hdu_list.writeto(out_dir + str(data_f.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
 
+
     #-----------------
     # INVERSION OF DATA WITH CMILOS
     #-----------------
-
-    
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
