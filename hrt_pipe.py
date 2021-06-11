@@ -536,10 +536,11 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     # INVERSION OF DATA WITH CMILOS
     #-----------------
 
-    """
+    
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
+        print(" ")
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
 
         try:
@@ -560,94 +561,100 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         wavelength = 6173.3356
 
-        #get wave_axis from the header information of the science scans
+        for scan in range(data_shape[-1]):
 
-        shift_w =  wave_axis[3] - wavelength
-        wave_axis = wave_axis - shift_w
-        #wave_axis = np.array([-300,-160,-80,0,80,160])/1000.+wavelength
-        # wave_axis = np.array([-300,-140,-70,0,70,140])
-        printc('   It is assumed the wavelength is given by the header info ')
-        printc(wave_axis,color = bcolors.WARNING)
-        printc((wave_axis - wavelength)*1000.,color = bcolors.WARNING)
-        printc('   saving data into dummy_in.txt for RTE input')
+            #must invert each scan independently, as cmilos only takes in one dataset at a time
 
-        sdata = data[:,:,ry[0]:ry[1],rx[0]:rx[1]]
-        l,p,x,y = sdata.shape
-        print(l,p,x,y)
+            wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(file,verbose = True) #get wave_axis from the header information of the science scans
 
-        filename = 'dummy_in.txt'
-        with open(filename,"w") as f:
-            for i in range(x):
-                for j in range(y):
-                    for k in range(l):
-                        f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[k,0,j,i],sdata[k,1,j,i],sdata[k,2,j,i],sdata[k,3,j,i]))
-        del sdata
+            shift_w =  wave_axis[3] - wavelength
+            wave_axis = wave_axis - shift_w
 
-        printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
-        umbral = 3.
+            printc('   It is assumed the wavelength is given by the header info ')
+            printc(wave_axis,color = bcolors.WARNING)
+            printc((wave_axis - wavelength)*1000.,color = bcolors.WARNING)
+            printc('   saving data into dummy_in.txt for RTE input')
 
-        cmd = CMILOS_LOC+"./milos"
-        cmd = fix_path(cmd)
-        if rte == 'RTE':
-            rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-        if rte == 'CE':
-            rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-        if rte == 'CE+RTE':
-            rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            sdata = data[:,:,:,:,scan]
+            y,x,p,l = sdata.shape
+            print(y,x,p,l)
 
-        print(rte_on)
-        printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
-        printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-        del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
-        print(del_dummy)
+            filename = 'dummy_in.txt'
+            with open(filename,"w") as f:
+                for i in range(x):
+                    for j in range(y):
+                        for k in range(l):
+                            f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
+            del sdata
 
-        res = np.loadtxt('dummy_out.txt')
-        npixels = res.shape[0]/12.
-        print(npixels)
-        print(npixels/x)
-        result = np.zeros((12,y*x)).astype(float)
-        rte_invs = np.zeros((12,yd,xd)).astype(float)
-        for i in range(y*x):
-            result[:,i] = res[i*12:(i+1)*12]
-        result = result.reshape(12,y,x)
-        result = np.einsum('ijk->ikj', result)
-        rte_invs[:,ry[0]:ry[1],rx[0]:rx[1]] = result
-        del result
-        rte_invs_noth = np.copy(rte_invs)
+            printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
+            umbral = 3.
 
-        noise_in_V =  np.mean(data[0,3,rry[0]:rry[1],rrx[0]:rrx[1]])
-        low_values_flags = np.max(np.abs(data[:,3,:,:]),axis=0) < noise_in_V*umbral  # Where values are low
+            cmd = CMILOS_LOC+"./milos"
+            cmd = fix_path(cmd)
+            if rte == 'RTE':
+                rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            if rte == 'CE':
+                rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            if rte == 'CE+RTE':
+                rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+
+            print(rte_on)
+            printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
+            printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
+            del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
+            print(del_dummy)
+
+            res = np.loadtxt('dummy_out.txt')
+            npixels = res.shape[0]/12.
+            print(npixels)
+            print(npixels/x)
+            result = np.zeros((12,y*x)).astype(float)
+            rte_invs = np.zeros((12,y,x)).astype(float)
+            for i in range(y*x):
+                result[:,i] = res[i*12:(i+1)*12]
+            result = result.reshape(12,y,x)
+            result = np.einsum('ijk->ikj', result)
+            rte_invs = result
+            del result
+            rte_invs_noth = np.copy(rte_invs)
+
+            noise_in_V =  np.mean(data[:,:,0,3])
+            low_values_flags = np.max(np.abs(data[:,:,3,:]),axis=0) < noise_in_V*umbral  # Where values are low
+            
+            rte_invs[2,low_values_flags] = 0
+            rte_invs[3,low_values_flags] = 0
+            rte_invs[4,low_values_flags] = 0
+
+            np.savez_compressed(out_dir+out_rte_file+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
+            
+            del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
+            print(del_dummy)
+
+            b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)
+            v_los = rte_invs_noth[8,:,:]
+
+            if isinstance(data_f, str):
+                file_path = data_f
+            elif isinstance(data_f, list):
+                file_path = data_f[scan]
+            
+            with fits.open(file_path) as hdu_list:
+                hdu_list[0].data = b_los
+                hdu_list.writeto(out_dir+out_rte_file+'_blos_rte.fits', overwrite=True)
+
+            with fits.open(file_path) as hdu_list:
+                hdu_list[0].data = v_los
+                hdu_list.writeto(out_dir+out_rte_file+'_vlos_rte.fits', overwrite=True)
+
+            with fits.open(file_path) as hdu_list:
+                hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
+                hdu_list.writeto(out_dir+out_rte_file+'_Icont_rte.fits', overwrite=True)
+
+
+            printc('--------------------- RTE END ----------------------------',color=bcolors.FAIL)
+
         
-        rte_invs[2,low_values_flags] = 0
-        rte_invs[3,low_values_flags] = 0
-        rte_invs[4,low_values_flags] = 0
-
-    
-        np.savez_compressed(out_dir+outfile+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth,mask=mask)
-        
-        del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-        print(del_dummy)
-
-        b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)
-  
-        
-        with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = b_los
-            hdu_list.writeto(out_dir+outfile+'_blos_rte.fits', clobber=True)
-
-        with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = v_los
-            hdu_list.writeto(out_dir+outfile+'_vlos_rte.fits', clobber=True)
-
-        with pyfits.open(data_f) as hdu_list:
-            hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
-            hdu_list.writeto(out_dir+outfile+'_Icont_rte.fits', clobber=True)
-
-
-        printc('--------------------- RTE END ----------------------------',color=bcolors.FAIL)
-
-    """
-    
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
     printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
