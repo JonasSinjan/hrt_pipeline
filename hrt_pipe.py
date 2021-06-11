@@ -596,8 +596,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             cmd = CMILOS_LOC+"./milos"
             cmd = fix_path(cmd)
 
-            print(cmd)
-
             if rte == 'RTE':
                 rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
             if rte == 'CE':
@@ -606,10 +604,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                 rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
 
             print(rte_on)
-
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- CMILOS Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
             printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
             del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
@@ -657,10 +651,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                 hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
                 hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_Icont_rte.fits', overwrite=True)
 
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-            printc('--------------------- RTE END ----------------------------',color=bcolors.FAIL)
-
-        
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
     printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
