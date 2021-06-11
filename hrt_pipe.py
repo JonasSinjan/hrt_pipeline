@@ -462,6 +462,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         print(" ")
         printc('-->>>>>>> Demodulating data         ',color=bcolors.OKGREEN)
 
+        start_time = time.time()
+
         data = demod_hrt(data, pmp_temp)
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -478,6 +480,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         print(" ")
         printc('-->>>>>>> Normalising Stokes to Quiet Sun',color=bcolors.OKGREEN)
         
+        start_time = time.time()
+
         for scan in range(data_shape[-1]):
             
             I_c = np.mean(data[512:1536,512:1536,0,continuum_wavelength,scan], axis = (0,1)) #mean of central 1k x 1k of continuum stokes I
