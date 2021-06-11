@@ -543,6 +543,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         print(" ")
         printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
 
+        start_time = time.time()
         try:
             CMILOS_LOC = os.path.realpath(__file__)
 
@@ -597,6 +598,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
             cmd = CMILOS_LOC+"./milos"
             cmd = fix_path(cmd)
+
+            print(cmd)
+
             if rte == 'RTE':
                 rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
             if rte == 'CE':
@@ -605,7 +609,11 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                 rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
 
             print(rte_on)
-            printc('  ---- >>>>> Finishing.... ',color=bcolors.OKGREEN)
+
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------- CMILOS Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
             printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
             del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
             print(del_dummy)
