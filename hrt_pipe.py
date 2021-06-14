@@ -215,25 +215,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         else:
             print("The scans have different continuum_wavelength postitions! \n Attempting to shift all to the 0th index")
 
-        for scan, cpos in enumerate(cpos_arr):
-
-            if cpos == 5:
-            
-                data_arr[scan] = np.roll(data_arr[scan], 4, axis = 0)
-
-                wve_axis_arr[scan] = np.roll(wve_axis_arr[scan], 1, axis = 0)
-
-                cpos_arr[scan] = 0
-            
-            elif cpos == 0:
-                pass
-
-            else:
-                print("Calculated Data cpos is neither at 0 nor 5 \n Cannot reorg data \n Ending Process")
-
-                exit()
-
-
         data = np.stack(data_arr, axis = -1)
         data = np.moveaxis(data, 0,-2) #so that it is [y,x,24,scans]
 
@@ -341,7 +322,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
             #if continuum wavelength of the flat is not the same as the data, attempt to roll
             if cpos_f != cpos_arr[0]:
-                print("The flat field continuum position is not the same as the data, please check the flat field data. \n Ending Process")
+                print("The flat field continuum position is not the same as the data, please check your input data. \n Ending Process")
 
                 exit()
                 
