@@ -733,7 +733,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             """
 
             noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
-            low_values_flags = np.max(np.abs(data[:,:,3,:,:]),axis=0) < noise_in_V  # Where values are low
+            low_values_flags = np.max(np.abs(data[:,:,3,:,:]),axis=-2) < noise_in_V  # Where values are low
             
             rte_invs[2,low_values_flags] = 0
             rte_invs[3,low_values_flags] = 0
