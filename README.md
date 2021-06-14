@@ -49,7 +49,7 @@ python run.py
 
 Authors: <br />
 
-Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen Germany
+Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germany
 
 Credit: <br />
 
