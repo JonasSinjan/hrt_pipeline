@@ -7,3 +7,8 @@ test_hrt_pipeline.ipynb
 __pycache__/hrt_pipe.cpython-36.pyc
 __pycache__/utils.cpython-36.pyc
 _0142230201_reduced.fits
+dummy*.txt
+*.fits
+cmilos/*.c
+cmilos/*.h
+cmilos/*

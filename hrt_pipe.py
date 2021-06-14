@@ -1,3 +1,4 @@
+from re import L
 import numpy as np 
 import os.path
 from astropy.io import fits
@@ -67,12 +68,12 @@ def demod_hrt(data,pmp_temp):
         #for if data has just one scan
         stokes_arr = np.matmul(demod,data)
     
-    return stokes_arr
+    return stokes_arr, demod
     
 
 
-def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states = 24, 
-                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, continuum_wavelength = 0, norm_stokes = True, 
+def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59, flat_states = 24, 
+                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, 
                 ItoQUV = False, rte = False):
 
@@ -80,16 +81,17 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     PHI-HRT data reduction pipeline
     1. read in science data (+scaling) open path option + open for several scans at once
     2. read in flat field - just one, so any averaging must be done before
-    3. option to clean flat field with unsharp masking - not implemented yet
+    3. option to clean flat field with unsharp masking
     4. read in dark field
     5. apply dark field
     6. normalise flat field
     7. apply flat field
-    8. read in field stop
-    9. apply field stop
-    10. demodulate with const demod matrix
-    11. normalise to quiet sun
-    12. calibration
+    8. prefilter correction - not implemented yet
+    9. read in field stop
+    10. apply field stop
+    11. demodulate with const demod matrix
+    12. normalise to quiet sun
+    13. calibration
         a) ghost correction - not implemented yet
         b) cross talk correction - not implemented yet
     14. rte inversion with sophism - not implemented yet
@@ -108,7 +110,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     norm_f: bool, DEFAULT: True
         to normalise the flat fields before applying
     clean_f: bool, DEFAULT: False
-        clean the flat field with unsharp masking   
+        clean the flat field with unsharp masking
+    sigma: int, DEFAULT: 59
+        sigma of the gaussian convolution used for unsharp masking if clean_f == True      
     flat_states: int, DEFAULT: 24
         Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)
     pmp_temp: str, DEFAULT: '50'
@@ -119,8 +123,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         apply dark field correction
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
-    continuum_wavelength: int, DEFAULT: 0
-        index of the continuum wavelength in the science data, assumes that the flat field has the same
     norm_stokes: bool, DEFAULT: True
         normalise the stokes vector to the quiet sun (I_continuum)
     out_dir : string, DEFUALT: './'
@@ -170,6 +172,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         data_arr = [0]*number_of_scans
         hdr_arr = [0]*number_of_scans
 
+        wve_axis_arr = [0]*number_of_scans
+        cpos_arr = [0]*number_of_scans
+
         for scan in range(number_of_scans):
             data_arr[scan], hdr_arr[scan] = get_data(data_f[scan])
 
@@ -179,7 +184,13 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
                 data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
+            wve_axis_arr[scan], _, _, cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
+
+
+        #--------
         #test if the scans have different sizes
+        #--------
+
         first_shape = data_arr[scan].shape
 
         result = all(element.shape == first_shape for element in data_arr)
@@ -190,6 +201,38 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             print("The scans have different dimensions! \n Ending process")
 
             exit()
+
+
+        #--------
+        #test if the scans have different continuum wavelength_positions
+        #--------
+
+        first_cpos = cpos_arr[0]
+        result = all(c_position == first_cpos for c_position in cpos_arr)
+        if (result):
+            print("All the scans have the same continuum wavelength position, shifting all to 0th index if not already there")
+
+        else:
+            print("The scans have different continuum_wavelength postitions! \n Attempting to shift all to the 0th index")
+
+        for scan, cpos in enumerate(cpos_arr):
+
+            if cpos == 5:
+            
+                data_arr[scan] = np.roll(data_arr[scan], 4, axis = 0)
+
+                wve_axis_arr[scan] = np.roll(wve_axis_arr[scan], 1, axis = 0)
+
+                cpos_arr[scan] = 0
+            
+            elif cpos == 0:
+                pass
+
+            else:
+                print("Calculated Data cpos is neither at 0 nor 5 \n Cannot reorg data \n Ending Process")
+
+                exit()
+
 
         data = np.stack(data_arr, axis = -1)
         data = np.moveaxis(data, 0,-2) #so that it is [y,x,24,scans]
@@ -211,11 +254,20 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
   
         print(f"Data shape is {data.shape}")
 
+        wave_axis, _, _, cpos = fits_get_sampling(data_f,verbose = True)
+
+        print("The data continuum wavelength position is at index: ", cpos)
+
+        cpos_arr = list(cpos)
+
+        if cpos_arr[0] != 0 and cpos_arr[0] != 5:
+            print("Data continuum position not at 0 or 5th index. Please reconcile. \n Ending Process")
+
+            exit()
+
     else:
       printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
       exit()
-
-    
       
     data_shape = data.shape
 
@@ -274,14 +326,25 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             flat = np.moveaxis(flat, 2,-1)
             
             print(flat.shape)
+
+            _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
+
+            print(f"The continuum position of the flat field is at {cpos_f} index position")
             
             if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits':
                 
                 print("This flat needs to be rolled")
                 
                 flat = np.roll(flat, 1, axis = -1)
-                
 
+                cpos_f = cpos_arr[0]
+
+            #if continuum wavelength of the flat is not the same as the data, attempt to roll
+            if cpos_f != cpos_arr[0]:
+                print("The flat field continuum position is not the same as the data, please check the flat field data. \n Ending Process")
+
+                exit()
+                
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -293,17 +356,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
     else:
         print(" ")
         printc('-->>>>>>> No flats mode',color=bcolors.WARNING)
-
-
-    #-----------------
-    # OPTIONAL Unsharp Masking clean the flat field stokes V images
-    #-----------------
-
-    if clean_f:
-        print(" ")
-        printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
-        
-        #call the clean function (not yet built)
 
 
     #-----------------
@@ -356,6 +408,61 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+
+    #-----------------
+    # OPTIONAL Unsharp Masking clean the flat field stokes V images
+    #-----------------
+
+    if clean_f:
+        print(" ")
+        printc('-->>>>>>> Cleaning flats with Unsharp Masking (Stokes V only)',color=bcolors.OKGREEN)
+
+        start_time = time.time()
+
+        #cleaning the stripe in the flats for a particular flat
+
+        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
+            flat[1345, 296:, 0, 2] = flat[1344, 296:, 0, 2]
+            flat[1346, :291, 0, 2] = flat[1345, :291, 0, 2]
+
+        #demod the flats
+
+        flat_demod, demodM = demod_hrt(flat, pmp_temp)
+
+        norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
+
+        flat_demod /= norm_factor
+
+        new_demod_flats = np.copy(flat_demod)
+
+        b_arr = np.zeros((2048,2048,3,5))
+
+        if cpos_arr[0] == 0:
+            wv_range = range(1,6)
+
+        elif cpos_arr[0] == 5:
+            wv_range = range(5)
+
+        for pol in range(3,4):
+
+            for wv in wv_range: #not the continuum
+
+                a = np.copy(np.clip(flat_demod[:,:,pol,wv], -0.02, 0.02))
+                b = a - gaussian_filter(a,sigma)
+                b_arr[:,:,pol-1,wv-1] = b
+                c = a - b
+
+                new_demod_flats[:,:,pol,wv] = c
+
+        invM = np.linalg.inv(demodM)
+
+        flat = np.matmul(invM, new_demod_flats*norm_factor)
+
+
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
@@ -464,7 +571,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         start_time = time.time()
 
-        data = demod_hrt(data, pmp_temp)
+        data,_ = demod_hrt(data, pmp_temp)
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -484,7 +591,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         for scan in range(data_shape[-1]):
             
-            I_c = np.mean(data[512:1536,512:1536,0,continuum_wavelength,scan], axis = (0,1)) #mean of central 1k x 1k of continuum stokes I
+            I_c = np.mean(data[512:1536,512:1536,0,0,int(scan)]) #mean of central 1k x 1k of continuum stokes I - all data cpos shifted to 0
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -512,7 +619,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
         
         if isinstance(data_f, list):
             print(" ")
-            printc('Saving demodulated data to one file per scan: ')
+            printc('Saving demodulated data to one _reduced.fits file per scan')
 
             for count, scan in enumerate(data_f):
 
@@ -523,7 +630,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         if isinstance(data_f, str):
             print(" ")
-            printc('Saving demodulated data to one file: ')
+            printc('Saving demodulated data to a _reduced.fits file')
 
             with fits.open(data_f) as hdu_list:
 
@@ -559,16 +666,20 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
 
         wavelength = 6173.3356
 
-        for scan in range(data_shape[-1]):
+        for scan in range(int(data_shape[-1])):
 
             if isinstance(data_f, str):
+
                 file_path = data_f
+
             elif isinstance(data_f, list):
+
                 file_path = data_f[scan]
+                wave_axis = wve_axis_arr[scan]
 
             #must invert each scan independently, as cmilos only takes in one dataset at a time
 
-            wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(file_path,verbose = True) #get wave_axis from the header information of the science scans
+             #get wave_axis from the header information of the science scans
 
             shift_w =  wave_axis[3] - wavelength
             wave_axis = wave_axis - shift_w
@@ -590,8 +701,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
                             f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
             del sdata
 
-            printc('  ---- >>>>> Inverting data.... ',color=bcolors.OKGREEN)
-            umbral = 3.
+            printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
 
             cmd = CMILOS_LOC+"./milos"
             cmd = fix_path(cmd)
@@ -603,7 +713,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             if rte == 'CE+RTE':
                 rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
 
-            print(rte_on)
+            #print(rte_on)
 
             printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
             del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
@@ -623,8 +733,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, flat_states
             del result
             rte_invs_noth = np.copy(rte_invs)
 
-            noise_in_V =  np.mean(data[:,:,0,3])
-            low_values_flags = np.max(np.abs(data[:,:,3,:]),axis=0) < noise_in_V*umbral  # Where values are low
+            noise_in_V =  np.mean(data[:,:,3,cpos,:])
+            low_values_flags = np.max(np.abs(data[:,:,3,:,:]),axis=0) < noise_in_V  # Where values are low
             
             rte_invs[2,low_values_flags] = 0
             rte_invs[3,low_values_flags] = 0

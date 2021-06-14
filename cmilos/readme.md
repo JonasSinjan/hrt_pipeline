@@ -4,6 +4,12 @@
 ## RTE INVERSION C code for SOPHI (based on the ILD code MILOS by D. Orozco) ##
 ## juanp (IAA-CSIC) ##
 
+#First recompile for your machine:
+
+#If Unix based:
+Make clean
+Make
+
 #How to use:#
 
 ```milos NLAMBDA MAX_ITER CLASSICAL_ESTIMATES RFS [FWHM DELTA NPOINTS] profiles_file.txt > output.txt```
