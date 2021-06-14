@@ -80,21 +80,23 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     '''
     PHI-HRT data reduction pipeline
     1. read in science data (+scaling) open path option + open for several scans at once
-    2. read in flat field - just one, so any averaging must be done before
-    3. option to clean flat field with unsharp masking
-    4. read in dark field
-    5. apply dark field
+    2. read in flat field (+scaling)- just accepts one flat field fits file
+    3. read in dark field (+scaling)
+    4. apply dark field
+    5. option to clean flat field with unsharp masking
     6. normalise flat field
     7. apply flat field
     8. prefilter correction - not implemented yet
     9. read in field stop
     10. apply field stop
     11. demodulate with const demod matrix
+        a) option to output demod to fits file
     12. normalise to quiet sun
     13. calibration
         a) ghost correction - not implemented yet
         b) cross talk correction - not implemented yet
     14. rte inversion with cmilos
+        a) output rte data products to fits file
 
     Parameters
     ----------
@@ -133,10 +135,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         correct the ghost in bottom left corner
     ItoQUV: bool, DEFAULT: False 
         apply I -> Q,U,V correction
-    rte: bool, DEFAULT: False 
-        invert using cmilos
-    out_rte_file: bool, DEFAULT: False
-        output of rte result to fits file
+    rte: str, DEFAULT: False 
+        invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     
     Returns
     -------
