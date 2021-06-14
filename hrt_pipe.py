@@ -379,7 +379,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         # APPLY DARK CORRECTION 
         #-----------------    
         print(" ")
-        print("'-->>>>>>> Subtracting dark field")
+        print("-->>>>>>> Subtracting dark field")
         
         start_time = time.time()
 
@@ -518,7 +518,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     #-----------------
     
     print(" ")
-    printc("-->>>>>>>  Applying field stop",color=bcolors.OKGREEN)
+    printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
 
     start_time = time.time()
     
@@ -628,7 +628,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
         print(" ")
-        printc('---------------------RUNNING CMILOS --------------------------',color=bcolors.OKGREEN)
+        printc('-->>>>>>> RUNNING CMILOS ',color=bcolors.OKGREEN)
 
         start_time = time.time()
         try:
@@ -667,14 +667,14 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             shift_w =  wave_axis[3] - wavelength
             wave_axis = wave_axis - shift_w
 
-            printc('   It is assumed the wavelength is given by the header info ')
-            printc(wave_axis,color = bcolors.WARNING)
-            printc((wave_axis - wavelength)*1000.,color = bcolors.WARNING)
-            printc('   saving data into dummy_in.txt for RTE input')
+            print('It is assumed the wavelength array is given by the header')
+            #print(wave_axis,color = bcolors.WARNING)
+            print("Wave axis is: ", (wave_axis - wavelength)*1000.)
+            print('Saving data into dummy_in.txt for RTE input')
 
             sdata = data[:,:,:,:,scan]
             y,x,p,l = sdata.shape
-            print(y,x,p,l)
+            #print(y,x,p,l)
 
             filename = 'dummy_in.txt'
             with open(filename,"w") as f:
@@ -700,12 +700,12 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
             printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
             del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
-            print(del_dummy)
+            #print(del_dummy)
 
             res = np.loadtxt('dummy_out.txt')
             npixels = res.shape[0]/12.
-            print(npixels)
-            print(npixels/x)
+            #print(npixels)
+            #print(npixels/x)
             result = np.zeros((12,y*x)).astype(float)
             rte_invs = np.zeros((12,y,x)).astype(float)
             for i in range(y*x):
@@ -733,7 +733,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             """
 
             noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
-            low_values_flags = np.max(np.abs(data[:,:,3,:,:]),axis=-2) < noise_in_V  # Where values are low
+            low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
             
             rte_invs[2,low_values_flags] = 0
             rte_invs[3,low_values_flags] = 0
@@ -742,7 +742,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
             
             del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-            print(del_dummy)
+            #print(del_dummy)
 
             rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[1]))
 
@@ -753,8 +753,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
             rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
 
+            rte_data_products *= field_stop[np.newaxis,start_row:start_row + data_size[0],start_col:start_col + data_size[1]] #field stop, set outside to 0
+
             with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = rte
+                hdu_list[0].data = rte_data_products
                 hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_rte_data_products.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:

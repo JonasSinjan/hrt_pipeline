@@ -12,3 +12,5 @@ dummy*.txt
 cmilos/*.c
 cmilos/*.h
 cmilos/*
+_RTE.npz
+*.npz
