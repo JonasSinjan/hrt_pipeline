@@ -94,7 +94,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     13. calibration
         a) ghost correction - not implemented yet
         b) cross talk correction - not implemented yet
-    14. rte inversion with sophism - not implemented yet
+    14. rte inversion with cmilos
 
     Parameters
     ----------
@@ -405,8 +405,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         #cleaning the stripe in the flats for a particular flat
 
         if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-            flat[1345, 296:, 0, 2] = flat[1344, 296:, 0, 2]
-            flat[1346, :291, 0, 2] = flat[1345, :291, 0, 2]
+            flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
+            flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
 
         #demod the flats
 
@@ -579,9 +579,11 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
+
     if ItoQUV:
         
         print(" ")
@@ -714,7 +716,23 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             del result
             rte_invs_noth = np.copy(rte_invs)
 
-            noise_in_V =  np.mean(data[:,:,3,cpos,:])
+            """
+            From 0 to 11
+            Counter (PX Id)
+            Iterations
+            Strength
+            Inclination
+            Azimuth
+            Eta0 parameter
+            Doppler width
+            Damping
+            Los velocity
+            Constant source function
+            Slope source function
+            Minimum chisqr value
+            """
+
+            noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
             low_values_flags = np.max(np.abs(data[:,:,3,:,:]),axis=0) < noise_in_V  # Where values are low
             
             rte_invs[2,low_values_flags] = 0
@@ -726,20 +744,29 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
             print(del_dummy)
 
-            b_los = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.)
-            v_los = rte_invs_noth[8,:,:]
+            rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[1]))
 
-            
+            rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
+            rte_data_products[1,:,:] = rte_invs_noth[2,:,:] #b mag strength
+            rte_data_products[2,:,:] = rte_invs_noth[3,:,:] #inclination
+            rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
+            rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
+            rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
+
             with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = b_los
+                hdu_list[0].data = rte
+                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_rte_data_products.fits', overwrite=True)
+
+            with fits.open(file_path) as hdu_list:
+                hdu_list[0].data = rte_data_products[5,:,:]
                 hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_blos_rte.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = v_los
+                hdu_list[0].data = rte_data_products[4,:,:]
                 hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_vlos_rte.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = rte_invs[9,:,:]+rte_invs[10,:,:]
+                hdu_list[0].data = rte_data_products[0,:,:]
                 hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_Icont_rte.fits', overwrite=True)
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
