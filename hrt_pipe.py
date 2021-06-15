@@ -313,7 +313,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                 flat *= 614400/128
 
             flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
-            flat = flat.reshape(data_size[0],data_size[1],6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
+            flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
             flat = np.moveaxis(flat, 2,-1)
             
             print(flat.shape)
@@ -740,8 +740,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         print(" ")
         printc('-->>>>>>> RUNNING CMILOS ',color=bcolors.OKGREEN)
-
-        start_time = time.time()
+        
         try:
             CMILOS_LOC = os.path.realpath(__file__)
 
@@ -761,6 +760,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         wavelength = 6173.3356
 
         for scan in range(int(data_shape[-1])):
+
+            start_time = time.time()
 
             if isinstance(data_f, str):
 
