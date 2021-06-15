@@ -208,10 +208,12 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         first_cpos = cpos_arr[0]
         result = all(c_position == first_cpos for c_position in cpos_arr)
         if (result):
-            print("All the scans have the same continuum wavelength position, shifting all to 0th index if not already there")
+            print("All the scans have the same continuum wavelength position")
 
         else:
-            print("The scans have different continuum_wavelength postitions! \n Attempting to shift all to the 0th index")
+            print("The scans have different continuum_wavelength postitions! Please fix \n Ending Process")
+
+            exit()
 
         data = np.stack(data_arr, axis = -1)
         data = np.moveaxis(data, 0,-2) #so that it is [y,x,24,scans]
