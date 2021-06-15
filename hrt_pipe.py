@@ -59,21 +59,21 @@ def demod_hrt(data,pmp_temp):
         #if data array has more than one scan
         data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
 
-        stokes_arr = np.matmul(demod,data)
-        stokes_arr = np.moveaxis(stokes_arr,0,-1) #move scans back to the end
+        data = np.matmul(demod,data)
+        data = np.moveaxis(data,0,-1) #move scans back to the end
     
     elif data.ndim == 4:
         #for if data has just one scan
-        stokes_arr = np.matmul(demod,data)
+        data = np.matmul(demod,data)
     
-    return stokes_arr, demod
+    return data, demod
     
 
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59, flat_states = 24, 
-                pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
-                out_dir = './',  out_demod_file = False,  correct_ghost = False, 
-                ItoQUV = False, rte = False):
+                prefilter_f = None, pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
+                out_dir = './',  out_demod_file = False,  correct_ghost = False, ItoQUV = False, 
+                ctalk_params = None, rte = False):
 
     '''
     PHI-HRT data reduction pipeline
@@ -115,6 +115,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         sigma of the gaussian convolution used for unsharp masking if clean_f == True      
     flat_states: int, DEFAULT: 24
         Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)
+    prefilter_f: str, DEFAULT None
+        file path location to prefilter fits file, apply prefilter correction
     pmp_temp: str, DEFAULT: '50'
         temperature of the PMP, to select the correct demodulation matrix
     flat_c: bool, DEFAULT: True
@@ -133,6 +135,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         correct the ghost in bottom left corner
     ItoQUV: bool, DEFAULT: False 
         apply I -> Q,U,V correction
+    ctalk_params: numpy arr, DEFAULT: None 
+        cross talk parameters for ItoQUV, (2,3) numpy array required: first axis: Slope, Offset (Normalised to I_c) - second axis:  Q,U,V
     rte: str, DEFAULT: False 
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     
@@ -172,6 +176,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         wve_axis_arr = [0]*number_of_scans
         cpos_arr = [0]*number_of_scans
+        voltagesData_arr = [0]*number_of_scans
+        tuning_constant_arr = [0]*number_of_scans
 
         for scan in range(number_of_scans):
             data_arr[scan], hdr_arr[scan] = get_data(data_f[scan])
@@ -182,7 +188,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
                 data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
-            wve_axis_arr[scan], _, _, cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
+            wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
 
 
         #--------
@@ -235,7 +241,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
   
         print(f"Data shape is {data.shape}")
 
-        wave_axis, _, _, cpos = fits_get_sampling(data_f,verbose = True)
+        wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(data_f,verbose = True)
 
         print("The data continuum wavelength position is at index: ", cpos)
 
@@ -245,6 +251,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             print("Data continuum position not at 0 or 5th index. Please reconcile. \n Ending Process")
 
             exit()
+
+        hdr_arr = list(header)
+        voltagesData_arr = list(voltagesData)
+        tuning_constant_arr = list(tuning_constant)
 
     else:
       printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
@@ -514,6 +524,45 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
 
     #-----------------
+    # PREFILTER CORRECTION  
+    #-----------------
+
+    if prefilter_f is not None:
+        printc('-->>>>>>> Prefilter Correction ',color=bcolors.OKGREEN)
+
+        start_time = time.time()
+
+        prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
+                            -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
+                            140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
+                            926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
+                            1711.67,1777.14,1842.61]
+
+        prefilter, _ = load_fits(prefilter_f)
+
+        prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
+
+        prefilter_array = np.tile(np.array(prefilter_voltages), (1,6,data_shape[-1]))
+
+        voltage_list = voltagesData[scan]
+
+        vdif = np.array(voltage_list)[np.newaxis, ..., np.newaxis] - prefilter_array 
+
+        def get_v1(x):
+            return min(abs(x),index1) #what is index1?
+
+        v1 = np.array(map(get_v1, vdif)) 
+
+        v2 = np.copy(vdif)
+
+
+
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Prefilter correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+
+    #-----------------
     # FIELD STOP 
     #-----------------
     
@@ -588,7 +637,68 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         
         print(" ")
         printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V ',color=bcolors.OKGREEN)
-   
+
+        start_time = time.time()
+
+        before_ctalk_data = np.copy(data)
+
+        num_of_scans = data_shape[-1]
+
+        try:
+            assert ctalk_params.shape == (2,3)
+        except AssertionError:
+            print("ctalk_params is not in the required (2,3) shape, please reconcile")
+
+        ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
+
+        cont_stokes = np.mean(data[512:1536,512:1536,0,cpos_arr[0],:], axis = (0,1))
+
+        for i in range(6):
+            stokes_i_wv_avg = np.mean(data[512:1536,512:1536,0,i,:], axis = (0,1))
+
+            if norm_stokes:
+                #if normed, applies normalised offset to normed stokes
+
+                tmp_param = ctalk_params*np.divide(stokes_i_wv_avg,cont_stokes)
+
+                q_slope = tmp_param[0,0,:]
+                u_slope = tmp_param[0,1,:]
+                v_slope = tmp_param[0,2,:]
+
+                q_int = tmp_param[1,0,:]
+                u_int = tmp_param[1,1,:]
+                v_int = tmp_param[1,2,:]
+
+                data[:,:,1,i,:] = before_ctalk_data[:,:,1,i,:] - before_ctalk_data[:,:,0,i,:]*q_slope - q_int
+
+                data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,0,i,:]*u_slope - u_int
+
+                data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int
+
+            else:
+                #if not normed, applies raw offset cross talk correction to raw stokes counts
+
+                tmp_param = ctalk_params[0,:,:]*np.divide(stokes_i_wv_avg,cont_stokes)
+
+                q_slope = tmp_param[0,:]
+                u_slope = tmp_param[1,:]
+                v_slope = tmp_param[2,:]
+
+                q_int = ctalk_params[1,0,:]
+                u_int = ctalk_params[1,1,:]
+                v_int = ctalk_params[1,2,:]
+
+                data[:,:,1,i,:] = before_ctalk_data[:,:,1,i,:] - before_ctalk_data[:,:,0,i,:]*q_slope - q_int*stokes_i_wv_avg 
+
+                data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,0,i,:]*u_slope - u_int*stokes_i_wv_avg 
+
+                data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int*stokes_i_wv_avg 
+
+
+        print(f"--- Cross talk correction time: {np.round(time.time() - start_time,3)} seconds ---")
+        
+        data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis]
+
 
     #-----------------
     #CHECK FOR INFs
