@@ -549,7 +549,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         vdif = np.array(voltage_list)[np.newaxis, ..., np.newaxis] - prefilter_array 
 
         def get_v1(x):
-            return min(abs(x),index1) #what is index1?
+            pass
+            #return min(abs(x),index1) #what is index1?
 
         v1 = np.array(map(get_v1, vdif)) 
 

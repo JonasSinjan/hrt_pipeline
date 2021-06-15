@@ -17,7 +17,7 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 12. normalise to quiet sun
 13. calibration <br />
         a) ghost correction - **not implemented yet** <br />
-        b) cross talk correction - **not implemented yet** <br />
+        b) cross talk correction <br />
 14. rte inversion with cmilos <br />
         a) output rte data products to fits file <br />
 ## SETUP
