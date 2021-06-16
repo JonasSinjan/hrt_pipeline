@@ -7,6 +7,8 @@ darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V2
 
 sciencedata_fits_filenames = ['../fits_files/' + i for i in sciencedata_fits_filenames]
 
+prefilter_f = '../fits_files/fitted_prefilter.fits'
+
 c_talk_params = np.zeros((2,3))
 
 q_slope = 0.0038
@@ -25,5 +27,5 @@ c_talk_params[1,0] = q_int
 c_talk_params[1,1] = u_int
 c_talk_params[1,2] = v_int
 
-data = phihrt_pipe(sciencedata_fits_filenames[1:], darkfield_fits_filename, flatfield_fits_filename, norm_stokes = True, 
-                    clean_f = True, ctalk_params = c_talk_params, ItoQUV = True, out_demod_file = True, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/stp-136_ctalk/', rte = 'RTE')
+data = phihrt_pipe(sciencedata_fits_filenames[1], darkfield_fits_filename, flatfield_fits_filename, norm_stokes = True, prefilter_f = prefilter_f, 
+                    clean_f = False, ctalk_params = c_talk_params, ItoQUV = False, out_demod_file = False, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/stp-136_ctalk/', rte = 'False')

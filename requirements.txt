@@ -8,3 +8,4 @@ os
 random
 subprocess
 statistics
+operator

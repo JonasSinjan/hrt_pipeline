@@ -5,6 +5,7 @@ from astropy.io import fits
 import subprocess
 from scipy.ndimage import gaussian_filter
 import time
+from operator import itemgetter
 
 from utils import *
 
@@ -290,7 +291,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     # TODO: Could check data dimensions? As an extra fail safe before progressing?
     #-----------------
     
-    
+    print(voltagesData_arr)
+
     #-----------------
     # READ FLAT FIELDS
     #-----------------
@@ -542,20 +544,33 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
-        prefilter_array = np.tile(np.array(prefilter_voltages), (1,6,data_shape[-1]))
+        def get_v1_index1(x):
+            index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
+            return  v1, index1
 
-        voltage_list = voltagesData[scan]
+        for scan in range(data_shape[-1]):
 
-        vdif = np.array(voltage_list)[np.newaxis, ..., np.newaxis] - prefilter_array 
+            voltage_list = voltagesData[scan]
+            
+            for wv in range(6):
 
-        def get_v1(x):
-            pass
-            #return min(abs(x),index1) #what is index1?
+                v = voltage_list[wv]
 
-        v1 = np.array(map(get_v1, vdif)) 
+                vdif = [v - pf for pf in prefilter_voltages]
+                
+                v1, index1 = get_v1_index1(vdif)
+                
+                if vdif[index1] >= 0:
+                    v2 = vdif[index1 + 1]
+                    index2 = index1 + 1
+                    
+                else:
+                    v2 = vdif[index1-1]
+                    index2 = index1 - 1
+                    
+                imprefilter = (prefilter[index1,:,:]*v1 + prefilter[index2,:,:]*v2)/(v1+v2)
 
-        v2 = np.copy(vdif)
-
+                data[:,:,:,wv,scan] /= imprefilter
 
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
