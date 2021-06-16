@@ -9,15 +9,15 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 5. option to clean flat field with unsharp masking (Stokes V only)
 6. normalise flat field
 7. apply flat field
-8. prefilter correction - **not implemented yet**
+8. prefilter correction
 9. read in field stop
 10. apply field stop
 11. demodulate with const demod matrix <br />
         a) option to output demod to fits file <br />
 12. normalise to quiet sun
 13. calibration <br />
-        a) ghost correction - **not implemented yet** <br />
-        b) cross talk correction <br />
+        a) cross talk correction <br />
+        (if required) b) ghost correction - **not implemented yet** <br />
 14. rte inversion with cmilos <br />
         a) output rte data products to fits file <br />
 ## SETUP

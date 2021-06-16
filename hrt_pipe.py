@@ -85,7 +85,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     5. option to clean flat field with unsharp masking
     6. normalise flat field
     7. apply flat field
-    8. prefilter correction - not implemented yet
+    8. prefilter correction
     9. read in field stop
     10. apply field stop
     11. demodulate with const demod matrix
