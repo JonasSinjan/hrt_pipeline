@@ -1,4 +1,5 @@
 from hrt_pipe import phihrt_pipe
+import numpy as np
 
 sciencedata_fits_filenames = ['solo_L0_phi-hrt-ilam_0667414905_V202103221851C_0142230602.fits', 'solo_L0_phi-hrt-ilam_0667415054_V202103221851C_0142230603.fits', 'solo_L0_phi-hrt-ilam_0667415205_V202103221851C_0142230604.fits', 'solo_L0_phi-hrt-ilam_0667415354_V202103221851C_0142230605.fits', 'solo_L0_phi-hrt-ilam_0667415505_V202103221851C_0142230606.fits', 'solo_L0_phi-hrt-ilam_0667415654_V202103221851C_0142230607.fits', 'solo_L0_phi-hrt-ilam_0667415805_V202103221851C_0142230608.fits']#['../fits_files/solo_L0_phi-hrt-ilam_0667414748_V202103221851C_0142230201.fits']
 flatfield_fits_filename = '../fits_files/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
@@ -6,5 +7,23 @@ darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V2
 
 sciencedata_fits_filenames = ['../fits_files/' + i for i in sciencedata_fits_filenames]
 
-data = phihrt_pipe(sciencedata_fits_filenames, darkfield_fits_filename, flatfield_fits_filename, norm_stokes = True, 
-                    clean_f = True, out_demod_file = True, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/stp-136/', rte = 'RTE')
+c_talk_params = np.zeros((2,3))
+
+q_slope = 0.0038
+u_slope = -0.0077
+v_slope = -0.0009
+
+q_int = -0.0056
+u_int = 0.0031
+v_int = -0.0002 
+
+c_talk_params[0,0] = q_slope
+c_talk_params[0,1] = u_slope
+c_talk_params[0,2] = v_slope
+
+c_talk_params[1,0] = q_int
+c_talk_params[1,1] = u_int
+c_talk_params[1,2] = v_int
+
+data = phihrt_pipe(sciencedata_fits_filenames[1:], darkfield_fits_filename, flatfield_fits_filename, norm_stokes = True, 
+                    clean_f = True, ctalk_params = c_talk_params, ItoQUV = True, out_demod_file = True, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/stp-136_ctalk/', rte = 'RTE')

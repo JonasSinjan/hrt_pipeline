@@ -245,16 +245,16 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         print("The data continuum wavelength position is at index: ", cpos)
 
-        cpos_arr = list(cpos)
+        cpos_arr = [cpos]
 
         if cpos_arr[0] != 0 and cpos_arr[0] != 5:
             print("Data continuum position not at 0 or 5th index. Please reconcile. \n Ending Process")
 
             exit()
 
-        hdr_arr = list(header)
-        voltagesData_arr = list(voltagesData)
-        tuning_constant_arr = list(tuning_constant)
+        hdr_arr = [header]
+        voltagesData_arr = [voltagesData]
+        tuning_constant_arr = [tuning_constant]
 
     else:
       printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
@@ -637,7 +637,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     if ItoQUV:
         
         print(" ")
-        printc('-->>>>>>> Cross-talk correction from Stokes I to Stokes Q,U,V ',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Cross-talk correction I to Q,U,V ',color=bcolors.OKGREEN)
 
         start_time = time.time()
 
@@ -696,7 +696,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                 data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int*stokes_i_wv_avg 
 
 
-        print(f"--- Cross talk correction time: {np.round(time.time() - start_time,3)} seconds ---")
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
         data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis]
 
@@ -851,7 +853,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             rte_invs[3,low_values_flags] = 0
             rte_invs[4,low_values_flags] = 0
 
-            np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
+            #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
             
             del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
             #print(del_dummy)
