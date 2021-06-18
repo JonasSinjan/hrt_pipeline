@@ -93,7 +93,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     12. normalise to quiet sun
     13. calibration
         a) ghost correction - not implemented yet
-        b) cross talk correction - not implemented yet
+        b) cross talk correction
     14. rte inversion with cmilos
         a) output rte data products to fits file
 
@@ -291,7 +291,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     # TODO: Could check data dimensions? As an extra fail safe before progressing?
     #-----------------
     
-    print(voltagesData_arr)
+    #print(voltagesData_arr)
 
     #-----------------
     # READ FLAT FIELDS
@@ -637,7 +637,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         for scan in range(data_shape[-1]):
             
-            I_c = np.mean(data[512:1536,512:1536,0,0,int(scan)]) #mean of central 1k x 1k of continuum stokes I - all data cpos shifted to 0
+            I_c = np.mean(data[512:1536,512:1536,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
