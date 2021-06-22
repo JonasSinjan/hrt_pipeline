@@ -72,7 +72,7 @@ def demod_hrt(data,pmp_temp):
 
 
 def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59, flat_states = 24, 
-                prefilter_f = None, pmp_temp = '50',flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
+                prefilter_f = None,flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
                 out_dir = './',  out_demod_file = False,  correct_ghost = False, ItoQUV = False, 
                 ctalk_params = None, rte = False):
 
@@ -118,8 +118,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)
     prefilter_f: str, DEFAULT None
         file path location to prefilter fits file, apply prefilter correction
-    pmp_temp: str, DEFAULT: '50'
-        temperature of the PMP, to select the correct demodulation matrix
     flat_c: bool, DEFAULT: True
         apply flat field correction
     dark_c: bool, DEFAULT: True
@@ -197,7 +195,6 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         #--------
 
         first_shape = data_arr[scan].shape
-
         result = all(element.shape == first_shape for element in data_arr)
         if (result):
             print("All the scans have the same dimension")
@@ -219,6 +216,21 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         else:
             print("The scans have different continuum_wavelength postitions! Please fix \n Ending Process")
+
+            exit()
+
+        #--------
+        #test if the scans have different pmp temperatures
+        #--------
+
+        first_pmp_temp = hdr_arr[0]['HPMPTSP1']
+        result = all(hdr['HPMPTSP1'] == first_pmp_temp for hdr in hdr_arr)
+        if (result):
+            print(f"All the scans have the same PMP Temperature Set Point: {first_pmp_temp}")
+            pmp_temp = str(first_pmp_temp)
+
+        else:
+            print("The scans have different PMP Temperatures! Please fix \n Ending Process")
 
             exit()
 
@@ -256,6 +268,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         hdr_arr = [header]
         voltagesData_arr = [voltagesData]
         tuning_constant_arr = [tuning_constant]
+
+        pmp_temp = str(header['HPMPTSP1'])
+        print(f"Data PMP Set Point Temperature is {pmp_temp}")
 
     else:
       printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
@@ -337,6 +352,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                 print("The flat field continuum position is not the same as the data, please check your input data. \n Ending Process")
 
                 exit()
+
+            flat_pmp_temp = str(header_flat['HPMPTSP1'])
+
+            print(f"Flat PMP Set Point Temperature is {flat_pmp_temp}")
                 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -422,7 +441,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         #demod the flats
 
-        flat_demod, demodM = demod_hrt(flat, pmp_temp)
+        
+
+        flat_demod, demodM = demod_hrt(flat, flat_pmp_temp)
 
         norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
 
