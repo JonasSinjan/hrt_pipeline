@@ -30,5 +30,5 @@ c_talk_params[1,0] = q_int
 c_talk_params[1,1] = u_int
 c_talk_params[1,2] = v_int
 
-phihrt_pipe(sciencedata_fits_filenames, darkfield_fits_filename, flatfield_fits_filename, lat_states = 24, norm_stokes = True, prefilter_f = None, 
+phihrt_pipe(sciencedata_fits_filenames, darkfield_fits_filename, flatfield_fits_filename, flat_states = 24, norm_stokes = True, prefilter_f = None, 
                    clean_f = True, ctalk_params = None, ItoQUV = False, out_demod_file = True, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/stp-144/', rte = 'False')
