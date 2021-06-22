@@ -732,12 +732,36 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             print(" ")
             printc('Saving demodulated data to one _reduced.fits file per scan')
 
+            #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
+            scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
+
+            seen = set()
+            uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
+
+            if uniq_scan_DIDs == scan_name_list:
+                print("The scan's DIDs are all unique")
+
+            else:
+
+                for x in uniq_scan_DIDs:
+                    number = scan_name_list.count(x)
+                    if number > 1: #if more than one
+                        print(f"The DID: {x} is repeated {number} times.")
+                        i = 1
+                        for index, name in enumerate(scan_name_list):
+                            if name == x:
+                                scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
+                                i += 1
+
+                print("The New DID list is: ", scan_name_list)
+                        
+
             for count, scan in enumerate(data_f):
 
                 with fits.open(scan) as hdu_list:
 
                     hdu_list[0].data = data[:,:,:,:,count]
-                    hdu_list.writeto(out_dir + str(scan.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
+                    hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
 
         if isinstance(data_f, str):
             print(" ")

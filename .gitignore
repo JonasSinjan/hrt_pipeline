@@ -14,3 +14,4 @@ cmilos/*.h
 cmilos/*
 _RTE.npz
 *.npz
+.env
