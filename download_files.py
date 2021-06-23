@@ -4,14 +4,14 @@ import os
 
 #########################################################
 """
-To make this work need to create a .env file:
+To make this work need to create a .env file and install dotenv: 'pip install dotenv':
 USER_NAME = YOUR LOGIN USERNAME (NORMALLY JUST YOUR LAST NAME)
 PHIDATAPASSWORD = YOUR WINDOWS PASSWORD
 """
 #########################################################
 
 
-def download_file(url, dload_location = '../fits_files'):
+def download_file(url, dload_location = '../fits_files/'):
   """
   Download files from the given url and store locally
   
@@ -46,7 +46,9 @@ if __name__ == "__main__":
 
   url = 'https://www2.mps.mpg.de/services/proton/phi/fm/attic/'
 
+  download_folder = '../fits_files/'
+
   for file in files:
 
-    download_file(url + path + file)
+    download_file(url + path + file, dload_location = download_folder)
 

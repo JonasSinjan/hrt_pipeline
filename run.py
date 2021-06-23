@@ -23,7 +23,7 @@ q_slope = 0.0038
 u_slope = -0.0077
 v_slope = -0.0009
 
-q_int = -0.0056
+q_int = -0.0056 #the offset, normalised to I_c
 u_int = 0.0031
 v_int = -0.0002 
 
