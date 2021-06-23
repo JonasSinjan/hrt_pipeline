@@ -10,18 +10,20 @@ from operator import itemgetter
 from utils import *
 
 
-def get_data(path):
+def get_data(path, scaling = True):
     """load science data from path"""
     try:
         data, header = load_fits(path)
+
+        if scaling:
       
-        data /=  256. #conversion from 24.8bit to 32bit
+            data /=  256. #conversion from 24.8bit to 32bit
 
-        accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
+            accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
 
-        data /= accu
+            data /= accu
 
-        printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
+            printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
         
         return data, header
 
@@ -71,10 +73,10 @@ def demod_hrt(data,pmp_temp):
     
 
 
-def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59, flat_states = 24, 
-                prefilter_f = None,flat_c = True,dark_c = True, demod = True, norm_stokes = True, 
-                out_dir = './',  out_demod_file = False,  correct_ghost = False, ItoQUV = False, 
-                ctalk_params = None, rte = False):
+def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = True, clean_f = False, 
+                sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, field_stop = True,
+                demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  
+                correct_ghost = False, ItoQUV = False, ctalk_params = None, rte = False):
 
     '''
     PHI-HRT data reduction pipeline
@@ -102,12 +104,14 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         Input:
     data_f : list or string
         list containing paths to fits files of the raw HRT data OR string of path to one file  
-    dark_f : string
+    dark_f : string, DEFAULT ''
         Fits file of a dark file (ONLY ONE FILE)
-    flat_f : string
+    flat_f : string, DEFAULT ''
         Fits file of a HRT flatfield (ONLY ONE FILE)
 
     ** Options:
+    read_scale_data: bool, DEFAULT True
+        reads in science data and performs appropriate scaling
     norm_f: bool, DEFAULT: True
         to normalise the flat fields before applying
     clean_f: bool, DEFAULT: False
@@ -122,6 +126,8 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         apply flat field correction
     dark_c: bool, DEFAULT: True
         apply dark field correction
+    field_stop: bool, DEFAULT True
+        apply HRT field stop
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
     norm_stokes: bool, DEFAULT: True
@@ -158,7 +164,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     #-----------------
     # READ DATA
     #-----------------
-    
+
     print(" ")
     printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN) 
 
@@ -179,15 +185,17 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         tuning_constant_arr = [0]*number_of_scans
 
         for scan in range(number_of_scans):
-            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan])
-
-            if hdr_arr[scan]['BITPIX'] == 16:
-
-                print(f"This scan: {data_f[scan]} has a bits per pixel of: 16 \nPerforming the extra scaling")
-
-                data_arr[scan] *= 81920/127 #conversion factor if 16 bits
+            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = scale_data)
 
             wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
+
+            if scale_data:
+
+                if hdr_arr[scan]['BITPIX'] == 16:
+
+                    print(f"This scan: {data_f[scan]} has a bits per pixel of: 16 \nPerforming the extra scaling")
+
+                    data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
 
         #--------
@@ -241,7 +249,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
     elif isinstance(data_f, str):
         #case when data f is just one file
-        data, header = get_data(data_f)
+        data, header = get_data(data_f, scaling = scale_data)
         data = np.expand_dims(data, axis = -1) #so that it has the same dimensions as several scans
         data = np.moveaxis(data, 0, -2) #so that it is [y,x,24,1]
 
@@ -251,7 +259,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
             data *= 81920/127 #conversion factor if 16 bits
 
-  
+
         print(f"Data shape is {data.shape}")
 
         wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(data_f,verbose = True)
@@ -273,9 +281,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         print(f"Data PMP Set Point Temperature is {pmp_temp}")
 
     else:
-      printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
-      exit()
-      
+        printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
+        exit()
+
     data_shape = data.shape
 
     data_size = data_shape[:2]
@@ -422,6 +430,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+    else:
+        print(" ")
+        printc('-->>>>>>> No dark mode',color=bcolors.WARNING)
 
     #-----------------
     # OPTIONAL Unsharp Masking clean the flat field stokes V images
@@ -479,7 +490,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-
+    else:
+        print(" ")
+        printc('-->>>>>>> No clean flats mode',color=bcolors.WARNING)
     #-----------------
     # NORM FLAT FIELDS
     #-----------------
@@ -501,6 +514,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         except Exception:
             printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No normalising flats mode',color=bcolors.WARNING)
 
 
     #-----------------
@@ -544,6 +561,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No flat field correction mode',color=bcolors.WARNING)
 
 
     #-----------------
@@ -599,25 +620,34 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Prefilter correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+    else:
+        print(" ")
+        printc('-->>>>>>> No prefilter mode',color=bcolors.WARNING)
 
     #-----------------
     # FIELD STOP 
     #-----------------
+
+    if field_stop:
     
-    print(" ")
-    printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
+        print(" ")
+        printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
 
-    start_time = time.time()
-    
-    field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
+        start_time = time.time()
+        
+        field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
 
-    field_stop = np.where(field_stop > 0,1,0)
+        field_stop = np.where(field_stop > 0,1,0)
 
-    data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
+        data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
 
-    printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No field stop mode',color=bcolors.WARNING)
 
 
     #-----------------
@@ -645,7 +675,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-
+    else:
+        print(" ")
+        printc('-->>>>>>> No demod mode',color=bcolors.WARNING)
     #-----------------
     # APPLY NORMALIZATION 
     #-----------------
@@ -666,7 +698,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-
+    else:
+        print(" ")
+        printc('-->>>>>>> No normalising Stokes mode',color=bcolors.WARNING)
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
@@ -739,6 +773,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
         
         data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis]
 
+    else:
+        print(" ")
+        printc('-->>>>>>> No ItoQUV mode',color=bcolors.WARNING)
+
 
     #-----------------
     #CHECK FOR INFs
@@ -796,6 +834,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                 hdu_list[0].data = data
                 hdu_list.writeto(out_dir + str(data_f.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
 
+    else:
+        print(" ")
+        printc('-->>>>>>> No output demod file mode',color=bcolors.WARNING)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
@@ -951,6 +992,10 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No RTE Inversion mode',color=bcolors.WARNING)
 
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
