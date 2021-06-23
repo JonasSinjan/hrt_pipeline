@@ -551,6 +551,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
     #-----------------
 
     if prefilter_f is not None:
+        print(" ")
         printc('-->>>>>>> Prefilter Correction ',color=bcolors.OKGREEN)
 
         start_time = time.time()
@@ -563,7 +564,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         prefilter, _ = load_fits(prefilter_f)
 
-        prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
+        #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
         def get_v1_index1(x):
             index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
@@ -571,7 +572,7 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
 
         for scan in range(data_shape[-1]):
 
-            voltage_list = voltagesData[scan]
+            voltage_list = voltagesData_arr[scan]
             
             for wv in range(6):
 
@@ -589,9 +590,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
                     v2 = vdif[index1-1]
                     index2 = index1 - 1
                     
-                imprefilter = (prefilter[index1,:,:]*v1 + prefilter[index2,:,:]*v2)/(v1+v2)
+                imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2)
 
-                data[:,:,:,wv,scan] /= imprefilter
+                data[:,:,:,wv,scan] /= imprefilter[...,np.newaxis]
 
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -759,7 +760,9 @@ def phihrt_pipe(data_f,dark_f,flat_f,norm_f = True, clean_f = False, sigma = 59,
             seen = set()
             uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
 
-            if uniq_scan_DIDs == scan_name_list:
+            print(uniq_scan_DIDs)
+            print(scan_name_list)
+            if uniq_scan_DIDs == []:
                 print("The scan's DIDs are all unique")
 
             else:
