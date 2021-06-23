@@ -51,7 +51,7 @@ def fits_get_sampling(file,verbose = False):
 
     From SPGPylibs PHITools
     '''
-    print('-- Obtaining voltages......')
+    #print('-- Obtaining voltages......')
     fg_head = 3
     try:
         with fits.open(file) as hdu_list:

@@ -198,6 +198,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
                     data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
+            if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
+                print("This scan has been flipped in the Y axis to conform to orientation standards.")
 
         #--------
         # test if the scans have different sizes
