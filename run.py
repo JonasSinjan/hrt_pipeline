@@ -17,6 +17,14 @@ sciencedata_fits_filenames = ['../fits_files/' + i for i in sciencedata_fits_fil
 
 prefilter_f = '../fits_files/fitted_prefilter.fits'
 
+#######################################################################################################
+#
+# The fitted prefilter can be downloaded from: 
+# http://www2.mps.mpg.de/data/outgoing/hirzberger/solo/RSCW3_helioseismology_test/fitted_prefilter.fits
+# OR from BOB: /www/docs/data/outgoing/hirzberger/solo/RSCW3_helioseismology_test/fitted_prefilter.fits
+#
+#######################################################################################################
+
 c_talk_params = np.zeros((2,3))
 
 q_slope = 0#0.0038
@@ -99,7 +107,7 @@ ItoQUV: bool, DEFAULT: False
 
 ctalk_params: numpy arr, DEFAULT: None 
     cross talk parameters for ItoQUV, (2,3) numpy array required: first axis: Slope, Offset (Normalised to I_c) - second axis:  Q,U,V
-    
+
 rte: str, DEFAULT: False 
     invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
 """

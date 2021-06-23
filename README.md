@@ -43,7 +43,7 @@ using conda
 conda create --name <env_name> --file requirements.txt
 ```
 2. Change fits files paths, desired processing steps and output directory in ```run.py```
-
+ 
 3. Execute ```run.py```
 
 ```bash
