@@ -161,6 +161,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     overall_time = time.time()
+    
     #-----------------
     # READ DATA
     #-----------------
@@ -199,7 +200,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
 
         #--------
-        #test if the scans have different sizes
+        # test if the scans have different sizes
         #--------
 
         first_shape = data_arr[scan].shape
@@ -214,7 +215,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
 
         #--------
-        #test if the scans have different continuum wavelength_positions
+        # test if the scans have different continuum wavelength_positions
         #--------
 
         first_cpos = cpos_arr[0]
@@ -228,7 +229,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
             exit()
 
         #--------
-        #test if the scans have different pmp temperatures
+        # test if the scans have different pmp temperatures
         #--------
 
         first_pmp_temp = hdr_arr[0]['HPMPTSP1']
@@ -309,12 +310,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
-    #-----------------
-    # TODO: Could check data dimensions? As an extra fail safe before progressing?
-    #-----------------
-    
-    #print(voltagesData_arr)
 
     #-----------------
     # READ FLAT FIELDS
@@ -434,6 +429,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
         print(" ")
         printc('-->>>>>>> No dark mode',color=bcolors.WARNING)
 
+
     #-----------------
     # OPTIONAL Unsharp Masking clean the flat field stokes V images
     #-----------------
@@ -493,6 +489,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     else:
         print(" ")
         printc('-->>>>>>> No clean flats mode',color=bcolors.WARNING)
+
+
     #-----------------
     # NORM FLAT FIELDS
     #-----------------
@@ -678,6 +676,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     else:
         print(" ")
         printc('-->>>>>>> No demod mode',color=bcolors.WARNING)
+
+
     #-----------------
     # APPLY NORMALIZATION 
     #-----------------
@@ -701,6 +701,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     else:
         print(" ")
         printc('-->>>>>>> No normalising Stokes mode',color=bcolors.WARNING)
+
+
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
