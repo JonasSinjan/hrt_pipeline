@@ -20,6 +20,9 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
         (if required) b) ghost correction - **not implemented yet** <br />
 14. rte inversion with cmilos <br />
         a) output rte data products to fits file <br />
+
+## NOTE
+At the moment it cannot process compressed data (5 or 6 bit compression)
 ## SETUP
 
 1. Compile milos:

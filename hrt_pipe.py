@@ -74,7 +74,7 @@ def demod_hrt(data,pmp_temp):
 
 
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = True, clean_f = False, 
-                sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, field_stop = True,
+                sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
                 demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  
                 correct_ghost = False, ItoQUV = False, ctalk_params = None, rte = False):
 
@@ -103,7 +103,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     ----------
         Input:
     data_f : list or string
-        list containing paths to fits files of the raw HRT data OR string of path to one file  
+        list containing paths to fits files of the raw HRT data OR string of path to one file  - must have last 10 characters before .fits as the DID - for naming purposes of output files
     dark_f : string, DEFAULT ''
         Fits file of a dark file (ONLY ONE FILE)
     flat_f : string, DEFAULT ''
@@ -126,7 +126,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
         apply flat field correction
     dark_c: bool, DEFAULT: True
         apply dark field correction
-    field_stop: bool, DEFAULT True
+    fs_c: bool, DEFAULT True
         apply HRT field stop
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
@@ -628,7 +628,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
     # FIELD STOP 
     #-----------------
 
-    if field_stop:
+    if fs_c:
     
         print(" ")
         printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
@@ -802,8 +802,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
             seen = set()
             uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
 
-            print(uniq_scan_DIDs)
-            print(scan_name_list)
+            #print(uniq_scan_DIDs)
+            #print(scan_name_list)
             if uniq_scan_DIDs == []:
                 print("The scan's DIDs are all unique")
 
