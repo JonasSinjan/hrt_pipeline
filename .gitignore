@@ -9,9 +9,9 @@ __pycache__/utils.cpython-36.pyc
 _0142230201_reduced.fits
 dummy*.txt
 *.fits
-cmilos/*.c
-cmilos/*.h
-cmilos/*
+# cmilos/*.c
+# cmilos/*.h
+# cmilos/*
 _RTE.npz
 *.npz
 .env

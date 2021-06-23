@@ -358,7 +358,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
             flat_pmp_temp = str(header_flat['HPMPTSP1'])
 
-            print(f"Flat PMP Set Point Temperature is {flat_pmp_temp}")
+            print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
                 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
