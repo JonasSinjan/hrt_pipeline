@@ -21,8 +21,12 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 14. rte inversion with cmilos <br />
         a) output rte data products to fits file <br />
 
-## NOTE
-At the moment it cannot process compressed data (5 or 6 bit compression)
+
+## DOWNLOAD FILES
+
+EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg.de/services/proton/phi/imgdb/ <br />
+OR : use download_files.py to download images from the attic repository
+
 ## SETUP
 
 1. Compile milos:
