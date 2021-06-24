@@ -791,6 +791,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
     
     if out_demod_file:
+
+        #check if the output directory exists, if not, create it
+        if not os.path.exists(out_dir): 
+            print(f"{out_dir} does not exist, creating it now")
+            os.makedirs(out_dir)
         
         if isinstance(data_f, list):
             print(" ")
@@ -812,7 +817,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
                 for x in uniq_scan_DIDs:
                     number = scan_name_list.count(x)
                     if number > 1: #if more than one
-                        print(f"The DID: {x} is repeated {number} times.")
+                        print(f"The DID: {x} is repeated {number} times")
                         i = 1
                         for index, name in enumerate(scan_name_list):
                             if name == x:

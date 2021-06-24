@@ -25,6 +25,18 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 ## DOWNLOAD FILES
 
 EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg.de/services/proton/phi/imgdb/ <br />
+
+Suggested filters for HRT science data: 
+- KEYWORD DETECTOR = 'HRT' <br />
+- Filename* like \*L1_phi-hrt-ilam\*
+        
+To download via the command line (eg if you want to save the files on a server and not locally)
+```
+wget --user yourusername --password yourpassword the_web_address_of_the_file_you_want_from_the_database
+gunzip file.gz
+```
+Gunzip used to unpack the .gz to the file you want  <br />
+
 OR : use download_files.py to download images from the attic repository
 
 ## SETUP
