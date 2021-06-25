@@ -15,3 +15,4 @@ dummy*.txt
 _RTE.npz
 *.npz
 .env
+run.py
