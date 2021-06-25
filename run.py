@@ -39,8 +39,6 @@ c_talk_params[1,0] = q_int
 c_talk_params[1,1] = u_int
 c_talk_params[1,2] = v_int
 
-print(sciencedata_fits_filenames)
-
 phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = True, norm_f = True, clean_f = True, 
             sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = prefilter_f, dark_c = True, flat_c = True, 
             fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = True, out_demod_file = True, 
