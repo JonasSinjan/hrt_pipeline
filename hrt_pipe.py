@@ -76,7 +76,7 @@ def demod_hrt(data,pmp_temp):
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = True, clean_f = False, 
                 sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
                 demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  
-                correct_ghost = False, ItoQUV = False, ctalk_params = None, rte = False):
+                correct_ghost = False, ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = ''):
 
     '''
     PHI-HRT data reduction pipeline
@@ -144,6 +144,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
         cross talk parameters for ItoQUV, (2,3) numpy array required: first axis: Slope, Offset (Normalised to I_c) - second axis:  Q,U,V
     rte: str, DEFAULT: False 
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
+    out_rte_filename: str, DEFAULT = ''
+        if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     
     Returns
     -------
@@ -982,21 +984,26 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
             rte_data_products *= field_stop[np.newaxis,start_row:start_row + data_size[0],start_col:start_col + data_size[1]] #field stop, set outside to 0
 
+            if out_rte_filename == '':
+                filename_root = str(file_path.split('.fits')[0][-10:])
+            else:
+                filename_root = out_rte_filename
+
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = rte_data_products
-                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_rte_data_products.fits', overwrite=True)
+                hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = rte_data_products[5,:,:]
-                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_blos_rte.fits', overwrite=True)
+                hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = rte_data_products[4,:,:]
-                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_vlos_rte.fits', overwrite=True)
+                hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
             with fits.open(file_path) as hdu_list:
                 hdu_list[0].data = rte_data_products[0,:,:]
-                hdu_list.writeto(out_dir+str(file_path.split('.fits')[0][-10:])+'_Icont_rte.fits', overwrite=True)
+                hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
