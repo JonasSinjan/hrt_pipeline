@@ -27,9 +27,6 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 Any and all steps can be turned oon or off as you wish using the keywords in the `phihrt_pipe` function
 
 
-***
-
-
 ## **DOWNLOAD INPUT FILES**
 
 
@@ -47,7 +44,7 @@ gunzip file.gz
 Gunzip used to unpack the .gz to the file you want  <br>
 
 OR : use download_files.py to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
-***
+
 ## **SETUP**
 
 1. Compile milos:
@@ -74,7 +71,6 @@ conda create --name <env_name> --file requirements.txt
 ```bash
 python run.py
 ```
-***
 ## **OUTPUT**
 
 #### **Demod File**
