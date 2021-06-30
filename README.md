@@ -34,7 +34,7 @@ EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg
 
 Suggested filters for HRT science data: 
 - **KEYWORD DETECTOR = 'HRT'** <br >
-- **Filename\* like \*L1_phi-hrt-ilam\***
+- **Filename\* like \*L1_phi-hrt-ilam_date\***
         
 To download via the command line (eg: if you want to save the files on a server and not locally)
 ```
@@ -43,7 +43,21 @@ gunzip file.gz
 ```
 Gunzip used to unpack the .gz to the file you want  <br>
 
-OR : use download_files.py to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
+Can also use `download_from_db.py` to perform multi download from database
+
+Instructions:
+  1. From the database find the files you wish to download
+  2. Copy the 'Download File List' that the database will generate
+  3. Paste into the `file_names.txt` file
+  4. Create a `.env` file with your MPS windows login: <br> 
+      ```text=
+      USER_NAME =
+      PHIDATAPASSWORD =
+      ```  
+  5. Set the target download folder in the `download_from_db.py` file
+  6. Run the file (will require dotenv python module to be installed) 
+
+OR : use `download_files.py` to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
 
 ## **SETUP**
 
