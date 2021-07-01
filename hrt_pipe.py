@@ -1,4 +1,3 @@
-from re import L
 import numpy as np 
 import os.path
 from astropy.io import fits
