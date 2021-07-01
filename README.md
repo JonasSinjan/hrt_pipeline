@@ -74,7 +74,7 @@ using pip - REQUIRES PYTHON >= 3.6
 ```bash
 pip install -r requirements.txt
 ```
-using conda
+using conda (Anaconda3) - creates virtual environment called 'dataproc'
 ```bash
 conda env create -f environment.yml
 ```
