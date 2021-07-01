@@ -70,13 +70,13 @@ make
         
 2. Setup virtual environment from requirements.txt
 
-using pip
+using pip - REQUIRES PYTHON >= 3.6
 ```bash
 pip install -r requirements.txt
 ```
 using conda
 ```bash
-conda create --name <env_name> --file requirements.txt
+conda env create -f environment.yml
 ```
 2. Change fits files paths, desired processing steps and output directory in ```run.py```
  
