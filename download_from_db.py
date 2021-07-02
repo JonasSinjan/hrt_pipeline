@@ -19,7 +19,7 @@ text = file.read()
 
 text_split = get_file_list(text)
 
-target_directory = '/scratch/slam/sinjan/solo_attic_fits/fits_files/'
+target_directory = '/data/slam/home/sinjan/fits_files/'
 
 os.chdir(target_directory)
 
@@ -33,5 +33,6 @@ for file in text_split:
   else:
     subprocess.call(["wget", "--user", f"{username}","--password", f"{password}", f"https://www2.mps.mpg.de/services/proton/phi/imgdb/{file}"])
     subprocess.call(["gunzip", f"{file}"])
+    subprocess.call(["chmod", "a+r", f"{file}"])
 
 print("Download and unpacking complete")

@@ -9,15 +9,16 @@ from operator import itemgetter
 from utils import *
 
 
-def get_data(path, scaling = True):
+def get_data(path, scaling = True, bit_convert_scale = True):
     """load science data from path"""
     try:
         data, header = load_fits(path)
 
-        if scaling:
-      
-            data /=  256. #conversion from 24.8bit to 32bit
+        if bit_convert_scale: #conversion from 24.8bit to 32bit
+                data /=  256.
 
+        if scaling:
+            
             accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
 
             data /= accu
@@ -72,7 +73,7 @@ def demod_hrt(data,pmp_temp):
     
 
 
-def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = True, clean_f = False, 
+def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = True, norm_f = True, clean_f = False, 
                 sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
                 demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  
                 correct_ghost = False, ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = ''):
@@ -193,11 +194,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
             if scale_data:
 
-                if hdr_arr[scan]['BITPIX'] == 16:
+                #if hdr_arr[scan]['BITPIX'] == 16:
 
-                    print(f"This scan: {data_f[scan]} has a bits per pixel of: 16 \nPerforming the extra scaling")
+                #    print(f"This scan: {data_f[scan]} has a bits per pixel of: 16 \nPerforming the extra scaling")
 
-                    data_arr[scan] *= 81920/127 #conversion factor if 16 bits
+                data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
                 print("This scan has been flipped in the Y axis to conform to orientation standards.")
@@ -251,6 +252,21 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
         print(f"Data shape is {data.shape}")
 
+        #--------
+        # test if the scans have same IMGDIRX keyword
+        #--------
+        if all('IMGDIRX' in hdr for hdr in hdr_arr):
+            first_imgdirx = hdr_arr[0]['IMGDIRX']
+            result = all(hdr['IMGDIRX'] == first_imgdirx for hdr in hdr_arr)
+            if (result):
+                print(f"All the scans have the same IMGDIRX keyword: {first_imgdirx}")
+                imgdirx_flipped = str(first_imgdirx)
+            else:
+                print("The scans have different IMGDIRX keywords! Please fix \n Ending Process")
+                exit()
+        else:
+            print("Not all the scans contain the 'IMGDIRX' keyword! Assuming not flipped")
+
     elif isinstance(data_f, str):
         #case when data f is just one file
         data, header = get_data(data_f, scaling = scale_data)
@@ -283,6 +299,13 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
         pmp_temp = str(header['HPMPTSP1'])
         print(f"Data PMP Set Point Temperature is {pmp_temp}")
+
+        if 'IMGDIRX' in header:
+            imgdirx_flipped = str(header['IMGDIRX'])
+
+        else:
+            print("Scan header does not contain the 'IMGDIRX' keyword! Assuming not flipped")
+
 
     else:
         printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
@@ -324,51 +347,51 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
         start_time = time.time()
     
-        try:
-            flat, header_flat = get_data(flat_f)
+        #try:
+        flat, header_flat = get_data(flat_f, bit_convert_scale=bit_flat)
 
-            print(f"Flat field shape is {flat.shape}")
+        print(f"Flat field shape is {flat.shape}")
+        
+        if header_flat['BITPIX'] == 16:
+
+            print("Number of bits per pixel is: 16")
+
+            flat *= 614400/128
+
+        flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
+        flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
+        flat = np.moveaxis(flat, 2,-1)
+        
+        print(flat.shape)
+
+        _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
+
+        print(f"The continuum position of the flat field is at {cpos_f} index position")
+        
+        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits':
             
-            if header_flat['BITPIX'] == 16:
-    
-                print("Number of bits per pixel is: 16")
-
-                flat *= 614400/128
-
-            flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
-            flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
-            flat = np.moveaxis(flat, 2,-1)
+            print("This flat needs to be rolled")
             
-            print(flat.shape)
+            flat = np.roll(flat, 1, axis = -1)
 
-            _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
+            cpos_f = cpos_arr[0]
 
-            print(f"The continuum position of the flat field is at {cpos_f} index position")
+        #if continuum wavelength of the flat is not the same as the data, attempt to roll
+        if cpos_f != cpos_arr[0]:
+            print("The flat field continuum position is not the same as the data, please check your input data. \n Ending Process")
+
+            exit()
+
+        flat_pmp_temp = str(header_flat['HPMPTSP1'])
+
+        print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
             
-            if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits':
-                
-                print("This flat needs to be rolled")
-                
-                flat = np.roll(flat, 1, axis = -1)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-                cpos_f = cpos_arr[0]
-
-            #if continuum wavelength of the flat is not the same as the data, attempt to roll
-            if cpos_f != cpos_arr[0]:
-                print("The flat field continuum position is not the same as the data, please check your input data. \n Ending Process")
-
-                exit()
-
-            flat_pmp_temp = str(header_flat['HPMPTSP1'])
-
-            print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
-                
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
-        except Exception:
-            printc("ERROR, Unable to open flats file: {}",flat_f,color=bcolors.FAIL)
+        # except Exception:
+        #     printc("ERROR, Unable to open/process flats file: {}",flat_f,color=bcolors.FAIL)
 
 
     else:
@@ -450,8 +473,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
             flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
 
         #demod the flats
-
-        
 
         flat_demod, demodM = demod_hrt(flat, flat_pmp_temp)
 
@@ -640,6 +661,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
         field_stop = np.where(field_stop > 0,1,0)
 
+        if imgdirx_flipped == 'NO':
+            field_stop = field_stop[:,::-1]
+
         data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -795,7 +819,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
 
         #check if the output directory exists, if not, create it
         if not os.path.exists(out_dir): 
-            print(f"{out_dir} does not exist, creating it now")
+            print(f"{out_dir} does not exist -->>>>>>> Creating it")
             os.makedirs(out_dir)
         
         if isinstance(data_f, list):
@@ -811,7 +835,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
             #print(uniq_scan_DIDs)
             #print(scan_name_list)
             if uniq_scan_DIDs == []:
-                print("The scan's DIDs are all unique")
+                print("The scans' DIDs are all unique")
 
             else:
 
@@ -891,8 +915,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, norm_f = Tr
             #must invert each scan independently, as cmilos only takes in one dataset at a time
 
              #get wave_axis from the header information of the science scans
+            if cpos_arr[0] == 0:
+                shift_w =  wave_axis[3] - wavelength
+            elif cpos_arr[0] == 5:
+                shift_w =  wave_axis[2] - wavelength
 
-            shift_w =  wave_axis[3] - wavelength
             wave_axis = wave_axis - shift_w
 
             print('It is assumed the wavelength array is given by the header')

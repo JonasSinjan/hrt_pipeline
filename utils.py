@@ -62,30 +62,32 @@ def fits_get_sampling(file,verbose = False):
             tunning_constant = 0.0
             ref_wavelength = 0.0
             for v in header:
+                #print(v)
                 if (j < 6):
                     if tunning_constant == 0:
                         tunning_constant = float(v[4])/1e9
                     if ref_wavelength == 0:
                         ref_wavelength = float(v[5])/1e3
-                    if np.abs(np.abs(v[2]) - np.abs(dummy)) > 5:
+                    if np.abs(np.abs(v[2]) - np.abs(dummy)) > 5: #check that the next voltage is more than 5 from the previous, as voltages change slightly
+                        #print(dummy, v[2])
                         voltagesData[j] = float(v[2])
                         dummy = voltagesData[j] 
                         j += 1
-        
-        d1 = voltagesData[0] - voltagesData[1]
-        d2 = voltagesData[4] - voltagesData[5]
-        if np.abs(d1) > np.abs(d2):
-            cpos = 0
-        else:
-            cpos = 5
-        if verbose:
-            print('Continuum position at wave: ', cpos)
-        wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
-
-        return wave_axis,voltagesData,tunning_constant,cpos
 
     except Exception:
-        print("Unable to open fits file: {}",file)     
+       print("Unable to open fits file: {}",file)     
+    #print(voltagesData)
+    d1 = voltagesData[0] - voltagesData[1]
+    d2 = voltagesData[4] - voltagesData[5]
+    if np.abs(d1) > np.abs(d2):
+        cpos = 0
+    else:
+        cpos = 5
+    if verbose:
+        print('Continuum position at wave: ', cpos)
+    wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
+    #print(wave_axis)
+    return wave_axis,voltagesData,tunning_constant,cpos
 
 def fix_path(path,dir='forward',verbose=False):
     path = repr(path)
