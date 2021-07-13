@@ -33,6 +33,6 @@ for file in text_split:
   else:
     subprocess.call(["wget", "--user", f"{username}","--password", f"{password}", f"https://www2.mps.mpg.de/services/proton/phi/imgdb/{file}"])
     subprocess.call(["gunzip", f"{file}"])
-    subprocess.call(["chmod", "a+r", f"{file}"])
+    subprocess.call(["chmod", "a+r", f"{file.split('.gz')[0]}"])
 
 print("Download and unpacking complete")

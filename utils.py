@@ -53,29 +53,29 @@ def fits_get_sampling(file,verbose = False):
     '''
     #print('-- Obtaining voltages......')
     fg_head = 3
-    try:
-        with fits.open(file) as hdu_list:
-            header = hdu_list[fg_head].data
-            j = 0
-            dummy = 0
-            voltagesData = np.zeros((6))
-            tunning_constant = 0.0
-            ref_wavelength = 0.0
-            for v in header:
-                #print(v)
-                if (j < 6):
-                    if tunning_constant == 0:
-                        tunning_constant = float(v[4])/1e9
-                    if ref_wavelength == 0:
-                        ref_wavelength = float(v[5])/1e3
-                    if np.abs(np.abs(v[2]) - np.abs(dummy)) > 5: #check that the next voltage is more than 5 from the previous, as voltages change slightly
-                        #print(dummy, v[2])
-                        voltagesData[j] = float(v[2])
-                        dummy = voltagesData[j] 
-                        j += 1
+    #try:
+    with fits.open(file) as hdu_list:
+        header = hdu_list[fg_head].data
+        j = 0
+        dummy = 0
+        voltagesData = np.zeros((6))
+        tunning_constant = 0.0
+        ref_wavelength = 0.0
+        for v in header:
+            #print(v)
+            if (j < 6):
+                if tunning_constant == 0:
+                    tunning_constant = float(v[4])/1e9
+                if ref_wavelength == 0:
+                    ref_wavelength = float(v[5])/1e3
+                if np.abs(np.abs(v[2]) - np.abs(dummy)) > 5: #check that the next voltage is more than 5 from the previous, as voltages change slightly
+                    #print(dummy, v[2])
+                    voltagesData[j] = float(v[2])
+                    dummy = voltagesData[j] 
+                    j += 1
 
-    except Exception:
-       print("Unable to open fits file: {}",file)     
+    #except Exception:
+    #   print("Unable to open fits file: {}",file)     
     #print(voltagesData)
     d1 = voltagesData[0] - voltagesData[1]
     d2 = voltagesData[4] - voltagesData[5]

@@ -1,7 +1,7 @@
 from hrt_pipe import phihrt_pipe
 import numpy as np
 
-sciencedata_fits_filenames = ['solo_L1_phi-hrt-ilam_20200528T171109_V202106111600C_0045140102.fits']
+sciencedata_fits_filenames = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20201117T170209_V202107090920C_0051170001.fits'#solo_L1_phi-hrt-ilam_20201117T170209_V202107060746C_0051170001.fits'#['solo_L1_phi-hrt-ilam_20200528T171109_V202106111600C_0045140102.fits']
 
 # ['solo_L0_phi-hrt-ilam_20210421T120003_V202106080929C_0144210101.fits', 'solo_L0_phi-hrt-ilam_20210424T120003_V202106141014C_0144240101.fits',
 #   'solo_L0_phi-hrt-ilam_20210425T120002_V202106141020C_0144250101.fits', 'solo_L0_phi-hrt-ilam_20210426T120002_V202106162118C_0144260101.fits',
@@ -12,10 +12,10 @@ sciencedata_fits_filenames = ['solo_L1_phi-hrt-ilam_20200528T171109_V20210611160
 #sciencedata_fits_filenames = ['solo_L0_phi-hrt-ilam_0667414748_V202103221851C_0142230201.fits']
 #sciencedata_fits_filenames = ['solo_L0_phi-hrt-ilam_0667414905_V202103221851C_0142230602.fits', 'solo_L0_phi-hrt-ilam_0667415054_V202103221851C_0142230603.fits', 'solo_L0_phi-hrt-ilam_0667415205_V202103221851C_0142230604.fits', 'solo_L0_phi-hrt-ilam_0667415354_V202103221851C_0142230605.fits', 'solo_L0_phi-hrt-ilam_0667415505_V202103221851C_0142230606.fits', 'solo_L0_phi-hrt-ilam_0667415654_V202103221851C_0142230607.fits', 'solo_L0_phi-hrt-ilam_0667415805_V202103221851C_0142230608.fits']
 
-flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20200417T174538_V202106111549C_0024150020.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits' #solo_L0_phi-hrt-ilam_20200417T174529_V202004241516C_0024150020000.fits'#solo_L1_phi-hrt-ilam_20200417T174538_V202106111549C_0024150020.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
 darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits'
 
-sciencedata_fits_filenames = ['/data/slam/home/sinjan/fits_files/' + i for i in sciencedata_fits_filenames]
+#sciencedata_fits_filenames = ['/data/slam/home/sinjan/fits_files/' + i for i in sciencedata_fits_filenames]
 
 prefilter_f = '../fits_files/fitted_prefilter.fits'
 
@@ -45,10 +45,10 @@ c_talk_params[1,0] = q_int
 c_talk_params[1,1] = u_int
 c_talk_params[1,2] = v_int
 
-phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = True, bit_flat = False, norm_f = True, clean_f = False, 
+phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = True, bit_flat = True, norm_f = True, clean_f = True, 
             sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = None, dark_c = True, flat_c = True, 
-            fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = True, out_demod_file = True, 
-            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/may_2020_ctalk/', rte = 'False', out_rte_filename='') 
+            fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = False, out_demod_file = True, 
+            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/nov_17_2020_imgdb_L1_test/', rte = 'False', out_rte_filename='') 
 """
  Input Parameters:
 ----------
