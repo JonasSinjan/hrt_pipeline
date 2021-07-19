@@ -825,7 +825,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
             return scan_name_list
 
         if out_demod_filename is not None:
-            if len([out_demod_filename]) == data_shape[-1]:
+
+            if isinstance(out_demod_filename,str):
+                out_demod_filename = [out_demod_filename]
+
+            if int(len(out_demod_filename)) == int(data_shape[-1]):
                 scan_name_list = [out_demod_filename]
                 scan_name_defined = True
             else:
@@ -841,7 +845,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         for count, scan in enumerate(data_f):
 
             with fits.open(scan) as hdu_list:
-
+                print(f"Writing out demod file as: {scan_name_list[count]}_reduced.fits")
                 hdu_list[0].data = data[:,:,:,:,count]
                 hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
 
