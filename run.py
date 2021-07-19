@@ -45,10 +45,10 @@ c_talk_params[1,0] = q_int
 c_talk_params[1,1] = u_int
 c_talk_params[1,2] = v_int
 
-phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = False, bit_flat = True, norm_f = True, clean_f = False, 
-            sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = None, dark_c = True, flat_c = True, 
-            fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = False, out_demod_file = True, 
-            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/april_2020/', rte = 'False', out_rte_filename='') 
+phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = False, 
+            bit_flat = True, norm_f = True, clean_f = False, sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = None, 
+            dark_c = True, flat_c = True, fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = False, out_demod_file = True, 
+            out_demod_filename = '0024160030000', out_dir = '/data/slam/home/sinjan/hrt_pipe_results/april_2020/', rte = 'False', out_rte_filename='') 
 """
  Input Parameters:
 ----------
@@ -104,8 +104,8 @@ out_dir : string, DEFUALT: './'
 out_demod_file: bool, DEFAULT: False
     output file with the stokes vectors to fits file
 
-correct_ghost: bool, DEFAULT: False 
-    correct the ghost in bottom left corner
+out_demod_filename: str, DEFAULT = None
+    if None, takes last 10 characters of input scan filename (assumes its a DID), change if want other name
 
 ItoQUV: bool, DEFAULT: False 
     apply I -> Q,U,V correction

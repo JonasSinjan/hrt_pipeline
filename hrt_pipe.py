@@ -75,8 +75,8 @@ def demod_hrt(data,pmp_temp):
 
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = True, norm_f = True, clean_f = False, 
                 sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
-                demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  
-                correct_ghost = False, ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = ''):
+                demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = ''):
 
     '''
     PHI-HRT data reduction pipeline
@@ -138,8 +138,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         directory for the output files
     out_demod_file: bool, DEFAULT: False
         output file with the stokes vectors to fits file
-    correct_ghost: bool, DEFAULT: False 
-        correct the ghost in bottom left corner
+    out_demod_filename: str, DEFAULT = None
+        if None, takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     ItoQUV: bool, DEFAULT: False 
         apply I -> Q,U,V correction
     ctalk_params: numpy arr, DEFAULT: None 
@@ -175,6 +175,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
     start_time = time.time()
 
+    if isinstance(data_f, str):
+        data_f = [data_f]
+
     if isinstance(data_f, list):
         #if the data_f contains several scans
         printc(f'Input contains {len(data_f)} scan(s)',color=bcolors.OKGREEN)
@@ -199,7 +202,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
                 data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
-                print("This scan has been flipped in the Y axis to conform to orientation standards.")
+                print(f"This scan has been flipped in the Y axis to conform to orientation standards. \n File: {data_f[scan]}")
 
 
         #--------
@@ -209,7 +212,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         first_shape = data_arr[scan].shape
         result = all(element.shape == first_shape for element in data_arr)
         if (result):
-            print("All the scans have the same dimension")
+            print("All the scan(s) have the same dimension")
 
         else:
             print("The scans have different dimensions! \n Ending process")
@@ -224,7 +227,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         first_cpos = cpos_arr[0]
         result = all(c_position == first_cpos for c_position in cpos_arr)
         if (result):
-            print("All the scans have the same continuum wavelength position")
+            print("All the scan(s) have the same continuum wavelength position")
 
         else:
             print("The scans have different continuum_wavelength postitions! Please fix \n Ending Process")
@@ -238,7 +241,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         first_pmp_temp = hdr_arr[0]['HPMPTSP1']
         result = all(hdr['HPMPTSP1'] == first_pmp_temp for hdr in hdr_arr)
         if (result):
-            print(f"All the scans have the same PMP Temperature Set Point: {first_pmp_temp}")
+            print(f"All the scan(s) have the same PMP Temperature Set Point: {first_pmp_temp}")
             pmp_temp = str(first_pmp_temp)
 
         else:
@@ -259,56 +262,14 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
             first_imgdirx = hdr_arr[0]['IMGDIRX']
             result = all(hdr['IMGDIRX'] == first_imgdirx for hdr in hdr_arr)
             if (result):
-                print(f"All the scans have the same IMGDIRX keyword: {first_imgdirx}")
+                print(f"All the scan(s) have the same IMGDIRX keyword: {first_imgdirx}")
                 imgdirx_flipped = str(first_imgdirx)
             else:
                 print("The scans have different IMGDIRX keywords! Please fix \n Ending Process")
                 exit()
         else:
             header_imgdirx_exists = False
-            print("Not all the scans contain the 'IMGDIRX' keyword! Assuming all not flipped - Proceed with caution")
-
-    elif isinstance(data_f, str):
-        #case when data f is just one file
-        data, header = get_data(data_f, scaling = scale_data)
-        data = np.expand_dims(data, axis = -1) #so that it has the same dimensions as several scans
-        data = np.moveaxis(data, 0, -2) #so that it is [y,x,24,1]
-
-        if scale_data: #not for April commissioning phase data
-
-            data *= 81920/127
-
-
-        print(f"Data shape is {data.shape}")
-
-        wave_axis, voltagesData, tuning_constant, cpos = fits_get_sampling(data_f,verbose = True)
-
-        print("The data continuum wavelength position is at index: ", cpos)
-
-        cpos_arr = [cpos]
-
-        if cpos_arr[0] != 0 and cpos_arr[0] != 5:
-            print("Data continuum position not at 0 or 5th index. Please reconcile. \n Ending Process")
-
-            exit()
-
-        hdr_arr = [header]
-        voltagesData_arr = [voltagesData]
-        tuning_constant_arr = [tuning_constant]
-
-        pmp_temp = str(header['HPMPTSP1'])
-        print(f"Data PMP Set Point Temperature is {pmp_temp}")
-
-        if 'IMGDIRX' in header:
-            header_imgdirx_exists = True
-            imgdirx_flipped = str(header['IMGDIRX'])
-            if imgdirx_flipped == 'YES':
-                 print("This scan has been flipped in the Y axis to conform to orientation standards.")
-
-        else:
-            header_imgdirx_exists = False
-            print("Scan header does not contain the 'IMGDIRX' keyword! Assuming not flipped")
-
+            print("Not all the scan(s) contain the 'IMGDIRX' keyword! Assuming all not flipped - Proceed with caution")
 
     else:
         printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
@@ -694,14 +655,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
 
     #-----------------
-    # GHOST CORRECTION  
-    #-----------------
-
-    # if correct_ghost:
-    #     printc('-->>>>>>> Correcting ghost image ',color=bcolors.OKGREEN)
-
-  
-    #-----------------
     # APPLY DEMODULATION 
     #-----------------
 
@@ -840,10 +793,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
             print(f"{out_dir} does not exist -->>>>>>> Creating it")
             os.makedirs(out_dir)
         
-        if isinstance(data_f, list):
-            print(" ")
-            printc('Saving demodulated data to one _reduced.fits file per scan')
+        print(" ")
+        printc('Saving demodulated data to one _reduced.fits file per scan')
 
+        def check_filenames(data_f):
             #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
             scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
 
@@ -868,23 +821,44 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
                                 i += 1
 
                 print("The New DID list is: ", scan_name_list)
-                        
 
-            for count, scan in enumerate(data_f):
+            return scan_name_list
 
-                with fits.open(scan) as hdu_list:
+        if out_demod_filename is not None:
+            if len([out_demod_filename]) == data_shape[-1]:
+                scan_name_list = [out_demod_filename]
+                scan_name_defined = True
+            else:
+                print("Input demod filenames do not match the number of input arrays, reverting to default naming")
+                scan_name_defined = False
+        else:
+            scan_name_defined = False
 
-                    hdu_list[0].data = data[:,:,:,:,count]
-                    hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
+        if not scan_name_defined: #check if already defined by input, otherwise generate
+            scan_name_list = check_filenames(data_f)
+        
 
-        if isinstance(data_f, str):
-            print(" ")
-            printc('Saving demodulated data to a _reduced.fits file')
+        for count, scan in enumerate(data_f):
 
-            with fits.open(data_f) as hdu_list:
+            with fits.open(scan) as hdu_list:
 
-                hdu_list[0].data = data
-                hdu_list.writeto(out_dir + str(data_f.split('.fits')[0][-10:]) + '_reduced.fits', overwrite=True)
+                hdu_list[0].data = data[:,:,:,:,count]
+                hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
+
+        # if isinstance(data_f, str):
+        #     print(" ")
+        #     printc('Saving demodulated data to a _reduced.fits file')
+
+        #     if out_demod_filename is not None:
+        #         scan_name = str(out_demod_filename)
+            
+        #     if 'scan_name' not in locals(): #check if already defined by input, otherwise generate
+        #         scan_name = str(data_f.split('.fits')[0][-10:])
+
+        #     with fits.open(data_f) as hdu_list:
+
+        #         hdu_list[0].data = data
+        #         hdu_list.writeto(out_dir + scan_name + '_reduced.fits', overwrite=True)
 
     else:
         print(" ")
