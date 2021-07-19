@@ -1,7 +1,7 @@
 from hrt_pipe import phihrt_pipe
 import numpy as np
 
-sciencedata_fits_filenames = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20201117T170209_V202107090920C_0051170001.fits'#solo_L1_phi-hrt-ilam_20201117T170209_V202107060746C_0051170001.fits'#['solo_L1_phi-hrt-ilam_20200528T171109_V202106111600C_0045140102.fits']
+sciencedata_fits_filenames = '/data/slam/home/sinjan/fits_files/solo_L0_phi-hrt-ilam_20200420T141752_V202004221450C_0024160030000.fits'#solo_L1_phi-hrt-ilam_20201117T170209_V202107090920C_0051170001.fits'#solo_L1_phi-hrt-ilam_20201117T170209_V202107060746C_0051170001.fits'#['solo_L1_phi-hrt-ilam_20200528T171109_V202106111600C_0045140102.fits']
 
 # ['solo_L0_phi-hrt-ilam_20210421T120003_V202106080929C_0144210101.fits', 'solo_L0_phi-hrt-ilam_20210424T120003_V202106141014C_0144240101.fits',
 #   'solo_L0_phi-hrt-ilam_20210425T120002_V202106141020C_0144250101.fits', 'solo_L0_phi-hrt-ilam_20210426T120002_V202106162118C_0144260101.fits',
@@ -12,7 +12,7 @@ sciencedata_fits_filenames = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-
 #sciencedata_fits_filenames = ['solo_L0_phi-hrt-ilam_0667414748_V202103221851C_0142230201.fits']
 #sciencedata_fits_filenames = ['solo_L0_phi-hrt-ilam_0667414905_V202103221851C_0142230602.fits', 'solo_L0_phi-hrt-ilam_0667415054_V202103221851C_0142230603.fits', 'solo_L0_phi-hrt-ilam_0667415205_V202103221851C_0142230604.fits', 'solo_L0_phi-hrt-ilam_0667415354_V202103221851C_0142230605.fits', 'solo_L0_phi-hrt-ilam_0667415505_V202103221851C_0142230606.fits', 'solo_L0_phi-hrt-ilam_0667415654_V202103221851C_0142230607.fits', 'solo_L0_phi-hrt-ilam_0667415805_V202103221851C_0142230608.fits']
 
-flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits' #solo_L0_phi-hrt-ilam_20200417T174529_V202004241516C_0024150020000.fits'#solo_L1_phi-hrt-ilam_20200417T174538_V202106111549C_0024150020.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/solo_L0_phi-hrt-ilam_20200417T174529_V202004241516C_0024150020000.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits' #solo_L0_phi-hrt-ilam_20200417T174529_V202004241516C_0024150020000.fits'#solo_L1_phi-hrt-ilam_20200417T174538_V202106111549C_0024150020.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
 darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits'
 
 #sciencedata_fits_filenames = ['/data/slam/home/sinjan/fits_files/' + i for i in sciencedata_fits_filenames]
@@ -45,10 +45,10 @@ c_talk_params[1,0] = q_int
 c_talk_params[1,1] = u_int
 c_talk_params[1,2] = v_int
 
-phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = True, bit_flat = True, norm_f = True, clean_f = True, 
+phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = False, bit_flat = True, norm_f = True, clean_f = False, 
             sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = None, dark_c = True, flat_c = True, 
             fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = False, out_demod_file = True, 
-            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/nov_17_2020_imgdb_L1_test/', rte = 'False', out_rte_filename='') 
+            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/april_2020/', rte = 'False', out_rte_filename='') 
 """
  Input Parameters:
 ----------
@@ -62,8 +62,11 @@ flat_f : string, DEFAULT ''
     Fits file of a HRT flatfield (ONLY ONE FILE)
 
 ** Options:
-read_scale_data: bool, DEFAULT True
-    reads in science data and performs appropriate scaling
+scale_data: bool, DEFAULT True
+    performs the accumulation scaling + conversion for flat and science (only FALSE for commissioning data)
+    
+bit_flat: bool, DEFAULT True
+    divides the scan + flat by 256 to convert from 24.8bit to 32bits
 
 norm_f: bool, DEFAULT: True
     to normalise the flat fields before applying

@@ -68,7 +68,8 @@ def fits_get_sampling(file,verbose = False):
                     tunning_constant = float(v[4])/1e9
                 if ref_wavelength == 0:
                     ref_wavelength = float(v[5])/1e3
-                if np.abs(np.abs(v[2]) - np.abs(dummy)) > 5: #check that the next voltage is more than 5 from the previous, as voltages change slightly
+                #print(dummy, v[2], type(dummy), type(v[2]))
+                if np.abs(np.abs(float(v[2])) - np.abs(dummy)) > 5: #check that the next voltage is more than 5 from the previous, as voltages change slightly
                     #print(dummy, v[2])
                     voltagesData[j] = float(v[2])
                     dummy = voltagesData[j] 

@@ -110,8 +110,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         Fits file of a HRT flatfield (ONLY ONE FILE)
 
     ** Options:
-    read_scale_data: bool, DEFAULT True
-        reads in science data and performs appropriate scaling
+    scale_data: bool, DEFAULT True
+        performs the accumulation scaling + conversion for flat and science (only FALSE for commissioning data)
+    bit_flat: bool, DEFAULT True
+        divides the scan + flat by 256 to convert from 24.8bit to 32bits
     norm_f: bool, DEFAULT: True
         to normalise the flat fields before applying
     clean_f: bool, DEFAULT: False
@@ -448,11 +450,12 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
         flat -= dark[..., np.newaxis, np.newaxis]
 
-        if imgdirx_flipped == 'YES':
-            dark_copy = np.copy(dark)
-            dark_copy = dark_copy[:,::-1]
+        if header_imgdirx_exists:
+            if imgdirx_flipped == 'YES':
+                dark_copy = np.copy(dark)
+                dark_copy = dark_copy[:,::-1]
 
-            data -= dark_copy[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
+                data -= dark_copy[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
         
         else:
             data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
