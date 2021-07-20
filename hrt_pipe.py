@@ -830,7 +830,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
                 out_demod_filename = [out_demod_filename]
 
             if int(len(out_demod_filename)) == int(data_shape[-1]):
-                scan_name_list = [out_demod_filename]
+                scan_name_list = out_demod_filename
                 scan_name_defined = True
             else:
                 print("Input demod filenames do not match the number of input arrays, reverting to default naming")
