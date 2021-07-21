@@ -76,7 +76,7 @@ def demod_hrt(data,pmp_temp):
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = True, norm_f = True, clean_f = False, 
                 sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
                 demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = ''):
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, pmilos = True):
 
     '''
     PHI-HRT data reduction pipeline
@@ -96,7 +96,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
     13. calibration
         a) ghost correction - not implemented yet
         b) cross talk correction
-    14. rte inversion with cmilos (CE, RTE or CE+RTE)
+    14. rte inversion with pmilos/cmilos (CE, RTE or CE+RTE)
         a) output rte data products to fits file
 
     Parameters
@@ -148,6 +148,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     out_rte_filename: str, DEFAULT = ''
         if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
+    pmilos: bool, DEFAULT = True
+        if True, will execute the RTE inversion using the parallel version of the CMILOS code on 16 processors
     
     Returns
     -------
@@ -874,162 +876,17 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
-        print(" ")
-        printc('-->>>>>>> RUNNING CMILOS ',color=bcolors.OKGREEN)
-        
-        try:
-            CMILOS_LOC = os.path.realpath(__file__)
+        if pmilos:
 
-            CMILOS_LOC = CMILOS_LOC[:-11] + 'cmilos/' #11 as hrt_pipe.py is 11 characters
+            try:
+                pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+                    
+            except ValueError:
+                print("Running CMILOS instead!")
+                cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
-            if os.path.isfile(CMILOS_LOC+'milos'):
-                printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
-
-            else:
-                raise ValueError('Cannot find cmilos:', CMILOS_LOC)
-
-        except ValueError as err:
-            printc(err.args[0],color=bcolors.FAIL)
-            printc(err.args[1],color=bcolors.FAIL)
-            return        
-
-        wavelength = 6173.3356
-
-        for scan in range(int(data_shape[-1])):
-
-            start_time = time.time()
-
-            if isinstance(data_f, str):
-
-                file_path = data_f
-
-            elif isinstance(data_f, list):
-
-                file_path = data_f[scan]
-                wave_axis = wve_axis_arr[scan]
-
-            #must invert each scan independently, as cmilos only takes in one dataset at a time
-
-             #get wave_axis from the header information of the science scans
-            if cpos_arr[0] == 0:
-                shift_w =  wave_axis[3] - wavelength
-            elif cpos_arr[0] == 5:
-                shift_w =  wave_axis[2] - wavelength
-
-            wave_axis = wave_axis - shift_w
-
-            print('It is assumed the wavelength array is given by the header')
-            #print(wave_axis,color = bcolors.WARNING)
-            print("Wave axis is: ", (wave_axis - wavelength)*1000.)
-            print('Saving data into dummy_in.txt for RTE input')
-
-            sdata = data[:,:,:,:,scan]
-            y,x,p,l = sdata.shape
-            #print(y,x,p,l)
-
-            filename = 'dummy_in.txt'
-            with open(filename,"w") as f:
-                for i in range(x):
-                    for j in range(y):
-                        for k in range(l):
-                            f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
-            del sdata
-
-            printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
-
-            cmd = CMILOS_LOC+"./milos"
-            cmd = fix_path(cmd)
-
-            if rte == 'RTE':
-                rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-            if rte == 'CE':
-                rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-            if rte == 'CE+RTE':
-                rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
-
-            #print(rte_on)
-
-            printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-            del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
-            #print(del_dummy)
-
-            res = np.loadtxt('dummy_out.txt')
-            npixels = res.shape[0]/12.
-            #print(npixels)
-            #print(npixels/x)
-            result = np.zeros((12,y*x)).astype(float)
-            rte_invs = np.zeros((12,y,x)).astype(float)
-            for i in range(y*x):
-                result[:,i] = res[i*12:(i+1)*12]
-            result = result.reshape(12,y,x)
-            result = np.einsum('ijk->ikj', result)
-            rte_invs = result
-            del result
-            rte_invs_noth = np.copy(rte_invs)
-
-            """
-            From 0 to 11
-            Counter (PX Id)
-            Iterations
-            Strength
-            Inclination
-            Azimuth
-            Eta0 parameter
-            Doppler width
-            Damping
-            Los velocity
-            Constant source function
-            Slope source function
-            Minimum chisqr value
-            """
-
-            noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
-            low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
-            
-            rte_invs[2,low_values_flags] = 0
-            rte_invs[3,low_values_flags] = 0
-            rte_invs[4,low_values_flags] = 0
-
-            #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
-            
-            del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-            #print(del_dummy)
-
-            rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[1]))
-
-            rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
-            rte_data_products[1,:,:] = rte_invs_noth[2,:,:] #b mag strength
-            rte_data_products[2,:,:] = rte_invs_noth[3,:,:] #inclination
-            rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
-            rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
-            rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
-
-            rte_data_products *= field_stop[np.newaxis,start_row:start_row + data_size[0],start_col:start_col + data_size[1]] #field stop, set outside to 0
-
-            if out_rte_filename == '':
-                filename_root = str(file_path.split('.fits')[0][-10:])
-            else:
-                filename_root = out_rte_filename
-
-            with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = rte_data_products
-                hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
-
-            with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = rte_data_products[5,:,:]
-                hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
-
-            with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = rte_data_products[4,:,:]
-                hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
-
-            with fits.open(file_path) as hdu_list:
-                hdu_list[0].data = rte_data_products[0,:,:]
-                hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
-
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        else:
+            cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
     else:
         print(" ")
