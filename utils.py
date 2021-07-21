@@ -385,16 +385,16 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         rte_data_products = np.zeros((6,result.shape[0],result.shape[1]))
 
         rte_data_products[0,:,:] = result[:,:,7] + result[:,:,8] #continuum
-        rte_data_products[1,:,:] = result[1,:,:] #b mag strength
-        rte_data_products[2,:,:] = result[5,:,:] #inclination
-        rte_data_products[3,:,:] = result[6,:,:] #azimuth
-        rte_data_products[4,:,:] = result[2,:,:] #vlos
-        rte_data_products[5,:,:] = result[1,:,:]*np.cos(result[5,:,:]*np.pi/180.) #blos
+        rte_data_products[1,:,:] = result[:,:,1] #b mag strength
+        rte_data_products[2,:,:] = result[:,:,5] #inclination
+        rte_data_products[3,:,:] = result[:,:,6] #azimuth
+        rte_data_products[4,:,:] = result[:,:,2] #vlos
+        rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
 
         rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
 
         #flipping taken care of for the field stop in the hrt_pipe 
-        
+
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
         else:
