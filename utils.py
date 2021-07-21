@@ -312,13 +312,15 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
 
         #write wavelengths to wavelength.fits file for the settings
 
-        wave_input = np.zeros((6,2))
-        wave_input[:,0] = int(1)
-        wave_input[:,1] = wave_axis
+        wave_input = np.zeros((2,6)) #cfitsio reads dimensions in opposite order
+        wave_input[0,:] = 1
+        wave_input[1,:] = wave_axis
+
+        print(wave_axis)
 
         hdr = fits.Header()
 
-        primary_hdu = fits.PrimaryH0DU(wave_input, header = hdr)
+        primary_hdu = fits.PrimaryHDU(wave_input, header = hdr)
         hdul = fits.HDUList([primary_hdu])
         hdul.writeto(f'./P-MILOS/run/wavelength_tmp.fits', overwrite=True)
 
@@ -342,26 +344,32 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
 
         cwd = os.getcwd()
         os.chdir("./P-MILOS/run/")
-        cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit" #PMILOS_LOC+"./milos"
+        cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit" #PMILOS_LOC+"./milos"
 
         if rte == 'RTE':
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
+            cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
             
         if rte == 'CE':
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos_ce.minit"
+            cmd = "mpiexec -np 10 ../pmilos.x pmilos_ce.minit"
 
         if rte == 'CE+RTE':
             print("CE+RTE not possible on PMILOS, performing RTE instead")
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
+            cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
 
         rte_on = subprocess.call(cmd,shell=True)
 
         os.chdir(cwd)
 
-        with fits.open('./P-MILOS/run/results/inv_input_tmp_mod.fits') as hdu_list:
+        if rte == 'CE':
+            out_file = 'inv_input_tmp_mod_ce.fits'
+
+        else:
+            out_file = 'inv_input_tmp_mod.fits'
+
+        with fits.open(f'./P-MILOS/run/results/{out_file}') as hdu_list:
             result = hdu_list[0].data
 
-        del_dummy = subprocess.call("rm ./P-MILOS/run/results/inv_input_tmp_mod.fits",shell=True) #must delete the output file
+        del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}.fits",shell=True) #must delete the output file
       
         #result has dimensions [rows,cols,13]
 

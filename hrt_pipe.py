@@ -76,7 +76,7 @@ def demod_hrt(data,pmp_temp):
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = True, norm_f = True, clean_f = False, 
                 sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
                 demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, pmilos = True):
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True):
 
     '''
     PHI-HRT data reduction pipeline
@@ -148,7 +148,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     out_rte_filename: str, DEFAULT = ''
         if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
-    pmilos: bool, DEFAULT = True
+    p_milos: bool, DEFAULT = True
         if True, will execute the RTE inversion using the parallel version of the CMILOS code on 16 processors
     
     Returns
@@ -876,7 +876,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
-        if pmilos:
+        if p_milos:
 
             try:
                 pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)

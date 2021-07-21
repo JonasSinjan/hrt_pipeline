@@ -50,7 +50,7 @@ out_names = ['0024160031000_test_rte']#, '0024160032000_noflat', '0024160033000_
 phihrt_pipe(sciencedata_fits_filenames, flat_f = flatfield_fits_filename, dark_f = darkfield_fits_filename, scale_data = False, 
             bit_flat = True, norm_f = True, clean_f = False, sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = None, 
             dark_c = True, flat_c = True, fs_c = True, demod = True, ctalk_params = c_talk_params, ItoQUV = False, out_demod_file = True, 
-            out_demod_filename = out_names, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/april_2020/', rte = 'RTE', out_rte_filename='', pmilos = False) 
+            out_demod_filename = out_names, out_dir = '/data/slam/home/sinjan/hrt_pipe_results/april_2020_pmilos/', rte = 'RTE', out_rte_filename=None, p_milos = True) 
 """
  Input Parameters:
 ----------
