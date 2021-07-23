@@ -324,9 +324,9 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         hdul = fits.HDUList([primary_hdu])
         hdul.writeto(f'./P-MILOS/run/wavelength_tmp.fits', overwrite=True)
 
-        #create input fits file for pmilos
         sdata = data[:,:,:,:,scan]
-        
+
+        #create input fits file for pmilos
         hdr = fits.Header() 
         
         hdr['CTYPE1'] = 'HPLT-TAN'
@@ -338,17 +338,9 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         hdul = fits.HDUList([primary_hdu])
         hdul.writeto(f'./P-MILOS/run/data/input_tmp.fits', overwrite=True)
 
-        #need to change settings for CE or CE+RTE in the pmilos.minit file here
-        
-        printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
-
-        cwd = os.getcwd()
-        os.chdir("./P-MILOS/run/")
-        cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit" #PMILOS_LOC+"./milos"
-
         if rte == 'RTE':
             cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
-            
+        
         if rte == 'CE':
             cmd = "mpiexec -np 10 ../pmilos.x pmilos_ce.minit"
 
@@ -356,8 +348,15 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
             print("CE+RTE not possible on PMILOS, performing RTE instead")
             cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
 
-        rte_on = subprocess.call(cmd,shell=True)
+       
+        del sdata
+        #need to change settings for CE or CE+RTE in the pmilos.minit file here
+        
+        printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
 
+        cwd = os.getcwd()
+        os.chdir("./P-MILOS/run/")
+        rte_on = subprocess.call(cmd,shell=True)
         os.chdir(cwd)
 
         if rte == 'CE':
@@ -369,10 +368,11 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         with fits.open(f'./P-MILOS/run/results/{out_file}') as hdu_list:
             result = hdu_list[0].data
 
+        #del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}.fits",shell=True) 
         del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}.fits",shell=True) #must delete the output file
       
         #result has dimensions [rows,cols,13]
-
+        print(result.shape)
         """
         PMILOS Output 13 columns
         0. eta0 = line-to-continuum absorption coefficient ratio 

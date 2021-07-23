@@ -76,7 +76,7 @@ def demod_hrt(data,pmp_temp):
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = True, norm_f = True, clean_f = False, 
                 sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
                 demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True):
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, config_file = True):
 
     '''
     PHI-HRT data reduction pipeline
@@ -150,6 +150,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     p_milos: bool, DEFAULT = True
         if True, will execute the RTE inversion using the parallel version of the CMILOS code on 16 processors
+    config_file: bool, DEFAULT = True
+        if True, will generate config.txt file that writes the reduction process steps done
     
     Returns
     -------
@@ -167,7 +169,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     overall_time = time.time()
-
+    saved_args = locals()
     #-----------------
     # READ DATA
     #-----------------
@@ -466,7 +468,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         elif cpos_arr[0] == 5:
             wv_range = range(5)
 
-        for pol in range(1,4):
+        for pol in range(3,4):
 
             for wv in wv_range: #not the continuum
 
@@ -891,6 +893,27 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
     else:
         print(" ")
         printc('-->>>>>>> No RTE Inversion mode',color=bcolors.WARNING)
+
+    
+    #-----------------
+    # CONFIG FILE
+    #-----------------
+
+    if config_file:
+        print(" ")
+        printc('-->>>>>>> Writing out config file ',color=bcolors.OKGREEN)
+        
+        for count, scan in enumerate(data_f):
+
+            with open(f"{out_dir + scan_name_list[count]}" + '_hrt_pipeline_config.txt', "w") as f:
+                name = scan.split("/")[-1]
+                flat_n = flat_f.split("/")[-1]
+                dark_n = dark_f.split("/")[-1]
+                f.write(f"data_filename: {name} \n" )
+                f.write(f"flat_filename: {flat_n} \n")
+                f.write(f"dark_filename: {dark_n} \n")
+                f.write(f"{saved_args}")
+                f.close()
 
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
