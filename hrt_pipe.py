@@ -1,10 +1,10 @@
 import numpy as np 
 import os.path
 from astropy.io import fits
-import subprocess
 from scipy.ndimage import gaussian_filter
 import time
 from operator import itemgetter
+import json
 
 from utils import *
 
@@ -170,6 +170,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
     overall_time = time.time()
     saved_args = locals()
+    saved_args['ctalk_params'] = ctalk_params.tolist()
     #-----------------
     # READ DATA
     #-----------------
@@ -279,6 +280,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
         exit()
 
+    saved_args['science_cpos'] = int(cpos_arr[0])
+
     data_shape = data.shape
 
     data_size = data_shape[:2]
@@ -335,6 +338,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
 
         print(f"The continuum position of the flat field is at {cpos_f} index position")
+
+        saved_args['flat_cpos'] = int(cpos_f)
         
         if cpos_f != cpos_arr[0]:
             print("The flat field continuum position is not the same as the data, trying to correct.")
@@ -902,18 +907,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
     if config_file:
         print(" ")
         printc('-->>>>>>> Writing out config file ',color=bcolors.OKGREEN)
-        
-        for count, scan in enumerate(data_f):
 
-            with open(f"{out_dir + scan_name_list[count]}" + '_hrt_pipeline_config.txt', "w") as f:
-                name = scan.split("/")[-1]
-                flat_n = flat_f.split("/")[-1]
-                dark_n = dark_f.split("/")[-1]
-                f.write(f"data_filename: {name} \n" )
-                f.write(f"flat_filename: {flat_n} \n")
-                f.write(f"dark_filename: {dark_n} \n")
-                f.write(f"{saved_args}")
-                f.close()
+        json.dump(saved_args, open(f"{out_dir + scan_name_list[count]}" + '_hrt_pipeline_config.txt', "w"))
 
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
