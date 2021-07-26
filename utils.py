@@ -3,6 +3,7 @@ import numpy as np
 import os
 import time
 import subprocess
+import math
 
 
 class bcolors:
@@ -114,7 +115,7 @@ def fix_path(path,dir='forward',verbose=False):
     else:
         pass   
 
-def cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
     print(" ")
     printc('-->>>>>>> RUNNING CMILOS ',color=bcolors.OKGREEN)
     
@@ -142,6 +143,7 @@ def cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
+        hdr = hdr_arr[scan]
 
         #must invert each scan independently, as cmilos only takes in one dataset at a time
 
@@ -230,6 +232,24 @@ def cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
         #print(del_dummy)
 
+        """
+        #vlos S/C vorrection
+        v_x, v_y, v_z = hdr['HCIX_VOB']/1000, hdr['HCIY_VOB']/1000, hdr['HCIZ_VOB']/1000
+
+        #need line of sight velocity, should be total HCI velocity in km/s, with sun at origin. 
+        #need to take care for velocities moving towards the sun, (ie negative) #could use continuum position as if towards or away
+    
+        if cpos_arr[scan] == 5: #moving away, redshifted
+            dir_factor = 1
+        
+        elif cpos_arr[scan] == 0: #moving towards, blueshifted
+            dir_factor == -1
+        
+        v_tot = dir_factor*math.sqrt(v_x**2 + v_y**2+v_z**2) #in km/s
+
+        rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - v_tot
+        """
+
         rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
 
         rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
@@ -244,7 +264,15 @@ def cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
         else:
-            filename_root = out_rte_filename
+            if isinstance(out_rte_filename, list):
+                filename_root = out_rte_filename[scan]
+
+            elif isinstance(out_rte_filename, str):
+                filename_root = out_rte_filename
+
+            else:
+                filename_root = str(file_path.split('.fits')[0][-10:])
+                print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
         with fits.open(file_path) as hdu_list:
             hdu_list[0].data = rte_data_products

@@ -890,10 +890,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
                     
             except ValueError:
                 print("Running CMILOS instead!")
-                cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
         else:
-            cmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
     else:
         print(" ")
