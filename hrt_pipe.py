@@ -547,7 +547,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
                     
                 tmp = np.mean(flat,axis=-2) #avg over pol states for the wavelength
 
-                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis]
+                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, :, np.newaxis]
 
 
             elif flat_states == 24:
@@ -562,7 +562,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
                 tmp = np.mean(flat,axis=-1) #avg over wavelength
 
-                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis]
+                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], :, np.newaxis, np.newaxis]
         
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
