@@ -1,3 +1,4 @@
+from posix import listdir
 import numpy as np 
 import os.path
 from astropy.io import fits
@@ -73,9 +74,9 @@ def demod_hrt(data,pmp_temp):
     
 
 
-def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = True, norm_f = True, clean_f = False, 
-                sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, dark_c = True, fs_c = True,
-                demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
+def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
+                bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, 
+                dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
                 ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, config_file = True):
 
     '''
@@ -110,9 +111,13 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         Fits file of a HRT flatfield (ONLY ONE FILE)
 
     ** Options:
+    L1_input: bool, DEFAULT True
+        ovverides scale_data, bit_conversion, and accum_scaling, so that correct scaling for L1 data applied
+    L1_8_generate: bool, DEFAULT False
+        if True, assumes L1 input, and generates RTE output with the calibration header information
     scale_data: bool, DEFAULT True
         performs the accumulation scaling + conversion for flat and science (only FALSE for commissioning data)
-    bit_flat: bool, DEFAULT True
+    bit_conversion: bool, DEFAULT True
         divides the scan + flat by 256 to convert from 24.8bit to 32bits
     norm_f: bool, DEFAULT: True
         to normalise the flat fields before applying
@@ -171,6 +176,14 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
     overall_time = time.time()
     saved_args = locals()
     saved_args['ctalk_params'] = ctalk_params.tolist()
+
+
+    if L1_input:
+        print("L1_input param set to True - Assuming L1 science data")
+        accum_scaling = True
+        bit_conversion = False
+        scale_data = True
+
     #-----------------
     # READ DATA
     #-----------------
@@ -198,7 +211,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         tuning_constant_arr = [0]*number_of_scans
 
         for scan in range(number_of_scans):
-            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = scale_data)
+            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion)
 
             wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
 
@@ -319,7 +332,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         start_time = time.time()
     
         #try:
-        flat, header_flat = get_data(flat_f, bit_convert_scale=bit_flat)
+        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion)
 
         print(f"Flat field shape is {flat.shape}")
         
@@ -360,6 +373,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
         flat_pmp_temp = str(header_flat['HPMPTSP1'])
 
         print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
+
+        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
+            flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
+            flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -459,7 +476,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', scale_data = True, bit_flat = 
 
         flat_demod, demodM = demod_hrt(flat, flat_pmp_temp)
 
-        norm_factor = norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
+        norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
 
         flat_demod /= norm_factor
 

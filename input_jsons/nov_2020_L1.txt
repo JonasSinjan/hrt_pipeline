@@ -1,0 +1,1 @@
+{"data_f": ["solo_L1_phi-hrt-ilam_20201117T170209_V202107060747C_0051170001.fits"], "flat_f": "/data/slam/home/sinjan/fits_files/april_avgd_2020_flat.fits", "dark_f": "../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits"}
