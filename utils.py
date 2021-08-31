@@ -275,18 +275,22 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
                 print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 

@@ -747,6 +747,17 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         except AssertionError:
             print("ctalk_params is not in the required (2,3) shape, please reconcile")
 
+
+        for scan_hdr in hdr_arr:
+            if 'CAL_CRT0' in scan_hdr: #check to make sure the keywords exist
+                scan_hdr['CAL_CRT0'] = ctalk_params[0,0] #I-Q slope
+                scan_hdr['CAL_CRT2'] = ctalk_params[0,1] #I-U slope
+                scan_hdr['CAL_CRT4'] = ctalk_params[0,2] #I-V slope
+
+                scan_hdr['CAL_CRT1'] = ctalk_params[1,0] #I-Q offset
+                scan_hdr['CAL_CRT3'] = ctalk_params[1,1] #I-U offset
+                scan_hdr['CAL_CRT5'] = ctalk_params[1,2] #I-V offset
+
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
         cont_stokes = np.mean(data[512:1536,512:1536,0,cpos_arr[0],:], axis = (0,1))
@@ -873,6 +884,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             with fits.open(scan) as hdu_list:
                 print(f"Writing out demod file as: {scan_name_list[count]}_reduced.fits")
                 hdu_list[0].data = data[:,:,:,:,count]
+                hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                 hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
 
         # if isinstance(data_f, str):

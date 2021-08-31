@@ -75,7 +75,7 @@ flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/april_avgd_2020_fla
 
 darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits'
 
-science_april = ['/data/slam/home/sinjan/fits_files/' + i for i in science_nov]
+science_nov = ['/data/slam/home/sinjan/fits_files/' + i for i in science_nov]
 
 input_dict = {
   'data_f': science_nov,
