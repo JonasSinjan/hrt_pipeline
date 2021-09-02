@@ -6,6 +6,7 @@ from scipy.ndimage import gaussian_filter
 import time
 from operator import itemgetter
 import json
+import matplotlib.pyplot as plt
 
 from utils import *
 
@@ -375,8 +376,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
 
         if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-            flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
-            flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
+            print("This flat has a missing line - filling in with neighbouring pixels")
+            flat_copy = flat.copy()
+            flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
+            flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -443,7 +446,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 dark_copy = dark_copy[:,::-1]
 
                 data -= dark_copy[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
-        
+            
+            elif imgdirx_flipped == 'NO':
+                data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
         else:
             data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
 
@@ -468,9 +473,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         #cleaning the stripe in the flats for a particular flat
 
-        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-            flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
-            flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
+        # if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
+        #     flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
+        #     flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
 
         #demod the flats
 
@@ -555,6 +560,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         if header_imgdirx_exists:
             if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
                 flat = flat[:,::-1, :, :]
+                print("Flat is flipped to match the Science Data")
 
         try:
 
