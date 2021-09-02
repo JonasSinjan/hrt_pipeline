@@ -465,7 +465,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     # OPTIONAL Unsharp Masking clean the flat field stokes V images
     #-----------------
 
-    if clean_f:
+    if clean_f and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking (Stokes V only)',color=bcolors.OKGREEN)
 
