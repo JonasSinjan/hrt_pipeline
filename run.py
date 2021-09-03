@@ -15,7 +15,7 @@ import json
 
 # flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'#solo_L0_phi-hrt-ilam_20200417T174529_V202004241516C_0024150020000.fits' #solo_L0_phi-hrt-ilam_20200417T174529_V202004241516C_0024150020000.fits'#solo_L1_phi-hrt-ilam_20200417T174538_V202106111549C_0024150020.fits'#solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
 
-input_json_file = './input_jsons/feb_2k_2021_L1.txt'
+input_json_file = './input_jsons/nov_2020_L1.txt'
 
 input_dict = json.load(open(input_json_file))
 
@@ -35,13 +35,13 @@ prefilter_f = '../fits_files/fitted_prefilter.fits'
 
 c_talk_params = np.zeros((2,3))
 
-q_slope = 0.0038#-0.0140##-0.0098#
-u_slope = -0.0077#-0.0008##-0.0003#
-v_slope = -0.0009#-0.0073##-0.0070#
+q_slope = -0.0263#0.0038#-0.0140##-0.0098#
+u_slope = 0.0023#-0.0077#-0.0008##-0.0003#
+v_slope = -0.0116#-0.0009#-0.0073##-0.0070#
 
-q_int = -0.0056#0.0016#-0.0056#-0.0015# #the offset, normalised to I_c
-u_int = 0.0031#0.0016##0.0007#
-v_int = -0.0002#0.0007##0.0006# 
+q_int = 0.0138#-0.0056#0.0016#-0.0056#-0.0015# #the offset, normalised to I_c
+u_int = -0.0016#0.0031#0.0016##0.0007#
+v_int = 0.0057#-0.0002#0.0007##0.0006# 
 
 c_talk_params[0,0] = q_slope
 c_talk_params[0,1] = u_slope
@@ -53,11 +53,11 @@ c_talk_params[1,2] = v_int
 
 #out_names = ['nov_17_0051170001']#, '0024160032000_noflat', '0024160033000_noflat', '0024160034000_noflat', '0024160035000_noflat', '0024160036000_noflat', '0024160037000_noflat', '0024160038000_noflat', '0024160039000_noflat']
 
-phihrt_pipe(data_f, flat_f = flat_f, dark_f = dark_f, scale_data = True, bit_conversion = True, accum_scaling = True, norm_f = True, 
-            clean_f = False, sigma = 59, flat_states = 24, norm_stokes = True, prefilter_f = None, 
+phihrt_pipe(data_f, flat_f = flat_f, dark_f = dark_f, scale_data = False, bit_conversion = False, accum_scaling = True, norm_f = True, 
+            clean_f = True, sigma = 49, flat_states = 24, norm_stokes = True, prefilter_f = None, 
             dark_c = True, flat_c = True, fs_c = True, demod = True, ctalk_params = c_talk_params, 
-            ItoQUV = False, out_demod_file = True, out_demod_filename = None, 
-            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/stp-136_ctalk_no_us/', rte = 'RTE', 
+            ItoQUV = True, out_demod_file = True, out_demod_filename = None, 
+            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/nov_17_april_flats_uv_clean/', rte = 'False', 
             out_rte_filename=None, p_milos = False, config_file = True) 
 """
  Input Parameters:
@@ -95,6 +95,9 @@ clean_f: bool, DEFAULT: False
 
 sigma: int, DEFAULT: 59
     sigma of the gaussian convolution used for unsharp masking if clean_f == True 
+
+clean_mode: str, DEFAULT: "V"
+    The polarisation states of the flat field to be unsharp masked, options are "V", "UV" and "QUV"
 
 flat_states: int, DEFAULT: 24
     Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)

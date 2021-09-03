@@ -76,7 +76,7 @@ def demod_hrt(data,pmp_temp):
 
 
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
-                bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, flat_states = 24, prefilter_f = None,flat_c = True, 
+                bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
                 dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
                 ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, config_file = True):
 
@@ -125,7 +125,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     clean_f: bool, DEFAULT: False
         clean the flat field with unsharp masking
     sigma: int, DEFAULT: 59
-        sigma of the gaussian convolution used for unsharp masking if clean_f == True      
+        sigma of the gaussian convolution used for unsharp masking if clean_f == True
+    clean_mode: str, DEFAULT: "V"
+        The polarisation states of the flat field to be unsharp masked, options are "V", "UV" and "QUV"
     flat_states: int, DEFAULT: 24
         Number of flat fields to be applied, options are 4 (one for each pol state), 6 (one for each wavelength), 24 (one for each image)
     prefilter_f: str, DEFAULT None
@@ -495,7 +497,14 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         elif cpos_arr[0] == 5:
             wv_range = range(5)
 
-        for pol in range(3,4):
+        if clean_mode == "QUV":
+            start_clean_pol = 1
+        elif clean_mode == "UV":
+            start_clean_pol = 2
+        elif clean_mode == "V":
+            start_clean_pol = 3
+
+        for pol in range(start_clean_pol,4):
 
             for wv in wv_range: #not the continuum
 
