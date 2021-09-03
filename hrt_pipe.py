@@ -72,6 +72,35 @@ def demod_hrt(data,pmp_temp):
         data = np.matmul(demod,data)
     
     return data, demod
+
+def check_filenames(data_f):
+    #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
+
+    scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
+
+    seen = set()
+    uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
+
+    #print(uniq_scan_DIDs)
+    #print(scan_name_list)
+    if uniq_scan_DIDs == []:
+        print("The scans' DIDs are all unique")
+
+    else:
+
+        for x in uniq_scan_DIDs:
+            number = scan_name_list.count(x)
+            if number > 1: #if more than one
+                print(f"The DID: {x} is repeated {number} times")
+                i = 1
+                for index, name in enumerate(scan_name_list):
+                    if name == x:
+                        scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
+                        i += 1
+
+        print("The New DID list is: ", scan_name_list)
+
+    return scan_name_list
     
 
 
@@ -848,34 +877,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         print(" ")
         printc('Saving demodulated data to one _reduced.fits file per scan')
 
-        def check_filenames(data_f):
-            #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
-            scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
-
-            seen = set()
-            uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
-
-            #print(uniq_scan_DIDs)
-            #print(scan_name_list)
-            if uniq_scan_DIDs == []:
-                print("The scans' DIDs are all unique")
-
-            else:
-
-                for x in uniq_scan_DIDs:
-                    number = scan_name_list.count(x)
-                    if number > 1: #if more than one
-                        print(f"The DID: {x} is repeated {number} times")
-                        i = 1
-                        for index, name in enumerate(scan_name_list):
-                            if name == x:
-                                scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
-                                i += 1
-
-                print("The New DID list is: ", scan_name_list)
-
-            return scan_name_list
-
         if out_demod_filename is not None:
 
             if isinstance(out_demod_filename,str):
@@ -919,6 +920,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     else:
         print(" ")
+        #check if already defined by input, otherwise generate
+        scan_name_list = check_filenames(data_f)
         printc('-->>>>>>> No output demod file mode',color=bcolors.WARNING)
 
     #-----------------
