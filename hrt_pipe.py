@@ -869,6 +869,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     
     if out_demod_file:
 
+        if out_dir[-1] != "/":
+            print("Desired Output directory missing / character, will be added")
+            out_dir = out_dir + "/"
+
         #check if the output directory exists, if not, create it
         if not os.path.exists(out_dir): 
             print(f"{out_dir} does not exist -->>>>>>> Creating it")

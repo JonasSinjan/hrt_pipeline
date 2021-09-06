@@ -61,6 +61,9 @@ OR : use `download_files.py` to download images from the attic repository: https
 
 ## **SETUP**
 
+IMPORTANT
+Operating System: Linux
+
 1. Compile milos:
 
 ```bash
