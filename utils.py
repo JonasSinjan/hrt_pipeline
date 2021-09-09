@@ -115,6 +115,46 @@ def fix_path(path,dir='forward',verbose=False):
     else:
         pass   
 
+def demod_hrt(data,pmp_temp):
+    '''
+    Use constant demodulation matrices to demodulate data
+    '''
+ 
+    if pmp_temp == '50':
+        demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
+                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
+                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
+                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
+        
+    elif pmp_temp == '40':
+        demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
+    
+    else:
+        printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
+
+    printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
+    
+    demod_data = demod_data.reshape((4,4))
+    shape = data.shape
+    demod = np.tile(demod_data, (shape[0],shape[1],1,1))
+
+    if data.ndim == 5:
+        #if data array has more than one scan
+        data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
+
+        data = np.matmul(demod,data)
+        data = np.moveaxis(data,0,-1) #move scans back to the end
+    
+    elif data.ndim == 4:
+        #for if data has just one scan
+        data = np.matmul(demod,data)
+    
+    return data, demod
+
+
 def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
     print(" ")
     printc('-->>>>>>> RUNNING CMILOS ',color=bcolors.OKGREEN)
