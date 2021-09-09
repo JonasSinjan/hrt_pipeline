@@ -94,6 +94,59 @@ def fits_get_sampling(file,verbose = False):
     #print(wave_axis)
     return wave_axis,voltagesData,tunning_constant,cpos
 
+def get_data(path, scaling = True, bit_convert_scale = True):
+    """load science data from path"""
+    #try:
+    data, header = load_fits(path)
+
+    if bit_convert_scale: #conversion from 24.8bit to 32bit
+        data /=  256.
+
+    if scaling:
+        
+        accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
+
+        data /= accu
+
+        printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
+    
+    return data, header
+
+    #except Exception:
+    #    printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
+
+
+def check_filenames(data_f):
+    #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
+
+    scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
+
+    seen = set()
+    uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
+
+    #print(uniq_scan_DIDs)
+    #print(scan_name_list)S
+    if uniq_scan_DIDs == []:
+        print("The scans' DIDs are all unique")
+
+    else:
+
+        for x in uniq_scan_DIDs:
+            number = scan_name_list.count(x)
+            if number > 1: #if more than one
+                print(f"The DID: {x} is repeated {number} times")
+                i = 1
+                for index, name in enumerate(scan_name_list):
+                    if name == x:
+                        scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
+                        i += 1
+
+        print("The New DID list is: ", scan_name_list)
+
+    return scan_name_list
+    
+
+
 def fix_path(path,dir='forward',verbose=False):
     path = repr(path)
     if dir == 'forward':

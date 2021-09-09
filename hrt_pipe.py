@@ -12,59 +12,6 @@ from utils import *
 from hrt_pipe_sub import *
 
 
-def get_data(path, scaling = True, bit_convert_scale = True):
-    """load science data from path"""
-    #try:
-    data, header = load_fits(path)
-
-    if bit_convert_scale: #conversion from 24.8bit to 32bit
-        data /=  256.
-
-    if scaling:
-        
-        accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
-
-        data /= accu
-
-        printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
-    
-    return data, header
-
-    #except Exception:
-    #    printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
-
-
-def check_filenames(data_f):
-    #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
-
-    scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
-
-    seen = set()
-    uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
-
-    #print(uniq_scan_DIDs)
-    #print(scan_name_list)S
-    if uniq_scan_DIDs == []:
-        print("The scans' DIDs are all unique")
-
-    else:
-
-        for x in uniq_scan_DIDs:
-            number = scan_name_list.count(x)
-            if number > 1: #if more than one
-                print(f"The DID: {x} is repeated {number} times")
-                i = 1
-                for index, name in enumerate(scan_name_list):
-                    if name == x:
-                        scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
-                        i += 1
-
-        print("The New DID list is: ", scan_name_list)
-
-    return scan_name_list
-    
-
-
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
                 bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
                 dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
@@ -173,9 +120,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if L1_input:
         print("L1_input param set to True - Assuming L1 science data")
-        accum_scaling = True
+        accum_scaling = False
         bit_conversion = False
-        scale_data = True
+        scale_data = False
 
     #-----------------
     # READ DATA
@@ -338,7 +285,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
         # except Exception:
         #     printc("ERROR, Unable to open/process flats file: {}",flat_f,color=bcolors.FAIL)
 
@@ -407,7 +353,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         else:
             data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
             flat -= dark[..., np.newaxis, np.newaxis]
-
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -436,8 +381,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         #demod the flats
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode)
-
-
+        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -459,13 +403,13 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         start_time = time.time()
 
         try:
-            norm_fac = np.mean(flat[512:1536,512:1536, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
+            norm_fac = np.mean(flat[ceny,cenx, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
             flat /= norm_fac
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
+            
         except Exception:
             printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
 
@@ -491,7 +435,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
@@ -765,4 +708,4 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
-    return data
+    return data, flat
