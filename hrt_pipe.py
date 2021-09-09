@@ -120,7 +120,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if L1_input:
         print("L1_input param set to True - Assuming L1 science data")
-        accum_scaling = False
+        accum_scaling = False #all False for latest version of L1 processed data: 09.09.21
         bit_conversion = False
         scale_data = False
 
@@ -181,8 +181,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         pmp_temp = check_pmp_temp(hdr_arr)
 
+        #so that data is [y,x,24,scans]
         data = np.stack(data_arr, axis = -1)
-        data = np.moveaxis(data, 0,-2) #so that it is [y,x,24,scans]
+        data = np.moveaxis(data, 0,-2) 
 
         print(f"Data shape is {data.shape}")
 
@@ -238,7 +239,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         start_time = time.time()
     
-        #try:
         flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion)
         
         if 'IMGDIRX' in header_flat:
@@ -255,7 +255,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
             flat *= 614400/128
         
-        # correction based on science data
+        # correction based on science data - see if flat and science are both flipped or not
         flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
         
         flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
@@ -264,13 +264,17 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         
         print(flat.shape)
 
-        _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
+        _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True) #get flat continuum position
 
         print(f"The continuum position of the flat field is at {cpos_f} index position")
 
         saved_args['flat_cpos'] = int(cpos_f)
         
-        flat = compare_cpos(flat,cpos_f,cpos_arr[0])
+        #--------
+        # test if the science and flat have continuum at same position
+        #--------
+
+        flat = compare_cpos(flat,cpos_f,cpos_arr[0]) 
 
         flat_pmp_temp = str(header_flat['HPMPTSP1'])
 
@@ -285,8 +289,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        # except Exception:
-        #     printc("ERROR, Unable to open/process flats file: {}",flat_f,color=bcolors.FAIL)
 
 
     else:
