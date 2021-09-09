@@ -2,106 +2,14 @@ from posix import listdir
 import numpy as np 
 import os.path
 from astropy.io import fits
-from scipy.ndimage import gaussian_filter
+# from scipy.ndimage import gaussian_filter
 import time
 from operator import itemgetter
 import json
 import matplotlib.pyplot as plt
 
 from utils import *
-
-
-def get_data(path, scaling = True, bit_convert_scale = True):
-    """load science data from path"""
-    #try:
-    data, header = load_fits(path)
-
-    if bit_convert_scale: #conversion from 24.8bit to 32bit
-        data /=  256.
-
-    if scaling:
-        
-        accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
-
-        data /= accu
-
-        printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
-    
-    return data, header
-
-    #except Exception:
-    #    printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
-
-   
-
-def demod_hrt(data,pmp_temp):
-    '''
-    Use constant demodulation matrices to demodulate data
-    '''
- 
-    if pmp_temp == '50':
-        demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
-                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
-                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
-                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
-        
-    elif pmp_temp == '40':
-        demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
-                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
-                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
-                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
-    
-    else:
-        printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
-
-    printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
-    
-    demod_data = demod_data.reshape((4,4))
-    shape = data.shape
-    demod = np.tile(demod_data, (shape[0],shape[1],1,1))
-
-    if data.ndim == 5:
-        #if data array has more than one scan
-        data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
-
-        data = np.matmul(demod,data)
-        data = np.moveaxis(data,0,-1) #move scans back to the end
-    
-    elif data.ndim == 4:
-        #for if data has just one scan
-        data = np.matmul(demod,data)
-    
-    return data, demod
-
-def check_filenames(data_f):
-    #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
-
-    scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
-
-    seen = set()
-    uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
-
-    #print(uniq_scan_DIDs)
-    #print(scan_name_list)
-    if uniq_scan_DIDs == []:
-        print("The scans' DIDs are all unique")
-
-    else:
-
-        for x in uniq_scan_DIDs:
-            number = scan_name_list.count(x)
-            if number > 1: #if more than one
-                print(f"The DID: {x} is repeated {number} times")
-                i = 1
-                for index, name in enumerate(scan_name_list):
-                    if name == x:
-                        scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
-                        i += 1
-
-        print("The New DID list is: ", scan_name_list)
-
-    return scan_name_list
-    
+from hrt_pipe_sub import *
 
 
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
@@ -212,9 +120,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if L1_input:
         print("L1_input param set to True - Assuming L1 science data")
-        accum_scaling = True
+        accum_scaling = False
         bit_conversion = False
-        scale_data = True
+        scale_data = False
 
     #-----------------
     # READ DATA
@@ -259,45 +167,19 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         # test if the scans have different sizes
         #--------
 
-        first_shape = data_arr[scan].shape
-        result = all(element.shape == first_shape for element in data_arr)
-        if (result):
-            print("All the scan(s) have the same dimension")
-
-        else:
-            print("The scans have different dimensions! \n Ending process")
-
-            exit()
-
+        check_size(data_arr)
 
         #--------
         # test if the scans have different continuum wavelength_positions
         #--------
 
-        first_cpos = cpos_arr[0]
-        result = all(c_position == first_cpos for c_position in cpos_arr)
-        if (result):
-            print("All the scan(s) have the same continuum wavelength position")
-
-        else:
-            print("The scans have different continuum_wavelength postitions! Please fix \n Ending Process")
-
-            exit()
+        check_cpos(cpos_arr)
 
         #--------
         # test if the scans have different pmp temperatures
         #--------
 
-        first_pmp_temp = hdr_arr[0]['HPMPTSP1']
-        result = all(hdr['HPMPTSP1'] == first_pmp_temp for hdr in hdr_arr)
-        if (result):
-            print(f"All the scan(s) have the same PMP Temperature Set Point: {first_pmp_temp}")
-            pmp_temp = str(first_pmp_temp)
-
-        else:
-            print("The scans have different PMP Temperatures! Please fix \n Ending Process")
-
-            exit()
+        pmp_temp = check_pmp_temp(hdr_arr)
 
         data = np.stack(data_arr, axis = -1)
         data = np.moveaxis(data, 0,-2) #so that it is [y,x,24,scans]
@@ -307,20 +189,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         #--------
         # test if the scans have same IMGDIRX keyword
         #--------
-        if all('IMGDIRX' in hdr for hdr in hdr_arr):
-            header_imgdirx_exists = True
-            first_imgdirx = hdr_arr[0]['IMGDIRX']
-            result = all(hdr['IMGDIRX'] == first_imgdirx for hdr in hdr_arr)
-            if (result):
-                print(f"All the scan(s) have the same IMGDIRX keyword: {first_imgdirx}")
-                imgdirx_flipped = str(first_imgdirx)
-            else:
-                print("The scans have different IMGDIRX keywords! Please fix \n Ending Process")
-                exit()
-        else:
-            header_imgdirx_exists = False
-            print("Not all the scan(s) contain the 'IMGDIRX' keyword! Assuming all not flipped - Proceed with caution")
-
+	
+        header_imgdirx_exists, imgdirx_flipped = check_IMGDIRX(hdr_arr)
+	
     else:
         printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
         exit()
@@ -333,8 +204,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     
     #converting to [y,x,pol,wv,scans]
 
-    data = data.reshape(data_size[0],data_size[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
-    data = np.moveaxis(data, 2,-2) #need to swap back to work
+    data = stokes_reshape(data)
 
     #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
     print("Data reshaped to: ", data.shape)
@@ -348,7 +218,12 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         
     else:
         start_row, start_col = 0, 0
-        
+    
+    rows = slice(start_row,start_row + data_size[0])
+    cols = slice(start_col,start_col + data_size[1])
+    ceny = slice(data_size[0]//2 - data_size[0]//4, data_size[0]//2 + data_size[0]//4)
+    cenx = slice(data_size[1]//2 - data_size[1]//4, data_size[1]//2 + data_size[1]//4)
+    
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -365,7 +240,13 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     
         #try:
         flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion)
-
+        
+        if 'IMGDIRX' in header_flat:
+            header_fltdirx_exists = True
+            fltdirx_flipped = str(header_flat['IMGDIRX'])
+        else:
+            header_fltdirx_exists = False
+        
         print(f"Flat field shape is {flat.shape}")
         
         if header_flat['BITPIX'] == 16:
@@ -373,7 +254,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             print("Number of bits per pixel is: 16")
 
             flat *= 614400/128
-
+        
+        # correction based on science data
+        flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
+        
         flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
         flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
         flat = np.moveaxis(flat, 2,-1)
@@ -386,21 +270,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         saved_args['flat_cpos'] = int(cpos_f)
         
-        if cpos_f != cpos_arr[0]:
-            print("The flat field continuum position is not the same as the data, trying to correct.")
-
-            if cpos_f == 5 and cpos_arr[0] == 0:
-
-                flat = np.roll(flat, 1, axis = -1)
-
-            elif cpos_f == 0 and cpos_arr[0] == 5:
-
-                flat = np.roll(flat, -1, axis = -1)
-
-            else:
-                print("Cannot reconcile the different continuum positions. \n Ending Process.")
-
-                exit()
+        flat = compare_cpos(flat,cpos_f,cpos_arr[0])
 
         flat_pmp_temp = str(header_flat['HPMPTSP1'])
 
@@ -415,7 +285,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
         # except Exception:
         #     printc("ERROR, Unable to open/process flats file: {}",flat_f,color=bcolors.FAIL)
 
@@ -469,20 +338,21 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         
         start_time = time.time()
 
-        flat -= dark[..., np.newaxis, np.newaxis]
 
         if header_imgdirx_exists:
             if imgdirx_flipped == 'YES':
                 dark_copy = np.copy(dark)
                 dark_copy = dark_copy[:,::-1]
 
-                data -= dark_copy[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
-            
+                data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
+                flat -= dark_copy[..., np.newaxis, np.newaxis]
+                
             elif imgdirx_flipped == 'NO':
-                data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
+                data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+                flat -= dark[..., np.newaxis, np.newaxis]
         else:
-            data -= dark[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis] 
-
+            data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
+            flat -= dark[..., np.newaxis, np.newaxis]
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -510,45 +380,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         #demod the flats
 
-        flat_demod, demodM = demod_hrt(flat, flat_pmp_temp)
-
-        norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
-
-        flat_demod /= norm_factor
-
-        new_demod_flats = np.copy(flat_demod)
-
-        b_arr = np.zeros((2048,2048,3,5))
-
-        if cpos_arr[0] == 0:
-            wv_range = range(1,6)
-
-        elif cpos_arr[0] == 5:
-            wv_range = range(5)
-
-        if clean_mode == "QUV":
-            start_clean_pol = 1
-        elif clean_mode == "UV":
-            start_clean_pol = 2
-        elif clean_mode == "V":
-            start_clean_pol = 3
-
-        for pol in range(start_clean_pol,4):
-
-            for wv in wv_range: #not the continuum
-
-                a = np.copy(np.clip(flat_demod[:,:,pol,wv], -0.02, 0.02))
-                b = a - gaussian_filter(a,sigma)
-                b_arr[:,:,pol-1,wv-1] = b
-                c = a - b
-
-                new_demod_flats[:,:,pol,wv] = c
-
-        invM = np.linalg.inv(demodM)
-
-        flat = np.matmul(invM, new_demod_flats*norm_factor)
-
-
+        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode)
+        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -570,13 +403,13 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         start_time = time.time()
 
         try:
-            norm_fac = np.mean(flat[512:1536,512:1536, :, :], axis = (0,1))  #mean of the central 1k x 1k
-            flat /= norm_fac[np.newaxis, np.newaxis, ...]
+            norm_fac = np.mean(flat[ceny,cenx, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
+            flat /= norm_fac
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
+            
         except Exception:
             printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
 
@@ -595,40 +428,13 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         start_time = time.time()
 
-        if header_imgdirx_exists:
-            if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
-                flat = flat[:,::-1, :, :]
-                print("Flat is flipped to match the Science Data")
-
         try:
 
-            if flat_states == 6:
-        
-                printc("Dividing by 6 flats, one for each wavelength",color=bcolors.OKGREEN)
-                    
-                tmp = np.mean(flat,axis=-2) #avg over pol states for the wavelength
-
-                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, :, np.newaxis]
-
-
-            elif flat_states == 24:
-
-                printc("Dividing by 24 flats, one for each image",color=bcolors.OKGREEN)
-
-                data /= flat[start_row:start_row + data_size[0],start_col:start_col + data_size[1], :, :, np.newaxis] #only one new axis for the scans
-                    
-            elif flat_states == 4:
-
-                printc("Dividing by 4 flats, one for each pol state",color=bcolors.OKGREEN)
-
-                tmp = np.mean(flat,axis=-1) #avg over wavelength
-
-                data /= tmp[start_row:start_row + data_size[0],start_col:start_col + data_size[1], :, np.newaxis, np.newaxis]
-        
+            data = flat_correction(data,flat,flat_states,rows,cols)
+                
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
@@ -657,33 +463,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
-        def get_v1_index1(x):
-            index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
-            return  v1, index1
-
-        for scan in range(data_shape[-1]):
-
-            voltage_list = voltagesData_arr[scan]
-            
-            for wv in range(6):
-
-                v = voltage_list[wv]
-
-                vdif = [v - pf for pf in prefilter_voltages]
-                
-                v1, index1 = get_v1_index1(vdif)
-                
-                if vdif[index1] >= 0:
-                    v2 = vdif[index1 + 1]
-                    index2 = index1 + 1
-                    
-                else:
-                    v2 = vdif[index1-1]
-                    index2 = index1 - 1
-                    
-                imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2)
-
-                data[:,:,:,wv,scan] /= imprefilter[...,np.newaxis]
+        data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
 
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -713,7 +493,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
                 field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
 
-        data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1],np.newaxis, np.newaxis, np.newaxis]
+        data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -759,7 +539,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         for scan in range(data_shape[-1]):
             
-            I_c = np.mean(data[512:1536,512:1536,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
+            I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -782,7 +562,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         start_time = time.time()
 
-        before_ctalk_data = np.copy(data)
+        # before_ctalk_data = np.copy(data)
 
         num_of_scans = data_shape[-1]
 
@@ -804,55 +584,16 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
-        cont_stokes = np.mean(data[512:1536,512:1536,0,cpos_arr[0],:], axis = (0,1))
+        # cont_stokes = np.mean(data[ceny,cenx,0,cpos_arr[0],:], axis = (0,1))
 
-        for i in range(6):
-            stokes_i_wv_avg = np.mean(data[512:1536,512:1536,0,i,:], axis = (0,1))
-
-            if norm_stokes:
-                #if normed, applies normalised offset to normed stokes
-
-                tmp_param = ctalk_params*np.divide(stokes_i_wv_avg,cont_stokes)
-
-                q_slope = tmp_param[0,0,:]
-                u_slope = tmp_param[0,1,:]
-                v_slope = tmp_param[0,2,:]
-
-                q_int = tmp_param[1,0,:]
-                u_int = tmp_param[1,1,:]
-                v_int = tmp_param[1,2,:]
-
-                data[:,:,1,i,:] = before_ctalk_data[:,:,1,i,:] - before_ctalk_data[:,:,0,i,:]*q_slope - q_int
-
-                data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,0,i,:]*u_slope - u_int
-
-                data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int
-
-            else:
-                #if not normed, applies raw offset cross talk correction to raw stokes counts
-
-                tmp_param = ctalk_params[0,:,:]*np.divide(stokes_i_wv_avg,cont_stokes)
-
-                q_slope = tmp_param[0,:]
-                u_slope = tmp_param[1,:]
-                v_slope = tmp_param[2,:]
-
-                q_int = ctalk_params[1,0,:]
-                u_int = ctalk_params[1,1,:]
-                v_int = ctalk_params[1,2,:]
-
-                data[:,:,1,i,:] = before_ctalk_data[:,:,1,i,:] - before_ctalk_data[:,:,0,i,:]*q_slope - q_int*stokes_i_wv_avg 
-
-                data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,0,i,:]*u_slope - u_int*stokes_i_wv_avg 
-
-                data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int*stokes_i_wv_avg 
+        data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr)
 
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        data *= field_stop[start_row:start_row + data_size[0],start_col:start_col + data_size[1], np.newaxis, np.newaxis, np.newaxis]
+        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -967,4 +708,4 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
-    return data
+    return data, flat

@@ -94,6 +94,59 @@ def fits_get_sampling(file,verbose = False):
     #print(wave_axis)
     return wave_axis,voltagesData,tunning_constant,cpos
 
+def get_data(path, scaling = True, bit_convert_scale = True):
+    """load science data from path"""
+    #try:
+    data, header = load_fits(path)
+
+    if bit_convert_scale: #conversion from 24.8bit to 32bit
+        data /=  256.
+
+    if scaling:
+        
+        accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
+
+        data /= accu
+
+        printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
+    
+    return data, header
+
+    #except Exception:
+    #    printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
+
+
+def check_filenames(data_f):
+    #checking if the science scans have the same DID - this would cause an issue for naming the output demod files
+
+    scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
+
+    seen = set()
+    uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
+
+    #print(uniq_scan_DIDs)
+    #print(scan_name_list)S
+    if uniq_scan_DIDs == []:
+        print("The scans' DIDs are all unique")
+
+    else:
+
+        for x in uniq_scan_DIDs:
+            number = scan_name_list.count(x)
+            if number > 1: #if more than one
+                print(f"The DID: {x} is repeated {number} times")
+                i = 1
+                for index, name in enumerate(scan_name_list):
+                    if name == x:
+                        scan_name_list[index] = name + f"_{i}" #add _1, _2, etc to the file name, so that when written to output file not overwriting
+                        i += 1
+
+        print("The New DID list is: ", scan_name_list)
+
+    return scan_name_list
+    
+
+
 def fix_path(path,dir='forward',verbose=False):
     path = repr(path)
     if dir == 'forward':
@@ -114,6 +167,46 @@ def fix_path(path,dir='forward',verbose=False):
         return path
     else:
         pass   
+
+def demod_hrt(data,pmp_temp):
+    '''
+    Use constant demodulation matrices to demodulate data
+    '''
+ 
+    if pmp_temp == '50':
+        demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
+                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
+                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
+                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
+        
+    elif pmp_temp == '40':
+        demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
+    
+    else:
+        printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
+
+    printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
+    
+    demod_data = demod_data.reshape((4,4))
+    shape = data.shape
+    demod = np.tile(demod_data, (shape[0],shape[1],1,1))
+
+    if data.ndim == 5:
+        #if data array has more than one scan
+        data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
+
+        data = np.matmul(demod,data)
+        data = np.moveaxis(data,0,-1) #move scans back to the end
+    
+    elif data.ndim == 4:
+        #for if data has just one scan
+        data = np.matmul(demod,data)
+    
+    return data, demod
+
 
 def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
     print(" ")
