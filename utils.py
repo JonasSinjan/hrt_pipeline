@@ -196,6 +196,8 @@ def compare_cpos(data,cpos,cpos_ref):
             print("Cannot reconcile the different continuum positions. \n Ending Process.")
 
             exit()
+    else:
+        return data
 
 
 def check_pmp_temp(hdr_arr):
@@ -258,6 +260,8 @@ def compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_ex
                 return flat
         else:
             return flat
+    else:
+        return flat
 
 
 def stokes_reshape(data):

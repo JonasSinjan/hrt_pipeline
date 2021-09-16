@@ -246,6 +246,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             fltdirx_flipped = str(header_flat['IMGDIRX'])
         else:
             header_fltdirx_exists = False
+            fltdirx_flipped = 'NO'
         
         print(f"Flat field shape is {flat.shape}")
         
@@ -254,7 +255,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             print("Number of bits per pixel is: 16")
 
             flat *= 614400/128
-        
+
         # correction based on science data - see if flat and science are both flipped or not
         flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
         
@@ -339,7 +340,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         print("-->>>>>>> Subtracting dark field")
         
         start_time = time.time()
-
 
         if header_imgdirx_exists:
             if imgdirx_flipped == 'YES':
