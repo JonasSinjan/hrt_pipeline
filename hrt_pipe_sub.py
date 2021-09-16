@@ -67,11 +67,17 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,pol_end=4):
 	    wv_range = range(5)
 
     if clean_mode == "QUV":
-	    start_clean_pol = 1
+        start_clean_pol = 1
+        print("Unsharp Masking Q,U,V")
+        
     elif clean_mode == "UV":
-	    start_clean_pol = 2
+        start_clean_pol = 2
+        print("Unsharp Masking U,V")
+	    
     elif clean_mode == "V":
-	    start_clean_pol = 3
+        start_clean_pol = 3
+        print("Unsharp Masking V")
+	    
 
     for pol in range(start_clean_pol,pol_end):
 
@@ -221,7 +227,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC[:-8] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC[:-15] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
