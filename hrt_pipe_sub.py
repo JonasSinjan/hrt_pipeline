@@ -52,13 +52,13 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,pol_end=4):
     """
     flat_demod, demodM = demod_hrt(flat, flat_pmp_temp)
 
-    norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
+    norm_factor = np.mean(flat_demod[512:1536,512:1536,0,cpos_arr[0]])
 
     flat_demod /= norm_factor
 
     new_demod_flats = np.copy(flat_demod)
 
-    b_arr = np.zeros((2048,2048,3,5))
+#     b_arr = np.zeros((2048,2048,3,5))
 
     if cpos_arr[0] == 0:
 	    wv_range = range(1,6)
@@ -85,7 +85,7 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,pol_end=4):
 
 	        a = np.copy(np.clip(flat_demod[:,:,pol,wv], -0.02, 0.02))
 	        b = a - gaussian_filter(a,sigma)
-	        b_arr[:,:,pol-1,wv-1] = b
+# 	        b_arr[:,:,pol-1,wv-1] = b
 	        c = a - b
 
 	        new_demod_flats[:,:,pol,wv] = c
