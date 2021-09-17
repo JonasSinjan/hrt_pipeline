@@ -3,107 +3,53 @@ from astropy.io import fits
 from scipy.ndimage import gaussian_filter
 from operator import itemgetter
 from utils import *
+import os
+import time
+import subprocess
 
-def check_size(data_arr):
-    first_shape = data_arr[0].shape
-    result = all(element.shape == first_shape for element in data_arr)
-    if (result):
-        print("All the scan(s) have the same dimension")
-
-    else:
-        print("The scans have different dimensions! \n Ending process")
-
-        exit()
-
-
-def check_cpos(cpos_arr):
-    first_cpos = cpos_arr[0]
-    result = all(c_position == first_cpos for c_position in cpos_arr)
-    if (result):
-        print("All the scan(s) have the same continuum wavelength position")
-
-    else:
-        print("The scans have different continuum_wavelength postitions! Please fix \n Ending Process")
-
-        exit()
-
-def compare_cpos(data,cpos,cpos_ref):
-    if cpos != cpos_ref:
-        print("The flat field continuum position is not the same as the data, trying to correct.")
-
-        if cpos == 5 and cpos_ref == 0:
-
-            return np.roll(data, 1, axis = -1)
-
-        elif cpos == 0 and cpos_ref == 5:
-
-            return np.roll(data, -1, axis = -1)
-
-        else:
-            print("Cannot reconcile the different continuum positions. \n Ending Process.")
-
-            exit()
-
-def check_pmp_temp(hdr_arr):
-    first_pmp_temp = hdr_arr[0]['HPMPTSP1']
-    result = all(hdr['HPMPTSP1'] == first_pmp_temp for hdr in hdr_arr)
-    if (result):
-        print(f"All the scan(s) have the same PMP Temperature Set Point: {first_pmp_temp}")
-        pmp_temp = str(first_pmp_temp)
-        return pmp_temp
-    else:
-        print("The scans have different PMP Temperatures! Please fix \n Ending Process")
-
-        exit()
-
-def check_IMGDIRX(hdr_arr):
-    if all('IMGDIRX' in hdr for hdr in hdr_arr):
-        header_imgdirx_exists = True
-        first_imgdirx = hdr_arr[0]['IMGDIRX']
-        result = all(hdr['IMGDIRX'] == first_imgdirx for hdr in hdr_arr)
-        if (result):
-            print(f"All the scan(s) have the same IMGDIRX keyword: {first_imgdirx}")
-            imgdirx_flipped = str(first_imgdirx)
-            
-            return header_imgdirx_exists, imgdirx_flipped
-        else:
-            print("The scans have different IMGDIRX keywords! Please fix \n Ending Process")
-            exit()
-    else:
-        header_imgdirx_exists = False
-        print("Not all the scan(s) contain the 'IMGDIRX' keyword! Assuming all not flipped - Proceed with caution")
-        return header_imgdirx_exists, None
-
-def compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped):
-    if header_imgdirx_exists and imgdirx_flipped == 'YES':
-        if header_fltdirx_exists:
-            if fltdirx_flipped == 'YES':
-                return flat
-            else:
-                return flat[:,:,::-1]
-        else:
-            return flat[:,:,::-1]
-    elif (header_imgdirx_exists and imgdirx_flipped == 'NO') or not header_imgdirx_exists:
-        if header_fltdirx_exists:
-            if fltdirx_flipped == 'YES':
-                return flat[:,:,::-1]
-            else:
-                return flat
-        else:
-            return flat
-
-def stokes_reshape(data):
-    data_shape = data.shape
-
-    #converting to [y,x,pol,wv,scans]
-
-    data = data.reshape(data_shape[0],data_shape[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
-    data = np.moveaxis(data, 2,-2)
+def demod_hrt(data,pmp_temp):
+    '''
+    Use constant demodulation matrices to demodulate input data
+    '''
+    if pmp_temp == '50':
+        demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
+                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
+                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
+                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
+        
+    elif pmp_temp == '40':
+        demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
     
-    return data
+    else:
+        printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
+
+    printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
+    
+    demod_data = demod_data.reshape((4,4))
+    shape = data.shape
+    demod = np.tile(demod_data, (shape[0],shape[1],1,1))
+
+    if data.ndim == 5:
+        #if data array has more than one scan
+        data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
+
+        data = np.matmul(demod,data)
+        data = np.moveaxis(data,0,-1) #move scans back to the end
+    
+    elif data.ndim == 4:
+        #for if data has just one scan
+        data = np.matmul(demod,data)
+    
+    return data, demod
+
 
 def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,pol_end=4):
-    
+    """
+    unsharp masks the flat fields to blur our polarimetric structures due to solar rotation
+    """
     flat_demod, demodM = demod_hrt(flat, flat_pmp_temp)
 
     norm_factor = np.mean(flat_demod[512:1536,512:1536,0,0])
@@ -121,11 +67,17 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,pol_end=4):
 	    wv_range = range(5)
 
     if clean_mode == "QUV":
-	    start_clean_pol = 1
+        start_clean_pol = 1
+        print("Unsharp Masking Q,U,V")
+        
     elif clean_mode == "UV":
-	    start_clean_pol = 2
+        start_clean_pol = 2
+        print("Unsharp Masking U,V")
+	    
     elif clean_mode == "V":
-	    start_clean_pol = 3
+        start_clean_pol = 3
+        print("Unsharp Masking V")
+	    
 
     for pol in range(start_clean_pol,pol_end):
 
@@ -144,7 +96,9 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,pol_end=4):
 
 
 def flat_correction(data,flat,flat_states,rows,cols):
-
+    """
+    correct science data with flat fields
+    """
     if flat_states == 6:
         
         printc("Dividing by 6 flats, one for each wavelength",color=bcolors.OKGREEN)
@@ -173,6 +127,9 @@ def flat_correction(data,flat,flat_states,rows,cols):
 
 
 def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
+    """
+    applies prefilter correction
+    """
     def _get_v1_index1(x):
         index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
         return  v1, index1
@@ -199,17 +156,18 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
                 v2 = vdif[index1-1]
                 index2 = index1 - 1
                 
-            imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2)
+            imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2) #interpolation between nearest voltages
 
             data[:,:,:,wv,scan] /= imprefilter[...,np.newaxis]
             
     return data
 
 def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr):
-
+    """
+    performs cross talk correction for I -> Q,U,V
+    """
     before_ctalk_data = np.copy(data)
     data_shape = data.shape
-    num_of_scans = data_shape[-1]
     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
     cont_stokes = np.mean(data[ceny,cenx,0,cpos_arr[0],:], axis = (0,1))
@@ -257,5 +215,360 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr):
             data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int*stokes_i_wv_avg
     
     return data
+
+
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
+    """
+    RTE inversion using CMILOS
+    """
+    print(" ")
+    printc('-->>>>>>> RUNNING CMILOS ',color=bcolors.OKGREEN)
+    
+    try:
+        CMILOS_LOC = os.path.realpath(__file__)
+
+        CMILOS_LOC = CMILOS_LOC[:-15] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
+
+        if os.path.isfile(CMILOS_LOC+'milos'):
+            printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
+
+        else:
+            raise ValueError('Cannot find cmilos:', CMILOS_LOC)
+
+    except ValueError as err:
+        printc(err.args[0],color=bcolors.FAIL)
+        printc(err.args[1],color=bcolors.FAIL)
+        return        
+
+    wavelength = 6173.3356
+
+    for scan in range(int(data_shape[-1])):
+
+        start_time = time.time()
+
+        file_path = data_f[scan]
+        wave_axis = wve_axis_arr[scan]
+        hdr = hdr_arr[scan]
+
+        #must invert each scan independently, as cmilos only takes in one dataset at a time
+
+        #get wave_axis from the header information of the science scans
+        if cpos_arr[0] == 0:
+            shift_w =  wave_axis[3] - wavelength
+        elif cpos_arr[0] == 5:
+            shift_w =  wave_axis[2] - wavelength
+
+        wave_axis = wave_axis - shift_w
+
+        print('It is assumed the wavelength array is given by the header')
+        #print(wave_axis,color = bcolors.WARNING)
+        print("Wave axis is: ", (wave_axis - wavelength)*1000.)
+        print('Saving data into dummy_in.txt for RTE input')
+
+        sdata = data[:,:,:,:,scan]
+        y,x,p,l = sdata.shape
+        #print(y,x,p,l)
+
+        filename = 'dummy_in.txt'
+        with open(filename,"w") as f:
+            for i in range(x):
+                for j in range(y):
+                    for k in range(l):
+                        f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
+        del sdata
+
+        printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
+
+        cmd = CMILOS_LOC+"./milos"
+        cmd = fix_path(cmd)
+
+        if rte == 'RTE':
+            rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+        if rte == 'CE':
+            rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+        if rte == 'CE+RTE':
+            rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+
+        #print(rte_on)
+
+        printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
+        del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
+        #print(del_dummy)
+
+        res = np.loadtxt('dummy_out.txt')
+        npixels = res.shape[0]/12.
+        #print(npixels)
+        #print(npixels/x)
+        result = np.zeros((12,y*x)).astype(float)
+        rte_invs = np.zeros((12,y,x)).astype(float)
+        for i in range(y*x):
+            result[:,i] = res[i*12:(i+1)*12]
+        result = result.reshape(12,y,x)
+        result = np.einsum('ijk->ikj', result)
+        rte_invs = result
+        del result
+        rte_invs_noth = np.copy(rte_invs)
+
+        """
+        From 0 to 11
+        Counter (PX Id)
+        Iterations
+        Strength
+        Inclination
+        Azimuth
+        Eta0 parameter
+        Doppler width
+        Damping
+        Los velocity
+        Constant source function
+        Slope source function
+        Minimum chisqr value
+        """
+
+        noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
+        low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
+        
+        rte_invs[2,low_values_flags] = 0
+        rte_invs[3,low_values_flags] = 0
+        rte_invs[4,low_values_flags] = 0
+
+        #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
+        
+        del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
+        #print(del_dummy)
+
+        """
+        #vlos S/C vorrection
+        v_x, v_y, v_z = hdr['HCIX_VOB']/1000, hdr['HCIY_VOB']/1000, hdr['HCIZ_VOB']/1000
+
+        #need line of sight velocity, should be total HCI velocity in km/s, with sun at origin. 
+        #need to take care for velocities moving towards the sun, (ie negative) #could use continuum position as if towards or away
+    
+        if cpos_arr[scan] == 5: #moving away, redshifted
+            dir_factor = 1
+        
+        elif cpos_arr[scan] == 0: #moving towards, blueshifted
+            dir_factor == -1
+        
+        v_tot = dir_factor*math.sqrt(v_x**2 + v_y**2+v_z**2) #in km/s
+
+        rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - v_tot
+        """
+
+        rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
+
+        rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
+        rte_data_products[1,:,:] = rte_invs_noth[2,:,:] #b mag strength
+        rte_data_products[2,:,:] = rte_invs_noth[3,:,:] #inclination
+        rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
+        rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
+        rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
+
+        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
+
+        if out_rte_filename is None:
+            filename_root = str(file_path.split('.fits')[0][-10:])
+        else:
+            if isinstance(out_rte_filename, list):
+                filename_root = out_rte_filename[scan]
+
+            elif isinstance(out_rte_filename, str):
+                filename_root = out_rte_filename
+
+            else:
+                filename_root = str(file_path.split('.fits')[0][-10:])
+                print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
+            hdu_list[0].data = rte_data_products
+            hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
+            hdu_list[0].data = rte_data_products[5,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
+            hdu_list[0].data = rte_data_products[4,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr
+            hdu_list[0].data = rte_data_products[0,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
+
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+
+def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
+    """
+    RTE inversion using PMILOS
+    """
+    print(" ")
+    printc('-->>>>>>> RUNNING PMILOS ',color=bcolors.OKGREEN)
+    
+    try:
+        PMILOS_LOC = os.path.realpath(__file__)
+
+        PMILOS_LOC = PMILOS_LOC[:-8] + 'P-MILOS/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
+
+        if os.path.isfile(PMILOS_LOC+'pmilos.x'):
+            printc("Pmilos executable located at:", PMILOS_LOC,color=bcolors.WARNING)
+
+        else:
+            raise ValueError('Cannot find pmilos:', PMILOS_LOC)
+
+    except ValueError as err:
+        printc(err.args[0],color=bcolors.FAIL)
+        printc(err.args[1],color=bcolors.FAIL)
+        return  
+    
+    wavelength = 6173.3356
+
+    for scan in range(int(data_shape[-1])):
+
+        start_time = time.time()
+
+        file_path = data_f[scan]
+        wave_axis = wve_axis_arr[scan]
+
+        #must invert each scan independently, as cmilos only takes in one dataset at a time
+
+        #get wave_axis from the header information of the science scans
+        if cpos_arr[0] == 0:
+            shift_w =  wave_axis[3] - wavelength
+        elif cpos_arr[0] == 5:
+            shift_w =  wave_axis[2] - wavelength
+
+        wave_axis = wave_axis - shift_w
+
+        print('It is assumed the wavelength array is given by the header')
+        #print(wave_axis,color = bcolors.WARNING)
+        print("Wave axis is: ", (wave_axis - wavelength)*1000.)
+        print('Saving data into ./P-MILOS/run/data/input_tmp.fits for pmilos RTE input')
+
+        #write wavelengths to wavelength.fits file for the settings
+
+        wave_input = np.zeros((2,6)) #cfitsio reads dimensions in opposite order
+        wave_input[0,:] = 1
+        wave_input[1,:] = wave_axis
+
+        print(wave_axis)
+
+        hdr = fits.Header()
+
+        primary_hdu = fits.PrimaryHDU(wave_input, header = hdr)
+        hdul = fits.HDUList([primary_hdu])
+        hdul.writeto(f'./P-MILOS/run/wavelength_tmp.fits', overwrite=True)
+
+        sdata = data[:,:,:,:,scan]
+
+        #create input fits file for pmilos
+        hdr = fits.Header() 
+        
+        hdr['CTYPE1'] = 'HPLT-TAN'
+        hdr['CTYPE2'] = 'HPLN-TAN'
+        hdr['CTYPE3'] = 'STOKES' #check order of stokes
+        hdr['CTYPE4'] = 'WAVE-GRI' 
+    
+        primary_hdu = fits.PrimaryHDU(sdata, header = hdr)
+        hdul = fits.HDUList([primary_hdu])
+        hdul.writeto(f'./P-MILOS/run/data/input_tmp.fits', overwrite=True)
+
+        if rte == 'RTE':
+            cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
+        
+        if rte == 'CE':
+            cmd = "mpiexec -np 10 ../pmilos.x pmilos_ce.minit"
+
+        if rte == 'CE+RTE':
+            print("CE+RTE not possible on PMILOS, performing RTE instead")
+            cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
+
+       
+        del sdata
+        #need to change settings for CE or CE+RTE in the pmilos.minit file here
+        
+        printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
+
+        cwd = os.getcwd()
+        os.chdir("./P-MILOS/run/")
+        rte_on = subprocess.call(cmd,shell=True)
+        os.chdir(cwd)
+
+        if rte == 'CE':
+            out_file = 'inv_input_tmp_mod_ce.fits'
+
+        else:
+            out_file = 'inv_input_tmp_mod.fits'
+
+        with fits.open(f'./P-MILOS/run/results/{out_file}') as hdu_list:
+            result = hdu_list[0].data
+
+        #del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}.fits",shell=True) 
+        del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}.fits",shell=True) #must delete the output file
+      
+        #result has dimensions [rows,cols,13]
+        print(result.shape)
+        """
+        PMILOS Output 13 columns
+        0. eta0 = line-to-continuum absorption coefficient ratio 
+        1. B = magnetic field strength [Gauss] 
+        2. vlos = line-of-sight velocity [km/s] 
+        3. dopp = Doppler width [Angstroms] 
+        4. aa = damping parameter 
+        5. gm = magnetic field inclination [deg] 
+        6. az = magnetic field azimuth [deg] 
+        7. S0 = source function constant 
+        8. S1 = source function gradient 
+        9. mac = macroturbulent velocity [km/s] 
+        10. filling factor of the magnetic component [0-1]  
+        11. Number of iterations performed 
+        12. Chisqr value
+        """
+
+        rte_data_products = np.zeros((6,result.shape[0],result.shape[1]))
+
+        rte_data_products[0,:,:] = result[:,:,7] + result[:,:,8] #continuum
+        rte_data_products[1,:,:] = result[:,:,1] #b mag strength
+        rte_data_products[2,:,:] = result[:,:,5] #inclination
+        rte_data_products[3,:,:] = result[:,:,6] #azimuth
+        rte_data_products[4,:,:] = result[:,:,2] #vlos
+        rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
+
+        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
+
+        #flipping taken care of for the field stop in the hrt_pipe 
+
+        if out_rte_filename is None:
+            filename_root = str(file_path.split('.fits')[0][-10:])
+        else:
+            filename_root = out_rte_filename
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].data = rte_data_products
+            hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].data = rte_data_products[5,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].data = rte_data_products[4,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].data = rte_data_products[0,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
+
+
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------- PMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
 
 
