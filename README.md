@@ -64,7 +64,7 @@ OR : use `download_files.py` to download images from the attic repository: https
 IMPORTANT
 Operating System: Linux
 
-1. Compile milos:
+1. Compile milos in both cmilos-fits folder and cmilos folder (cmilos-fits faster):
 
 ```bash
 make clear
@@ -138,3 +138,4 @@ Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germa
 
 - SPGPylibs for the foundation, from which it was expanded upon
 - CMILOS: RTE INVERSION C code for SOPHI (based on the ILD code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
+- CMILOS-FITS: RTE INVERSION C code with fits interace, fits interfacing developed by Philipp Loeschl (MPS)
