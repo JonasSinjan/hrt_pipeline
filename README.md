@@ -137,5 +137,5 @@ Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germa
 ### **Credit**: <br>
 
 - SPGPylibs for the foundation, from which it was expanded upon
-- CMILOS: RTE INVERSION C code for SOPHI (based on the ILD code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
+- CMILOS: RTE INVERSION C code for SO-PHI (based on the IDL code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
 - CMILOS-FITS: RTE INVERSION C code with fits interace, fits interfacing developed by Philipp Loeschl (MPS)
