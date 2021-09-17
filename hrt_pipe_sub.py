@@ -465,11 +465,11 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         hdr['LAMBDA5'] = wave_axis[5]
 
         #write out data to temp fits for cmilos-fits input
-        input_arr = np.transpose(sdata, axes = (3,2,1,0)) #must transpose due to cfitsio
+        input_arr = np.transpose(sdata, axes = (3,2,0,1)) #must transpose due to cfitsio
         hdu1 = fits.PrimaryHDU(data=input_arr, header = hdr)
 
         #mask
-        mask = np.ones((sdata.shape[1],sdata.shape[0])) #change this for fdt
+        mask = np.ones((sdata.shape[0],sdata.shape[1])) #change this for fdt
         hdu2 = fits.ImageHDU(data=mask)
 
         #write out to temp fits
@@ -498,43 +498,29 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         #print(del_dummy)
 
         with fits.open(out_dir+'temp_cmilos_io.fits') as hdu_list:
-            print(hdu_list[0].data.shape)
-            print(hdu_list[1].data.shape)
-            print(np.mean(hdu_list[0].data-input_arr))
+            rte_out = hdu_list[0].data
+            #hdu_list.writeto(out_dir+'rte_out.fits', overwrite=True)
         
         del input_arr
 
-        # res = np.loadtxt('dummy_out.txt')
-        # npixels = res.shape[0]/12.
-        # #print(npixels)
-        # #print(npixels/x)
-        # result = np.zeros((12,y*x)).astype(float)
-        # rte_invs = np.zeros((12,y,x)).astype(float)
-        # for i in range(y*x):
-        #     result[:,i] = res[i*12:(i+1)*12]
-        # result = result.reshape(12,y,x)
-        # result = np.einsum('ijk->ikj', result)
-        # rte_invs = result
-        # del result
-        # rte_invs_noth = np.copy(rte_invs)
-
         """
         From 0 to 11
-        Counter (PX Id)
         Iterations
         Strength
         Inclination
         Azimuth
         Eta0 parameter
         Doppler width
-        Damping
+        Damping/aa
         Los velocity
+        alfa? Counter PID?
         Constant source function
         Slope source function
         Minimum chisqr value
         """
 
         """
+        Direct from cmilos-fits/milos.c
         inv->iter = malloc(npix*sizeof(int));
         inv->B    = malloc(npix*sizeof(double));
         inv->gm   = malloc(npix*sizeof(double));
@@ -550,64 +536,58 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         
         """
 
-
-        # noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
-        # low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
+        """
+        noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
+        low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
         
-        # rte_invs[2,low_values_flags] = 0
-        # rte_invs[3,low_values_flags] = 0
-        # rte_invs[4,low_values_flags] = 0
-
-        # #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
-        
-        # del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-        # #print(del_dummy)
-
+        rte_out[2,low_values_flags] = 0 #not sure about 2,3,4 indexing here
+        rte_out[3,low_values_flags] = 0
+        rte_out[4,low_values_flags] = 0
+        """
        
+        rte_data_products = np.zeros((6,rte_out.shape[1],rte_out.shape[2]))
 
-        # rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
+        rte_data_products[0,:,:] = rte_out[9,:,:] + rte_out[10,:,:] #continuum
+        rte_data_products[1,:,:] = rte_out[1,:,:] #b mag strength
+        rte_data_products[2,:,:] = rte_out[2,:,:] #inclination
+        rte_data_products[3,:,:] = rte_out[3,:,:] #azimuth
+        rte_data_products[4,:,:] = rte_out[7,:,:] #vlos
+        rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
 
-        # rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
-        # rte_data_products[1,:,:] = rte_invs_noth[2,:,:] #b mag strength
-        # rte_data_products[2,:,:] = rte_invs_noth[3,:,:] #inclination
-        # rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
-        # rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
-        # rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
+        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
 
-        # rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
+        if out_rte_filename is None:
+            filename_root = str(file_path.split('.fits')[0][-10:])
+        else:
+            if isinstance(out_rte_filename, list):
+                filename_root = out_rte_filename[scan]
 
-        # if out_rte_filename is None:
-        #     filename_root = str(file_path.split('.fits')[0][-10:])
-        # else:
-        #     if isinstance(out_rte_filename, list):
-        #         filename_root = out_rte_filename[scan]
+            elif isinstance(out_rte_filename, str):
+                filename_root = out_rte_filename
 
-        #     elif isinstance(out_rte_filename, str):
-        #         filename_root = out_rte_filename
+            else:
+                filename_root = str(file_path.split('.fits')[0][-10:])
+                print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
-        #     else:
-        #         filename_root = str(file_path.split('.fits')[0][-10:])
-        #         print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products
+            hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
-        # with fits.open(file_path) as hdu_list:
-        #     hdu_list[0].hdr = hdr
-        #     hdu_list[0].data = rte_data_products
-        #     hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[5,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
 
-        # with fits.open(file_path) as hdu_list:
-        #     hdu_list[0].hdr = hdr
-        #     hdu_list[0].data = rte_data_products[5,:,:]
-        #     hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[4,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
-        # with fits.open(file_path) as hdu_list:
-        #     hdu_list[0].hdr = hdr
-        #     hdu_list[0].data = rte_data_products[4,:,:]
-        #     hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
-
-        # with fits.open(file_path) as hdu_list:
-        #     hdu_list[0].hdr = hdr
-        #     hdu_list[0].data = rte_data_products[0,:,:]
-        #     hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[0,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
