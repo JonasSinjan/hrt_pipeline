@@ -15,7 +15,7 @@ from hrt_pipe_sub import *
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
                 bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
                 dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, config_file = True):
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = False, cmilos_fits_opt = True, config_file = True):
 
     '''
     PHI-HRT data reduction pipeline
@@ -677,6 +677,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
+        #check out_dir has "/" character
+        if out_dir[-1] != "/":
+            print("Desired Output directory missing / character, will be added")
+            out_dir = out_dir + "/"
+
         if p_milos:
 
             try:
@@ -687,7 +692,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
         else:
-            cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            if cmilos_fits_opt:
+                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            else:
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
     else:
         print(" ")
