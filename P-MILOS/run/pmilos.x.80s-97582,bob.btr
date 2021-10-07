@@ -1,0 +1,5 @@
+
+pmilos.x:97582 terminated with signal 11 at PC=43582f SP=7ffd20e1c800.  Backtrace:
+../pmilos.x[0x43582f]
+/lib64/libc.so.6(__libc_start_main+0xf5)[0x2b39c80be765]
+../pmilos.x[0x403ca9]
