@@ -604,7 +604,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
     try:
         PMILOS_LOC = os.path.realpath(__file__)
 
-        PMILOS_LOC = PMILOS_LOC[:-8] + 'P-MILOS/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
+        PMILOS_LOC = PMILOS_LOC[:-15] + 'P-MILOS/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
 
         if os.path.isfile(PMILOS_LOC+'pmilos.x'):
             printc("Pmilos executable located at:", PMILOS_LOC,color=bcolors.WARNING)
@@ -649,35 +649,35 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
 
         print(wave_axis)
 
-        hdr = fits.hdr()
+        hdr = fits.Header()
 
-        primary_hdu = fits.PrimaryHDU(wave_input, hdr = hdr)
+        primary_hdu = fits.PrimaryHDU(wave_input, header = hdr)
         hdul = fits.HDUList([primary_hdu])
         hdul.writeto(f'./P-MILOS/run/wavelength_tmp.fits', overwrite=True)
 
-        sdata = data[:,:,:,:,scan]
-
+        sdata = data[:,:,:,:,scan].T
+        sdata = sdata.astype(np.float32)
         #create input fits file for pmilos
-        hdr = fits.hdr() 
+        hdr = fits.Header() 
         
         hdr['CTYPE1'] = 'HPLT-TAN'
         hdr['CTYPE2'] = 'HPLN-TAN'
         hdr['CTYPE3'] = 'STOKES' #check order of stokes
         hdr['CTYPE4'] = 'WAVE-GRI' 
     
-        primary_hdu = fits.PrimaryHDU(sdata, hdr = hdr)
+        primary_hdu = fits.PrimaryHDU(sdata, header = hdr)
         hdul = fits.HDUList([primary_hdu])
         hdul.writeto(f'./P-MILOS/run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
-            cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
+            cmd = "mpiexec -n 16 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
         
         if rte == 'CE':
-            cmd = "mpiexec -np 10 ../pmilos.x pmilos_ce.minit"
+            cmd = "mpiexec -np 16 ../pmilos.x pmilos_ce.minit"
 
         if rte == 'CE+RTE':
             print("CE+RTE not possible on PMILOS, performing RTE instead")
-            cmd = "mpiexec -np 10 ../pmilos.x pmilos.minit"
+            cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
 
        
         del sdata
@@ -691,10 +691,10 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         os.chdir(cwd)
 
         if rte == 'CE':
-            out_file = 'inv_input_tmp_mod_ce.fits'
+            out_file = 'inv__mod_ce.fits' # not sure about this one
 
         else:
-            out_file = 'inv_input_tmp_mod.fits'
+            out_file = 'inv__mod.fits' #only when one datacube and 16 processors
 
         with fits.open(f'./P-MILOS/run/results/{out_file}') as hdu_list:
             result = hdu_list[0].data

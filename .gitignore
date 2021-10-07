@@ -18,7 +18,7 @@ _RTE.npz
 *.npz
 .env
 run.py
-P-MILOS/*
+P-MILOS/src/*.o
 utils.py
 file_names.txt
 april_2020_flat_us_sigma.py
