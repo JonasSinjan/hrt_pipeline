@@ -84,7 +84,7 @@ make
 
 ONLY TESTED WITH 16 PROCESSES AND ONE CUBE AT A TIME
         
-2. Setup virtual environment from requirements.txt
+3. Setup virtual environment from requirements.txt
 
 using pip - REQUIRES PYTHON >= 3.6
 ```bash
@@ -94,9 +94,14 @@ using conda (Anaconda3) - creates virtual environment called 'dataproc'
 ```bash
 conda env create -f environment.yml
 ```
-2. Change fits files paths, desired processing steps and output directory in ```run.py```
+
+4. Genetate json files with the science, dark and flat you desire to reduce
+
+5. Change the json file being read in ```run.py```
+
+6. Take care of cross talk parameters - and check all other parameters being fed into the `hrt_pipe' function
  
-3. Execute ```run.py```
+7. Execute ```run.py```
 
 ```bash
 python run.py
