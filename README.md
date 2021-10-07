@@ -70,6 +70,19 @@ Operating System: Linux
 make clear
 make
 ```
+
+2. FOR P-MILOS - multiple steps required - ASSUMING RUNNING ON **BOB** SERVER
+- load openmpi_gcc
+- load fftw
+- load cfitsio (or export through .bashrc)
+
+COMPILE
+```bash
+make clean
+make
+```
+
+ONLY TESTED WITH 16 PROCESSES AND ONE CUBE AT A TIME
         
 2. Setup virtual environment from requirements.txt
 
