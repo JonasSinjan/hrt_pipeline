@@ -779,7 +779,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         printc(err.args[1],color=bcolors.FAIL)
         return  
     
-    wavelength = 6173.3356
+    wavelength = 6173.3354
 
     for scan in range(int(data_shape[-1])):
 
@@ -832,7 +832,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         hdul.writeto(f'./P-MILOS/run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
-            cmd = "mpiexec -n 16 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
+            cmd = "mpiexec -n 64 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
         
         if rte == 'CE':
             cmd = "mpiexec -np 16 ../pmilos.x pmilos_ce.minit"
@@ -840,6 +840,9 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         if rte == 'CE+RTE':
             print("CE+RTE not possible on PMILOS, performing RTE instead")
             cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
+
+        if rte == 'RTE_seq':
+            cmd = '../milos.x pmilos.mtrol'
 
        
         del sdata

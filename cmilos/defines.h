@@ -65,7 +65,7 @@
 #define CUANTIC_JUPI 0
 
 
-#define NOISE_SIGMA 0.004 
+#define NOISE_SIGMA 0.001 
 
 #define CLASSICAL_ESTIMATES_SAMPLE_REF 4 //Muestra referencia para cambio de cuadrante de azimuth. Depende del numero de muestras y posicion Continuo
 
