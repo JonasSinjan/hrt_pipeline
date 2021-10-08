@@ -12,11 +12,13 @@ dummy*.txt
 # cmilos/*.c
 # cmilos/*.h
 # cmilos/*
+cmilos-fits/milos
+cmilos-fits/*.o
 _RTE.npz
 *.npz
 .env
 run.py
-P-MILOS/*
+P-MILOS/src/*.o
 utils.py
 file_names.txt
 april_2020_flat_us_sigma.py

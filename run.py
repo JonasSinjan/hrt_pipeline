@@ -54,11 +54,11 @@ c_talk_params[1,2] = v_int
 #out_names = ['nov_17_0051170001']#, '0024160032000_noflat', '0024160033000_noflat', '0024160034000_noflat', '0024160035000_noflat', '0024160036000_noflat', '0024160037000_noflat', '0024160038000_noflat', '0024160039000_noflat']
 
 phihrt_pipe(data_f, flat_f = flat_f, dark_f = dark_f, scale_data = False, bit_conversion = False, accum_scaling = True, norm_f = True, 
-            clean_f = True, sigma = 49, flat_states = 24, norm_stokes = True, prefilter_f = None, 
+            clean_f = True, sigma = 49, clean_mode = "QUV", flat_states = 24, norm_stokes = True, prefilter_f = None, 
             dark_c = True, flat_c = True, fs_c = True, demod = True, ctalk_params = c_talk_params, 
             ItoQUV = True, out_demod_file = True, out_demod_filename = None, 
-            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/nov_17_april_flats_uv_clean/', rte = 'False', 
-            out_rte_filename=None, p_milos = False, config_file = True) 
+            out_dir = '/data/slam/home/sinjan/hrt_pipe_results/pmilos_test/', rte = 'RTE', 
+            out_rte_filename=None, p_milos = True, config_file = True, cmilos_fits_opt=True) 
 """
  Input Parameters:
 ----------

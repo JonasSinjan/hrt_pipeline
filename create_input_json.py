@@ -87,6 +87,7 @@ json.dump(input_dict, open(f"./input_jsons/nov_2020_L1.txt", "w"))
 """
 
 
+"""
 #Nov 17 2020 L1 Feb Flats
 
 # CAN also do the L1 files - but must set bit_convert_scale to false, and scale data to False for the flat fields, and presumably same for the input data
@@ -106,6 +107,29 @@ input_dict = {
 }
 
 json.dump(input_dict, open(f"./input_jsons/nov_2020_L1_feb_flats.txt", "w"))
+"""
+
+
+#Nov 17 2020 L1 KLL flats
+
+# CAN also do the L1 files - but must set bit_convert_scale to false, and scale data to False for the flat fields, and presumably same for the input data
+
+science_nov = ['solo_L1_phi-hrt-ilam_20201117T170209_V202107060747C_0051170001.fits']
+
+flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-flat_20210321T210847_V202108301617C_0163211100.fits' #solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+
+darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits'
+
+science_nov = ['/data/slam/home/sinjan/fits_files/' + i for i in science_nov]
+
+input_dict = {
+  'data_f': science_nov,
+  'flat_f' : flatfield_fits_filename,
+  'dark_f' : darkfield_fits_filename
+}
+
+json.dump(input_dict, open(f"./input_jsons/nov_2020_L1_kll.txt", "w"))
+
 
 
 

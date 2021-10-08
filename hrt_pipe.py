@@ -15,7 +15,7 @@ from hrt_pipe_sub import *
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
                 bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
                 dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, config_file = True):
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = False, cmilos_fits_opt = True, config_file = True):
 
     '''
     PHI-HRT data reduction pipeline
@@ -239,7 +239,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         start_time = time.time()
     
-        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion)
+        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale = bit_conversion)
         
         if 'IMGDIRX' in header_flat:
             header_fltdirx_exists = True
@@ -281,7 +281,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
 
-        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
+        #--------
+        # correct for missing line in particular flat field
+        #--------
+
+        if flat_f[-15:] == '0162201100.fits':  # flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
             print("This flat has a missing line - filling in with neighbouring pixels")
             flat_copy = flat.copy()
             flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
@@ -302,62 +306,19 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     #-----------------
 
     if dark_c:
-        print(" ")
-        printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
+        
+        #-----------------
+        # LOAD DARK
+        #-----------------  
 
-        start_time = time.time()
-
-        try:
-            dark,h = get_data(dark_f)
-
-            dark_shape = dark.shape
-
-            if dark_shape != (2048,2048):
-                
-                printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
-                printc("Attempting to correct ",color=bcolors.WARNING)
-
-                
-                try:
-                    if dark_shape[0] > 2048:
-                        dark = dark[dark_shape[0]-2048:,:]
-                
-                except Exception:
-                    printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
-
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
-        except Exception:
-            printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
-
+        dark = load_dark(dark_f)
 
         #-----------------
         # APPLY DARK CORRECTION 
-        #-----------------    
-        print(" ")
-        print("-->>>>>>> Subtracting dark field")
+        #-----------------  
+
+        data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped)  
         
-        start_time = time.time()
-
-        if header_imgdirx_exists:
-            if imgdirx_flipped == 'YES':
-                dark_copy = np.copy(dark)
-                dark_copy = dark_copy[:,::-1]
-
-                data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-                flat -= dark_copy[..., np.newaxis, np.newaxis]
-                
-            elif imgdirx_flipped == 'NO':
-                data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-                flat -= dark[..., np.newaxis, np.newaxis]
-        else:
-            data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-            flat -= dark[..., np.newaxis, np.newaxis]
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     else:
         print(" ")
@@ -373,14 +334,6 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
         start_time = time.time()
-
-        #cleaning the stripe in the flats for a particular flat
-
-        # if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-        #     flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
-        #     flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
-
-        #demod the flats
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode)
         
@@ -399,21 +352,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if norm_f and flat_c:
         
-        print(" ")
-        printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
-
-        start_time = time.time()
-
-        try:
-            norm_fac = np.mean(flat[ceny,cenx, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
-            flat /= norm_fac
-
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            
-        except Exception:
-            printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+        flat = normalise_flat(flat, flat_f, ceny, cenx)
 
     else:
         print(" ")
@@ -425,21 +364,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     #-----------------
 
     if flat_c:
-        print(" ")
-        printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
 
-        start_time = time.time()
-
-        try:
-
-            data = flat_correction(data,flat,flat_states,rows,cols)
+        data = flat_correction(data,flat,flat_states,rows,cols)
                 
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        except: 
-          printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
-
     else:
         print(" ")
         printc('-->>>>>>> No flat field correction mode',color=bcolors.WARNING)
@@ -482,24 +409,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if fs_c:
     
-        print(" ")
-        printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
-
-        start_time = time.time()
-        
-        field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
-
-        field_stop = np.where(field_stop > 0,1,0)
-
-        if header_imgdirx_exists:
-            if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
-                field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
-
-        data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
-
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
 
     else:
         print(" ")
@@ -513,7 +423,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     if demod:
 
         print(" ")
-        printc('-->>>>>>> Demodulating data         ',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Demodulating data',color=bcolors.OKGREEN)
 
         start_time = time.time()
 
@@ -574,15 +484,18 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             print("ctalk_params is not in the required (2,3) shape, please reconcile")
 
 
+        slope, offset = 0, 1
+        q, u, v = 0, 1, 2
+
         for scan_hdr in hdr_arr:
             if 'CAL_CRT0' in scan_hdr: #check to make sure the keywords exist
-                scan_hdr['CAL_CRT0'] = ctalk_params[0,0] #I-Q slope
-                scan_hdr['CAL_CRT2'] = ctalk_params[0,1] #I-U slope
-                scan_hdr['CAL_CRT4'] = ctalk_params[0,2] #I-V slope
+                scan_hdr['CAL_CRT0'] = ctalk_params[slope,q] #I-Q slope
+                scan_hdr['CAL_CRT2'] = ctalk_params[slope,u] #I-U slope
+                scan_hdr['CAL_CRT4'] = ctalk_params[slope,v] #I-V slope
 
-                scan_hdr['CAL_CRT1'] = ctalk_params[1,0] #I-Q offset
-                scan_hdr['CAL_CRT3'] = ctalk_params[1,1] #I-U offset
-                scan_hdr['CAL_CRT5'] = ctalk_params[1,2] #I-V offset
+                scan_hdr['CAL_CRT1'] = ctalk_params[offset,q] #I-Q offset
+                scan_hdr['CAL_CRT3'] = ctalk_params[offset,u] #I-U offset
+                scan_hdr['CAL_CRT5'] = ctalk_params[offset,v] #I-V offset
 
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
@@ -677,6 +590,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
 
+        #check out_dir has "/" character
+        if out_dir[-1] != "/":
+            print("Desired Output directory missing / character, will be added")
+            out_dir = out_dir + "/"
+
         if p_milos:
 
             try:
@@ -687,7 +605,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
         else:
-            cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            if cmilos_fits_opt:
+                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            else:
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
     else:
         print(" ")

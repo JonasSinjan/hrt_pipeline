@@ -64,14 +64,27 @@ OR : use `download_files.py` to download images from the attic repository: https
 IMPORTANT
 Operating System: Linux
 
-1. Compile milos:
+1. Compile milos in both cmilos-fits folder and cmilos folder (cmilos-fits faster):
 
 ```bash
 make clear
 make
 ```
+
+2. FOR P-MILOS - multiple steps required - ASSUMING RUNNING ON **BOB** SERVER
+- load openmpi_gcc
+- load fftw
+- load cfitsio (or export through .bashrc)
+
+COMPILE
+```bash
+make clean
+make
+```
+
+ONLY TESTED WITH 16 PROCESSES AND ONE CUBE AT A TIME
         
-2. Setup virtual environment from requirements.txt
+3. Setup virtual environment from requirements.txt
 
 using pip - REQUIRES PYTHON >= 3.6
 ```bash
@@ -81,9 +94,14 @@ using conda (Anaconda3) - creates virtual environment called 'dataproc'
 ```bash
 conda env create -f environment.yml
 ```
-2. Change fits files paths, desired processing steps and output directory in ```run.py```
+
+4. Genetate json files with the science, dark and flat you desire to reduce
+
+5. Change the json file being read in ```run.py```
+
+6. Take care of cross talk parameters - and check all other parameters being fed into the `hrt_pipe' function
  
-3. Execute ```run.py```
+7. Execute ```run.py```
 
 ```bash
 python run.py
@@ -137,4 +155,5 @@ Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germa
 ### **Credit**: <br>
 
 - SPGPylibs for the foundation, from which it was expanded upon
-- CMILOS: RTE INVERSION C code for SOPHI (based on the ILD code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
+- CMILOS: RTE INVERSION C code for SO-PHI (based on the IDL code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
+- CMILOS-FITS: RTE INVERSION C code with fits interace, fits interfacing developed by Philipp Loeschl (MPS)
