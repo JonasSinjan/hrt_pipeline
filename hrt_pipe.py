@@ -317,7 +317,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         # APPLY DARK CORRECTION 
         #-----------------  
 
-        data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped)  
+        data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols)  
         
 
     else:
@@ -335,7 +335,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         start_time = time.time()
 
-        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode)
+        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode, clean_f = "blurring")
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
