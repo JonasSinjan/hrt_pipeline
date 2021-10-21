@@ -269,6 +269,9 @@ def stokes_reshape(data):
     converting science to [y,x,pol,wv,scans]
     """
     data_shape = data.shape
+    if data_shape[2] == 25:
+        data = data[:,:,:24]
+        data_shape = data.shape
     data = data.reshape(data_shape[0],data_shape[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
     data = np.moveaxis(data, 2,-2)
     
@@ -299,3 +302,132 @@ def fix_path(path,dir='forward',verbose=False):
     else:
         pass   
 
+def filling_data(arr, thresh, mode, axis = -1):
+    from scipy.interpolate import CubicSpline
+    
+    N = arr.shape[axis]
+    
+    a0 = np.zeros(arr.shape)
+    a0 = arr.copy()
+    if mode == 'max':
+        a0[a0>thresh] = np.nan
+    if mode == 'min':
+        a0[a0<thresh] = np.nan
+    if mode == 'abs':
+        a0[np.abs(a0)>thresh] = np.nan
+    if 'exact rows' in mode.keys():
+        rows = mode['exact rows']
+        for r in rows:
+            a0[r] = np.nan
+    if 'exact columns' in mode.keys():
+        cols = mode['exact columns']
+        for c in cols:
+            a0[:,r] = np.nan
+    
+    with np.errstate(divide='ignore'):
+        for i in range(N):
+            a1 = a0.take(i, axis=axis)
+            nans, index = np.isnan(a1), lambda z: z.nonzero()[0]
+            if nans.sum()>0:
+                a1[nans] = CubicSpline(np.arange(N)[~nans], a1[~nans])(np.arange(N))[nans]
+                if axis == 0:
+                    a0[i] = a1
+                else:
+                    a0[:,i] = a1
+    return a0
+
+def limb_fitting(img, mode = 'columns', switch = False, show = False):
+    def _residuals(p,x,y):
+        xc,yc,R = p
+        return R**2 - (x-xc)**2 - (y-yc)**2
+    
+    def _is_outlier(points, thresh=3.5):
+        """
+        Returns a boolean array with True if points are outliers and False 
+        otherwise.
+
+        Parameters:
+        -----------
+            points : An numobservations by numdimensions array of observations
+            thresh : The modified z-score to use as a threshold. Observations with
+                a modified z-score (based on the median absolute deviation) greater
+                than this value will be classified as outliers.
+
+        Returns:
+        --------
+            mask : A numobservations-length boolean array.
+
+        References:
+        ----------
+            Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+            Handle Outliers", The ASQC Basic References in Quality Control:
+            Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
+        """
+        if len(points.shape) == 1:
+            points = points[:,None]
+        median = np.median(points, axis=0)
+        diff = np.sum((points - median)**2, axis=-1)
+        diff = np.sqrt(diff)
+        med_abs_deviation = np.median(diff)
+
+        modified_z_score = 0.6745 * diff / med_abs_deviation
+
+        return modified_z_score > thresh
+    
+    def _circular_mask(h, w, center, radius):
+
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+        mask = dist_from_center <= radius
+        return mask
+
+    from scipy import optimize
+    
+    if switch:
+        norm = -1
+    else:
+        norm = 1
+        
+    if mode == 'columns':
+        xi = np.arange(100,2000,50)
+        yi = []
+        for c in xi:
+            col = img[:,c]
+            yi += [np.gradient(col*norm).argmax()]
+        yi = np.asarray(yi)
+        xi = xi[~_is_outlier(yi)]; yi = yi[~_is_outlier(yi)]
+    
+    elif mode == 'rows':
+        yi = np.arange(100,200,50)
+        xi = []
+        for r in yi:
+            row = img[r,:]
+            xi += [np.gradient(row*norm).argmax()+100]
+        xi = np.asarray(xi)
+        xi = xi[~_is_outlier(xi)]; yi = yi[~_is_outlier(xi)]
+        
+    p = optimize.least_squares(_residuals,x0 = [1024,1024,3000], args=(xi,yi))
+    if show:
+        plt.plot(xi,yi,'b.')
+        print('center = [{:.2f}, {:.2f}], Radius = {:.2f}'.format(*p.x))
+        plt.imshow((img0-D)*dc.circular_mask(2048,2048,[p.x[0],p.x[1]],p.x[2]))
+        circle = plt.Circle((p.x[0], p.x[1]), p.x[2], color='b', linestyle='--', fill=False)
+        plt.gca().add_patch(circle)#; plt.xlim(0,2048); plt.ylim(0,2048);
+    
+    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2])
+
+
+def auto_norm(file_name):
+    d = fits.open(file_name)
+    try:
+        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
+        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
+        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
+        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    except:
+        norm = 1/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
+    return norm
