@@ -645,7 +645,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         printc(err.args[1],color=bcolors.FAIL)
         return  
     
-    wavelength = 6173.3356
+    wavelength = 6173.3354
 
     for scan in range(int(data_shape[-1])):
 
@@ -707,7 +707,9 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
             print("CE+RTE not possible on PMILOS, performing RTE instead")
             cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
 
-       
+        if rte == 'RTE_seq':
+            cmd = '../milos.x pmilos.mtrol'
+            
         del sdata
         #need to change settings for CE or CE+RTE in the pmilos.minit file here
         

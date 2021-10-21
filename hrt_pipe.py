@@ -13,9 +13,9 @@ from hrt_pipe_sub import *
 
 
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
-                bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
+                bit_conversion = True, norm_f = True, clean_f = None, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
                 dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, config_file = True):
+                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, cmilos_fits_opt = True, out_intermediate = False, config_file = True):
 
     '''
     PHI-HRT data reduction pipeline
@@ -59,10 +59,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         divides the scan + flat by 256 to convert from 24.8bit to 32bits
     norm_f: bool, DEFAULT: True
         to normalise the flat fields before applying
-    clean_f: bool, DEFAULT: False
-        clean the flat field with unsharp masking
+    clean_f: str, DEFAULT: None
+        clean the flat field with unsharp masking, accepted values = ['blurring','fft']
     sigma: int, DEFAULT: 59
-        sigma of the gaussian convolution used for unsharp masking if clean_f == True
+        sigma of the gaussian convolution used for unsharp masking if clean_f == 'blurring', 'fft'
     clean_mode: str, DEFAULT: "V"
         The polarisation states of the flat field to be unsharp masked, options are "V", "UV" and "QUV"
     flat_states: int, DEFAULT: 24
@@ -95,6 +95,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     p_milos: bool, DEFAULT = True
         if True, will execute the RTE inversion using the parallel version of the CMILOS code on 16 processors
+    out_intermediate: bool, DEFAULT = False
+        if True, dark corrected and flat corrected data will be saved
     config_file: bool, DEFAULT = True
         if True, will generate config.txt file that writes the reduction process steps done
     
@@ -120,9 +122,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
     if L1_input:
         print("L1_input param set to True - Assuming L1 science data")
-        accum_scaling = False #all False for latest version of L1 processed data: 09.09.21
-        bit_conversion = False
-        scale_data = False
+        accum_scaling = True # False #all False for latest version of L1 processed data: 09.09.21
+        bit_conversion = True # False
+        scale_data = True # False
 
     #-----------------
     # READ DATA
@@ -190,9 +192,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         #--------
         # test if the scans have same IMGDIRX keyword
         #--------
-	
+    
         header_imgdirx_exists, imgdirx_flipped = check_IMGDIRX(hdr_arr)
-	
+    
     else:
         printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
         exit()
@@ -238,8 +240,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
 
         start_time = time.time()
-    
+        
+        # DC change 20211018
         flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion)
+#         flat, header_flat = get_data(flat_f, scaling = False,  bit_convert_scale=False)
         
         if 'IMGDIRX' in header_flat:
             header_fltdirx_exists = True
@@ -250,7 +254,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         
         print(f"Flat field shape is {flat.shape}")
         
-        if header_flat['BITPIX'] == 16:
+        # DC change 20211014
+#         if header_flat['BITPIX'] == 16:
+        if scale_data:
 
             print("Number of bits per pixel is: 16")
 
@@ -281,11 +287,15 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
 
-        if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-            print("This flat has a missing line - filling in with neighbouring pixels")
+        if flat_f[-15:] == '0162201100.fits': 
+#             print("This flat has a missing line - filling in with neighbouring pixels")
+            print("This flat has a missing line - filling in with cubic spline interpolation")
             flat_copy = flat.copy()
-            flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
-            flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
+            for i in range(4):
+                flat[:,:,i,2] = filling_data(flat_copy[:,:,i,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
+
+#             flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
+#             flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -311,6 +321,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
             dark,h = get_data(dark_f)
 
             dark_shape = dark.shape
+            # DC change 20211018
+            if dark_f[-19:] != '0022210004_000.fits':
+                if scale_data: #not for commissioning data
+
+                    dark *= 81920/127 #conversion factor if 16 bits
 
             if dark_shape != (2048,2048):
                 
@@ -324,7 +339,16 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 
                 except Exception:
                     printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
-
+            # DC change 20211018
+            if 'IMGDIRX' in h:
+                header_drkdirx_exists = True
+                drkdirx_flipped = str(h['IMGDIRX'])
+            else:
+                header_drkdirx_exists = False
+                drkdirx_flipped = 'NO'
+            
+            dark = compare_IMGDIRX(dark,header_imgdirx_exists,imgdirx_flipped,header_drkdirx_exists,drkdirx_flipped)
+            
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -340,21 +364,29 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         print("-->>>>>>> Subtracting dark field")
         
         start_time = time.time()
+        # DC change 20211018
+#         if header_imgdirx_exists:
+#             if imgdirx_flipped == 'YES':
+#                 dark_copy = np.copy(dark)
+#                 dark_copy = dark_copy[:,::-1]
 
-        if header_imgdirx_exists:
-            if imgdirx_flipped == 'YES':
-                dark_copy = np.copy(dark)
-                dark_copy = dark_copy[:,::-1]
+#                 data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+#                 if flat_c:
+#                     flat -= dark_copy[..., np.newaxis, np.newaxis]
 
-                data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-                flat -= dark_copy[..., np.newaxis, np.newaxis]
-                
-            elif imgdirx_flipped == 'NO':
-                data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-                flat -= dark[..., np.newaxis, np.newaxis]
-        else:
-            data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
+#             elif imgdirx_flipped == 'NO':
+#                 data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+#                 if flat_c:
+#                     flat -= dark[..., np.newaxis, np.newaxis]
+#         else:
+        data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        if flat_c:
             flat -= dark[..., np.newaxis, np.newaxis]
+                
+        #DC change 20211018
+        if out_intermediate:
+            data_darkc = data.copy()
+            
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -368,7 +400,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     # OPTIONAL Unsharp Masking clean the flat field stokes V images
     #-----------------
 
-    if clean_f and flat_c:
+    if clean_f is not None and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
@@ -382,7 +414,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         #demod the flats
 
-        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode)
+        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f)
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -433,7 +465,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         try:
 
             data = flat_correction(data,flat,flat_states,rows,cols)
-                
+            # DC change 20211014
+            if out_intermediate:
+                data_flatc = data.copy()
+            
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -487,13 +522,17 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         start_time = time.time()
         
+        # DC change 20211018 Only for Limb data
         field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
-
+        
         field_stop = np.where(field_stop > 0,1,0)
 
         if header_imgdirx_exists:
             if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
                 field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
+
+#         field_stop,_ = load_fits('/data/slam/home/calchetti/fits_files/limb/0149140301_mask_300.fits')
+#         field_stop = (field_stop == 1)
 
         data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
 
@@ -540,9 +579,15 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         start_time = time.time()
 
         for scan in range(data_shape[-1]):
-            
-            I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
-            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
+            # DC change 20211015 only for Limb data
+#             I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
+            I_c = np.mean(data[50:500,700:1700,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun north limb
+#             I_c = np.mean(data[1500:2000,800:1300,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun south limb
+    
+            # DC change 20211018 only for Limb data
+            limb = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True, show = False)
+            limb = np.where(limb>0,1,0)
+            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c * limb[:,:,np.newaxis,np.newaxis]
        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -588,6 +633,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
         # cont_stokes = np.mean(data[ceny,cenx,0,cpos_arr[0],:], axis = (0,1))
 
+        # DC change 20211021 CT should be change according to the Sun position in the FoV (not implemented yet)
         data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr)
 
 
@@ -596,6 +642,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
         data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        # DC change 20211019 only for limb
+        data *= limb[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -649,6 +697,20 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 hdu_list[0].data = data[:,:,:,:,count]
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                 hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
+            
+            # DC change 20211014
+            if out_intermediate:
+                with fits.open(scan) as hdu_list:
+                    print(f"Writing out demod file as: {scan_name_list[count]}_dark_corrected.fits")
+                    hdu_list[0].data = data_darkc[:,:,:,:,count]
+                    hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                    hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
+
+                with fits.open(scan) as hdu_list:
+                    print(f"Writing out demod file as: {scan_name_list[count]}_flat_corrected.fits")
+                    hdu_list[0].data = data_flatc[:,:,:,:,count]
+                    hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                    hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
 
         # if isinstance(data_f, str):
         #     print(" ")
@@ -675,7 +737,12 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     # INVERSION OF DATA WITH CMILOS
     #-----------------
 
-    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE':
+    if rte == 'RTE' or rte == 'CE' or rte == 'CE+RTE' or rte == 'RTE_seq':
+
+        #check out_dir has "/" character
+        if out_dir[-1] != "/":
+            print("Desired Output directory missing / character, will be added")
+            out_dir = out_dir + "/"
 
         if p_milos:
 
@@ -687,12 +754,14 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
         else:
-            cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            if cmilos_fits_opt:
+                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+            else:
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
 
     else:
         print(" ")
         printc('-->>>>>>> No RTE Inversion mode',color=bcolors.WARNING)
-
     
     #-----------------
     # CONFIG FILE
@@ -709,5 +778,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
-
-    return data, flat
+    if flat_c:
+        return data, flat
+    else:
+        return data
