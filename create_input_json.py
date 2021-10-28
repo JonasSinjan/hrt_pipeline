@@ -1,4 +1,5 @@
 import json
+import numpy as np
 
 """
 
@@ -109,7 +110,7 @@ input_dict = {
 json.dump(input_dict, open(f"./input_jsons/nov_2020_L1_feb_flats.txt", "w"))
 """
 
-
+"""
 #Nov 17 2020 L1 KLL flats
 
 # CAN also do the L1 files - but must set bit_convert_scale to false, and scale data to False for the flat fields, and presumably same for the input data
@@ -130,7 +131,7 @@ input_dict = {
 
 json.dump(input_dict, open(f"./input_jsons/nov_2020_L1_kll.txt", "w"))
 
-
+"""
 
 
 """
@@ -154,3 +155,92 @@ input_dict = {
 json.dump(input_dict, open(f"./input_jsons/feb_2k_2021_L1.txt", "w"))
 
 """
+
+"""
+#Sep 2021 data
+
+science_sep = ['solo_L1_phi-hrt-ilam_20210914T053015_V202110150939C_0149140301.fits']#['solo_L1_phi-hrt-ilam_20210914T034515_V202110211713C_0149140201.fits']
+
+flat = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210911T120504_V202110200555C_0169110100.fits' #solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+
+dark = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210428T130238_V202109240900C_0164281001.fits'
+
+science_nov = ['/data/slam/home/sinjan/fits_files/' + i for i in science_sep]
+
+input_dict = {
+  'data_f': science_nov,
+  'flat_f' : flat,
+  'dark_f' : dark
+}
+
+json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_sl.txt", "w"))
+
+"""
+
+science_west = ['solo_L1_phi-hrt-ilam_20210914T071515_V202110260809C_0149140401.fits','solo_L1_phi-hrt-ilam_20210914T071945_V202110260809C_0149140402.fits','solo_L1_phi-hrt-ilam_20210914T072409_V202110260809C_0149140403.fits','solo_L1_phi-hrt-ilam_20210914T072833_V202110260809C_0149140404.fits']#['solo_L1_phi-hrt-ilam_20210914T034515_V202110211713C_0149140201.fits']
+
+flat = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210911T120504_V202110200555C_0169110100.fits' #solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+
+dark = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210428T130238_V202109240900C_0164281001.fits'
+
+science_west_2 = ['/data/slam/home/sinjan/fits_files/' + i for i in science_west]
+
+c_talk_params = np.zeros((2,3))
+
+q_slope = -0.0263#0.0038#-0.0140##-0.0098#
+u_slope = 0.0023#-0.0077#-0.0008##-0.0003#
+v_slope = -0.0116#-0.0009#-0.0073##-0.0070#
+
+q_int = 0.0138#-0.0056#0.0016#-0.0056#-0.0015# #the offset, normalised to I_c
+u_int = -0.0016#0.0031#0.0016##0.0007#
+v_int = 0.0057#-0.0002#0.0007##0.0006# 
+
+c_talk_params[0,0] = q_slope
+c_talk_params[0,1] = u_slope
+c_talk_params[0,2] = v_slope
+
+c_talk_params[1,0] = q_int
+c_talk_params[1,1] = u_int
+c_talk_params[1,2] = v_int
+
+
+input_dict = {
+  #input data
+  'data_f': science_west_2,
+  'flat_f' : flat,
+  'dark_f' : dark,
+
+  #input/output type + scaling
+  'L1_input' : True, 
+  'L1_8_generate': False, #not developed yet
+  'scale_data' : True,  #these 3 will be made redundant once L1 data scaling is normalised - needed mainly for comissioning (IP5) data
+  'accum_scaling' : True, 
+  'bit_conversion' : True, 
+  
+  #reduction
+  'dark_c' : True,
+  'flat_c' : True, 
+  'norm_f' : True, 
+  'clean_f' : False, 
+  'sigma' : 59, #unsharp masking gaussian width
+  'clean_mode' : "V", #options 'QUV', 'UV', 'V' for the unsharp masking
+  'flat_states' : 24, #options 4 (one each pol state), 6 (one each wavelength), 24
+  'prefilter_f': None,
+  'fs_c' : True, 
+  'demod' : True, 
+  'norm_stokes' : True, 
+  'ItoQUV' : False, #missing VtoQU - not developed yet
+  'ctalk_params' : None, #VtoQU parameters will be required in this argument once ready
+  'rte' : 'RTE', #options: ''RTE', 'CE', 'CE+RTE'
+  'p_milos' : True, #attempted, ran into problems - on hold
+  'cmilos_fits_opt': False, #whether to use cmilos-fits
+  
+  #output dir/filenames
+  'out_dir' : '/data/slam/home/sinjan/hrt_pipe_results/sep_2021/',  
+  'out_demod_file' : False,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
+  'out_demod_filename' : None, #if specific and not default name
+  'out_rte_filename' : None,  #if specific and not default name
+  'config_file' : True #now redudant if json input files used
+}
+
+json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_west.txt", "w"))

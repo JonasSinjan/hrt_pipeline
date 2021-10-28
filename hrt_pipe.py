@@ -12,10 +12,7 @@ from utils import *
 from hrt_pipe_sub import *
 
 
-def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
-                bit_conversion = True, norm_f = True, clean_f = False, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
-                dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = False, cmilos_fits_opt = True, config_file = True):
+def phihrt_pipe(input_json_file):
 
     '''
     PHI-HRT data reduction pipeline
@@ -113,6 +110,44 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+     #-----------------
+    # READ INPUT JSON
+    #-----------------
+    
+    input_dict = json.load(open(input_json_file))
+
+    data_f = input_dict['data_f']
+    flat_f = input_dict['flat_f']
+    dark_f = input_dict['dark_f']
+
+    L1_input = input_dict['L1_input']
+    L1_8_generate = input_dict['L1_8_generate']
+    scale_data = input_dict['scale_data']
+    accum_scaling = input_dict['accum_scaling']
+    bit_conversion = input_dict['bit_conversion']
+
+    dark_c = input_dict['dark_c']
+    flat_c = input_dict['flat_c']
+    norm_f = input_dict['norm_f']
+    clean_f = input_dict['clean_f']
+    sigma = input_dict['sigma']
+    clean_mode = input_dict['clean_mode']
+    flat_states = input_dict['flat_states']
+    prefilter_f = input_dict['prefilter_f']
+    fs_c = input_dict['fs_c']
+    demod = input_dict['demod']
+    norm_stokes = input_dict['norm_stokes']
+    CT_ItoQUV = input_dict['ItoQUV']
+    ctalk_params = input_dict['ctalk_params']
+    rte = input_dict['rte']
+    p_milos = input_dict['p_milos']
+    cmilos_fits_opt = input_dict['cmilos_fits_opt']
+
+    out_dir = input_dict['out_dir']
+    out_demod_filename = input_dict['out_demod_filename']
+    out_rte_filename = input_dict['out_rte_filename']
+    config_file = input_dict['config_file']
+    
     overall_time = time.time()
     saved_args = locals()
     saved_args['ctalk_params'] = ctalk_params.tolist()
