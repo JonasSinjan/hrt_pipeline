@@ -14,7 +14,7 @@ from hrt_pipe_sub import *
 
 def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
                 bit_conversion = True, norm_f = True, clean_f = None, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
-                dark_c = True, fs_c = True, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
+                dark_c = True, fs_c = True, limb = False, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
                 ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, cmilos_fits_opt = True, out_intermediate = False, config_file = True):
 
     '''
@@ -49,7 +49,12 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         Fits file of a HRT flatfield (ONLY ONE FILE)
 
     ** Options:
-    L1_input: bool, DEFAULT True
+    L1_input: bool, DEFAULT TrueFeller
+Rajees Uthayasegaram
+Jamie Gorman
+===> NEW ROUND STARTS
+Patrick Ondratschek 
+Lisa-Mari
         ovverides scale_data, bit_conversion, and accum_scaling, so that correct scaling for L1 data applied
     L1_8_generate: bool, DEFAULT False
         if True, assumes L1 input, and generates RTE output with the calibration header information
@@ -75,6 +80,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         apply dark field correction
     fs_c: bool, DEFAULT True
         apply HRT field stop
+    limb: str, DEFAULT None
+        specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
     norm_stokes: bool, DEFAULT: True
@@ -153,13 +160,15 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         tuning_constant_arr = [0]*number_of_scans
 
         for scan in range(number_of_scans):
-            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion)
+            # DC change 20211025 get_data with scale_data included
+            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion,
+                                                     scale_data = scale_data)
 
             wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
 
-            if scale_data: #not for commissioning data
+#             if scale_data: #not for commissioning data
 
-                data_arr[scan] *= 81920/127 #conversion factor if 16 bits
+#                 data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
                 print(f"This scan has been flipped in the Y axis to conform to orientation standards. \n File: {data_f[scan]}")
@@ -242,7 +251,10 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         start_time = time.time()
         
         # DC change 20211018
-        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion)
+        if '0024151020000' not in flat_f or '0024150020000' not in flat_f:
+            flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
+                                        scale_data=False)
+            
 #         flat, header_flat = get_data(flat_f, scaling = False,  bit_convert_scale=False)
         
         if 'IMGDIRX' in header_flat:
@@ -256,11 +268,11 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         
         # DC change 20211014
 #         if header_flat['BITPIX'] == 16:
-        if scale_data:
+#         if scale_data:
 
-            print("Number of bits per pixel is: 16")
+#             print("Number of bits per pixel is: 16")
 
-            flat *= 614400/128
+#             flat *= 614400/128
 
         # correction based on science data - see if flat and science are both flipped or not
         flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
@@ -296,6 +308,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 
 #             flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
 #             flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
+            del flat_copy
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -318,15 +331,17 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         start_time = time.time()
 
         try:
-            dark,h = get_data(dark_f)
+            
 
-            dark_shape = dark.shape
+            
             # DC change 20211018
             if dark_f[-19:] != '0022210004_000.fits':
-                if scale_data: #not for commissioning data
-
-                    dark *= 81920/127 #conversion factor if 16 bits
-
+                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = scale_data)
+ 
+            else:
+                dark,h = get_data(dark_f, scaling = True, bit_convert_scale = True,scale_data = False)
+            
+            dark_shape = dark.shape
             if dark_shape != (2048,2048):
                 
                 printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
@@ -347,7 +362,7 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
                 header_drkdirx_exists = False
                 drkdirx_flipped = 'NO'
             
-            dark = compare_IMGDIRX(dark,header_imgdirx_exists,imgdirx_flipped,header_drkdirx_exists,drkdirx_flipped)
+            dark = compare_IMGDIRX(dark[np.newaxis],header_imgdirx_exists,imgdirx_flipped,header_drkdirx_exists,drkdirx_flipped)[0]
             
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -380,8 +395,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
 #                     flat -= dark[..., np.newaxis, np.newaxis]
 #         else:
         data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-        if flat_c:
-            flat -= dark[..., np.newaxis, np.newaxis]
+#         if flat_c:
+#             flat -= dark[..., np.newaxis, np.newaxis]
                 
         #DC change 20211018
         if out_intermediate:
@@ -579,15 +594,30 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         start_time = time.time()
 
         for scan in range(data_shape[-1]):
-            # DC change 20211015 only for Limb data
-#             I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
-            I_c = np.mean(data[50:500,700:1700,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun north limb
-#             I_c = np.mean(data[1500:2000,800:1300,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun south limb
-    
-            # DC change 20211018 only for Limb data
-            limb = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True, show = False)
-            limb = np.where(limb>0,1,0)
-            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c * limb[:,:,np.newaxis,np.newaxis]
+            # DC change 20211028 only for Limb data
+            if limb is not None:
+                if limb == 'N':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True, show = False)
+                if limb == 'S':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = False, show = False)
+                if limb == 'W':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True, show = False)
+                if limb == 'E':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False, show = False)
+                limb_mask = np.where(limb_mask>0,1,0)
+                Ic_mask = np.where(Ic_mask>0,1,0)
+                data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_mask[:,:,np.newaxis,np.newaxis]
+            else:
+                Ic_mask = np.zeros(data_size)
+                Ic_mask[ceny,cenx] = 1
+                Ic_mask = np.where(Ic_mask>0,1,0)
+             
+            if fs_c:
+                Ic_mask *= field_stop
+            
+            Ic_mask = np.array(Ic_mask, dtype=bool)
+            I_c = np.mean(data[Ic_mask,0,cpos_arr[0],int(scan)])
+            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c 
        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -632,9 +662,9 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
         # cont_stokes = np.mean(data[ceny,cenx,0,cpos_arr[0],:], axis = (0,1))
-
+        
         # DC change 20211021 CT should be change according to the Sun position in the FoV (not implemented yet)
-        data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr)
+        data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
 
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -643,7 +673,8 @@ def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate
         
         data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
         # DC change 20211019 only for limb
-        data *= limb[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        if limb is not None:
+            data *= limb_mask[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
     else:
         print(" ")
