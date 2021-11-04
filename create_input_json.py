@@ -177,13 +177,13 @@ json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_sl.txt", "w"))
 
 """
 
-science_west = ['solo_L1_phi-hrt-ilam_20210914T071515_V202110260809C_0149140401.fits','solo_L1_phi-hrt-ilam_20210914T071945_V202110260809C_0149140402.fits','solo_L1_phi-hrt-ilam_20210914T072409_V202110260809C_0149140403.fits','solo_L1_phi-hrt-ilam_20210914T072833_V202110260809C_0149140404.fits']#['solo_L1_phi-hrt-ilam_20210914T034515_V202110211713C_0149140201.fits']
+science = ['solo_L1_phi-hrt-ilam_20210914T071515_V202110260809C_0149140401.fits','solo_L1_phi-hrt-ilam_20210914T071945_V202110260809C_0149140402.fits','solo_L1_phi-hrt-ilam_20210914T072409_V202110260809C_0149140403.fits','solo_L1_phi-hrt-ilam_20210914T072833_V202110260809C_0149140404.fits']#['solo_L1_phi-hrt-ilam_20210914T034515_V202110211713C_0149140201.fits']
 
-flat = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210911T120504_V202110200555C_0169110100.fits' #solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+flat = '/data/slam/home/sinjan/fits_files/0169111100_DC_9data.fits'#solo_L1_phi-hrt-ilam_20210911T120504_V202110200555C_0169110100.fits' #solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
 
 dark = '/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210428T130238_V202109240900C_0164281001.fits'
 
-science_west_2 = ['/data/slam/home/sinjan/fits_files/' + i for i in science_west]
+science_2 = ['/data/slam/home/sinjan/fits_files/' + i for i in science]
 
 c_talk_params = np.zeros((2,3))
 
@@ -206,7 +206,7 @@ c_talk_params[1,2] = v_int
 
 input_dict = {
   #input data
-  'data_f': science_west_2,
+  'data_f': science_2,
   'flat_f' : flat,
   'dark_f' : dark,
 
@@ -216,10 +216,11 @@ input_dict = {
   'scale_data' : True,  #these 3 will be made redundant once L1 data scaling is normalised - needed mainly for comissioning (IP5) data
   'accum_scaling' : True, 
   'bit_conversion' : True, 
+  'scale_data': True,
   
   #reduction
   'dark_c' : True,
-  'flat_c' : True, 
+  'flat_c' : False, 
   'norm_f' : True, 
   'clean_f' : False, 
   'sigma' : 59, #unsharp masking gaussian width
@@ -231,16 +232,16 @@ input_dict = {
   'norm_stokes' : True, 
   'ItoQUV' : False, #missing VtoQU - not developed yet
   'ctalk_params' : None, #VtoQU parameters will be required in this argument once ready
-  'rte' : 'RTE', #options: ''RTE', 'CE', 'CE+RTE'
-  'p_milos' : True, #attempted, ran into problems - on hold
+  'rte' : 'none', #options: ''RTE', 'CE', 'CE+RTE'
+  'p_milos' : False, #attempted, ran into problems - on hold
   'cmilos_fits_opt': False, #whether to use cmilos-fits
   
   #output dir/filenames
-  'out_dir' : '/data/slam/home/sinjan/hrt_pipe_results/sep_2021/',  
-  'out_demod_file' : False,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
+  'out_dir' : '/data/slam/home/sinjan/hrt_pipe_results/sep_2021_no_flat/',  
+  'out_demod_file' : True,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
   'out_demod_filename' : None, #if specific and not default name
   'out_rte_filename' : None,  #if specific and not default name
-  'config_file' : True #now redudant if json input files used
+  'config_file' : False #now redudant if json input files used
 }
 
-json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_west.txt", "w"))
+json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_west_noflat.json", "w"))
