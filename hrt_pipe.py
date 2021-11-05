@@ -7,6 +7,7 @@ import time
 from operator import itemgetter
 import json
 import matplotlib.pyplot as plt
+from numpy.core.numeric import True_
 
 from utils import *
 from hrt_pipe_sub import *
@@ -72,15 +73,17 @@ def phihrt_pipe(input_json_file):
         apply dark field correction
     fs_c: bool, DEFAULT True
         apply HRT field stop
+    limb: str, DEFAULT None
+        specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
     norm_stokes: bool, DEFAULT: True
         normalise the stokes vector to the quiet sun (I_continuum)
     out_dir : string, DEFUALT: './'
         directory for the output files
-    out_demod_file: bool, DEFAULT: False
+    out_stokes_file: bool, DEFAULT: False
         output file with the stokes vectors to fits file
-    out_demod_filename: str, DEFAULT = None
+    out_stokes_filename: str, DEFAULT = None
         if None, takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     ItoQUV: bool, DEFAULT: False 
         apply I -> Q,U,V correction
@@ -92,13 +95,13 @@ def phihrt_pipe(input_json_file):
         if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     p_milos: bool, DEFAULT = True
         if True, will execute the RTE inversion using the parallel version of the CMILOS code on 16 processors
-    config_file: bool, DEFAULT = True
-        if True, will generate config.txt file that writes the reduction process steps done
-    
+
     Returns
     -------
-    data: nump array
-        stokes vector 
+    data: numpy array
+        stokes vector
+    flat: numpy array
+        flat field 
 
     References
     ----------
@@ -110,7 +113,7 @@ def phihrt_pipe(input_json_file):
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-     #-----------------
+    #-----------------
     # READ INPUT JSON
     #-----------------
     
@@ -135,6 +138,7 @@ def phihrt_pipe(input_json_file):
     flat_states = input_dict['flat_states']
     prefilter_f = input_dict['prefilter_f']
     fs_c = input_dict['fs_c']
+    limb = input_dict['limb']
     demod = input_dict['demod']
     norm_stokes = input_dict['norm_stokes']
     CT_ItoQUV = input_dict['ItoQUV']
@@ -144,27 +148,25 @@ def phihrt_pipe(input_json_file):
     cmilos_fits_opt = input_dict['cmilos_fits_opt']
 
     out_dir = input_dict['out_dir']
-    out_demod_filename = input_dict['out_demod_filename']
+    out_stokes_file = input_dict['out_stokes_file']
+    out_stokes_filename = input_dict['out_stokes_filename']
     out_rte_filename = input_dict['out_rte_filename']
-    config_file = input_dict['config_file']
     
     overall_time = time.time()
-    saved_args = locals()
-    saved_args['ctalk_params'] = ctalk_params.tolist()
-
 
     if L1_input:
         print("L1_input param set to True - Assuming L1 science data")
         accum_scaling = False #all False for latest version of L1 processed data: 09.09.21
         bit_conversion = False
-        scale_data = False
+        #scale_data = False
+
 
     #-----------------
     # READ DATA
     #-----------------
 
     print(" ")
-    printc('-->>>>>>> Reading Data              ',color=bcolors.OKGREEN) 
+    printc('-->>>>>>> Reading Data',color=bcolors.OKGREEN) 
 
     start_time = time.time()
 
@@ -186,13 +188,9 @@ def phihrt_pipe(input_json_file):
         tuning_constant_arr = [0]*number_of_scans
 
         for scan in range(number_of_scans):
-            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion)
+            data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = scale_data)
 
             wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
-
-            if scale_data: #not for commissioning data
-
-                data_arr[scan] *= 81920/127 #conversion factor if 16 bits
 
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
                 print(f"This scan has been flipped in the Y axis to conform to orientation standards. \n File: {data_f[scan]}")
@@ -232,8 +230,6 @@ def phihrt_pipe(input_json_file):
         printc("ERROR, data_f argument is neither a string nor list containing strings: {} \n Ending Process",data_f,color=bcolors.FAIL)
         exit()
 
-    saved_args['science_cpos'] = int(cpos_arr[0])
-
     data_shape = data.shape
 
     data_size = data_shape[:2]
@@ -264,6 +260,7 @@ def phihrt_pipe(input_json_file):
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+
     #-----------------
     # READ FLAT FIELDS
     #-----------------
@@ -274,7 +271,7 @@ def phihrt_pipe(input_json_file):
 
         start_time = time.time()
     
-        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale = bit_conversion)
+        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale = bit_conversion, scale_data = scale_data)
         
         if 'IMGDIRX' in header_flat:
             header_fltdirx_exists = True
@@ -284,12 +281,6 @@ def phihrt_pipe(input_json_file):
             fltdirx_flipped = 'NO'
         
         print(f"Flat field shape is {flat.shape}")
-        
-        if header_flat['BITPIX'] == 16:
-
-            print("Number of bits per pixel is: 16")
-
-            flat *= 614400/128
 
         # correction based on science data - see if flat and science are both flipped or not
         flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
@@ -303,8 +294,6 @@ def phihrt_pipe(input_json_file):
         _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True) #get flat continuum position
 
         print(f"The continuum position of the flat field is at {cpos_f} index position")
-
-        saved_args['flat_cpos'] = int(cpos_f)
         
         #--------
         # test if the science and flat have continuum at same position
@@ -352,9 +341,13 @@ def phihrt_pipe(input_json_file):
         # APPLY DARK CORRECTION 
         #-----------------  
 
+        if flat_c == False:
+            flat = np.empty((2048,2048,4,6))
+
         data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols)  
         
-
+        if flat_c == False:
+            flat = np.empty((2048,2048,4,6))
     else:
         print(" ")
         printc('-->>>>>>> No dark mode',color=bcolors.WARNING)
@@ -413,7 +406,7 @@ def phihrt_pipe(input_json_file):
 
     if prefilter_f is not None:
         print(" ")
-        printc('-->>>>>>> Prefilter Correction ',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Prefilter Correction',color=bcolors.OKGREEN)
 
         start_time = time.time()
 
@@ -437,6 +430,7 @@ def phihrt_pipe(input_json_file):
     else:
         print(" ")
         printc('-->>>>>>> No prefilter mode',color=bcolors.WARNING)
+
 
     #-----------------
     # FIELD STOP 
@@ -486,7 +480,36 @@ def phihrt_pipe(input_json_file):
 
         for scan in range(data_shape[-1]):
             
-            I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
+            #I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
+            #I_c = np.mean(data[50:500,700:1700,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun north limb
+            #I_c = np.mean(data[1500:2000,800:1300,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun south limb
+            #I_c = np.mean(data[350:1700,200:900,0,cpos_arr[0],int(scan)]) # West limb
+            limb_copy = np.copy(data)
+            #from Daniele Calchetti
+            if limb is not None:
+                if limb == 'N':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True)
+                if limb == 'S':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = False)
+                if limb == 'W':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True)
+                if limb == 'E':
+                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False)
+                
+                limb_mask = np.where(limb_mask>0,1,0)
+                Ic_mask = np.where(Ic_mask>0,1,0)
+                
+                data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_mask[:,:,np.newaxis,np.newaxis]
+            else:
+                Ic_mask = np.zeros(data_size)
+                Ic_mask[ceny,cenx] = 1
+                Ic_mask = np.where(Ic_mask>0,1,0)
+             
+            if fs_c:
+                Ic_mask *= field_stop
+            
+            Ic_mask = np.array(Ic_mask, dtype=bool)
+            I_c = np.mean(data[Ic_mask,0,cpos_arr[0],int(scan)])
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -502,7 +525,7 @@ def phihrt_pipe(input_json_file):
     # CROSS-TALK CALCULATION 
     #-----------------
 
-    if ItoQUV:
+    if CT_ItoQUV:
         
         print(" ")
         printc('-->>>>>>> Cross-talk correction I to Q,U,V ',color=bcolors.OKGREEN)
@@ -557,28 +580,36 @@ def phihrt_pipe(input_json_file):
     data[np.isinf(data)] = 0
     data[np.isnan(data)] = 0
 
-    
-    if out_demod_file:
+ 
+    #-----------------
+    #WRITE OUT STOKES VECTOR
+    #-----------------
 
-        if out_dir[-1] != "/":
-            print("Desired Output directory missing / character, will be added")
-            out_dir = out_dir + "/"
+    #these two ifs need to be outside out_stokes_file if statement - needed for inversion
+    if out_dir[-1] != "/":
+        print("Desired Output directory missing / character, will be added")
+        out_dir = out_dir + "/"
 
         #check if the output directory exists, if not, create it
-        if not os.path.exists(out_dir): 
-            print(f"{out_dir} does not exist -->>>>>>> Creating it")
-            os.makedirs(out_dir)
+    if not os.path.exists(out_dir): 
+        print(f"{out_dir} does not exist -->>>>>>> Creating it")
+        os.makedirs(out_dir)
+    
+  
+
+
+    if out_stokes_file:
         
         print(" ")
         printc('Saving demodulated data to one _reduced.fits file per scan')
 
-        if out_demod_filename is not None:
+        if out_stokes_filename is not None:
 
-            if isinstance(out_demod_filename,str):
-                out_demod_filename = [out_demod_filename]
+            if isinstance(out_stokes_filename,str):
+                out_stokes_filename = [out_stokes_filename]
 
-            if int(len(out_demod_filename)) == int(data_shape[-1]):
-                scan_name_list = out_demod_filename
+            if int(len(out_stokes_filename)) == int(data_shape[-1]):
+                scan_name_list = out_stokes_filename
                 scan_name_defined = True
             else:
                 print("Input demod filenames do not match the number of input arrays, reverting to default naming")
@@ -598,20 +629,9 @@ def phihrt_pipe(input_json_file):
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                 hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
 
-        # if isinstance(data_f, str):
-        #     print(" ")
-        #     printc('Saving demodulated data to a _reduced.fits file')
-
-        #     if out_demod_filename is not None:
-        #         scan_name = str(out_demod_filename)
-            
-        #     if 'scan_name' not in locals(): #check if already defined by input, otherwise generate
-        #         scan_name = str(data_f.split('.fits')[0][-10:])
-
-        #     with fits.open(data_f) as hdu_list:
-
-        #         hdu_list[0].data = data
-        #         hdu_list.writeto(out_dir + scan_name + '_reduced.fits', overwrite=True)
+            # with fits.open(scan) as hdu_list:
+            #     hdu_list[0].data = limb_copy
+            #     hdu_list.writeto(out_dir+scan_name_list[count]+'_limb_fit_input.fits', overwrite=True)
 
     else:
         print(" ")
@@ -649,16 +669,6 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> No RTE Inversion mode',color=bcolors.WARNING)
 
-    
-    #-----------------
-    # CONFIG FILE
-    #-----------------
-
-    if config_file:
-        print(" ")
-        printc('-->>>>>>> Writing out config file ',color=bcolors.OKGREEN)
-
-        json.dump(saved_args, open(f"{out_dir + scan_name_list[count]}" + '_hrt_pipeline_config.txt', "w"))
 
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)

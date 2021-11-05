@@ -1,6 +1,7 @@
 from astropy.io import fits
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 
 class bcolors:
   HEADER = '\033[95m'
@@ -43,7 +44,7 @@ def load_fits(path):
   return data, header 
 
 
-def get_data(path, scaling = True, bit_convert_scale = True):
+def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
     """
     load science data from path
     """
@@ -60,6 +61,12 @@ def get_data(path, scaling = True, bit_convert_scale = True):
             data /= accu
 
             printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
+
+        if scale_data: #not for commissioning data
+                
+            maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
+            
+            data *= maxRange[0]/maxRange[-1] 
         
         return data, header
 
@@ -299,3 +306,121 @@ def fix_path(path,dir='forward',verbose=False):
     else:
         pass   
 
+#from Daniele Calchetti - integrated by Jonas Sinjan
+def limb_fitting(img, mode = 'columns', switch = False):
+    def _residuals(p,x,y):
+        xc,yc,R = p
+        return R**2 - (x-xc)**2 - (y-yc)**2
+    
+    def _is_outlier(points, thresh=3.5):
+        """
+        Returns a boolean array with True if points are outliers and False 
+        otherwise.
+        Parameters:
+        -----------
+            points : An numobservations by numdimensions array of observations
+            thresh : The modified z-score to use as a threshold. Observations with
+                a modified z-score (based on the median absolute deviation) greater
+                than this value will be classified as outliers.
+        Returns:
+        --------
+            mask : A numobservations-length boolean array.
+        References:
+        ----------
+            Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+            Handle Outliers", The ASQC Basic References in Quality Control:
+            Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
+        """
+        if len(points.shape) == 1:
+            points = points[:,None]
+        median = np.median(points, axis=0)
+        diff = np.sum((points - median)**2, axis=-1)
+        diff = np.sqrt(diff)
+        med_abs_deviation = np.median(diff)
+
+        modified_z_score = 0.6745 * diff / med_abs_deviation
+
+        return modified_z_score > thresh
+    
+    def _interp(y, m, kind='cubic',fill_value='extrapolate'):
+        
+        from scipy.interpolate import interp1d
+        x = np.arange(np.size(y))
+        fn = interp1d(x, y, kind=kind,fill_value=fill_value)
+        x_new = np.arange(len(y), step=1./m)
+        return fn(x_new)
+    
+    def _circular_mask(h, w, center, radius):
+
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+        mask = dist_from_center <= radius
+        return mask
+
+    from scipy import optimize
+    
+    if switch:
+        norm = -1
+    else:
+        norm = 1
+        
+    if mode == 'columns':
+        xi = np.arange(100,2000,50)
+        yi = []
+        m = 10
+        for c in xi:
+            col = img[:,c]
+            g = np.gradient(col*norm)
+            gi = _interp(g,m)
+            
+            yi += [gi.argmax()/m]
+        yi = np.asarray(yi)
+        #out_one = _is_outlier(yi)
+        #out_two = ~out_one
+        #xi = xi[out_two]; yi = yi[out_two]
+
+        xi = xi[~_is_outlier(yi)]
+        yi = yi[~_is_outlier(yi)]
+    
+    elif mode == 'rows':
+        yi = np.arange(100,2000,50)
+        xi = []
+        m = 10
+        for r in yi:
+            row = img[r,:]
+            g = np.gradient(row*norm)
+            gi = _interp(g,m)
+            
+            xi += [gi.argmax()/m]
+        xi = np.asarray(xi)
+        out_one = _is_outlier(xi)
+        out_two = ~out_one
+        #print(out_two)
+        #print(out_one)
+        #xi = xi[out_two]; yi = yi[out_two] # '~' is the bitwise inversion - ie ~1 (0001) becomes (1110) = -2 (if using 4 bit signed representation) - in this case _is_outlier just provides a bool
+        #~True = -2
+        #~False = -1
+        yi = yi[~_is_outlier(xi)]
+        xi = xi[~_is_outlier(xi)]
+
+
+    p = optimize.least_squares(_residuals,x0 = [1024,1024,3000], args=(xi,yi))
+        
+    mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
+    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80
+
+
+def auto_norm(file_name):
+    d = fits.open(file_name)
+    try:
+        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
+        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
+        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
+        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    except:
+        norm = 1/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
+    return norm

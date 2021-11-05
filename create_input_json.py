@@ -220,28 +220,28 @@ input_dict = {
   
   #reduction
   'dark_c' : True,
-  'flat_c' : False, 
+  'flat_c' : True, 
   'norm_f' : True, 
   'clean_f' : False, 
   'sigma' : 59, #unsharp masking gaussian width
-  'clean_mode' : "V", #options 'QUV', 'UV', 'V' for the unsharp masking
+  'clean_mode' : "UV", #options 'QUV', 'UV', 'V' for the unsharp masking
   'flat_states' : 24, #options 4 (one each pol state), 6 (one each wavelength), 24
   'prefilter_f': None,
   'fs_c' : True, 
+  'limb' : 'W', #specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
   'demod' : True, 
   'norm_stokes' : True, 
   'ItoQUV' : False, #missing VtoQU - not developed yet
   'ctalk_params' : None, #VtoQU parameters will be required in this argument once ready
-  'rte' : 'none', #options: ''RTE', 'CE', 'CE+RTE'
+  'rte' : 'RTE', #options: ''RTE', 'CE', 'CE+RTE'
   'p_milos' : False, #attempted, ran into problems - on hold
   'cmilos_fits_opt': False, #whether to use cmilos-fits
   
   #output dir/filenames
-  'out_dir' : '/data/slam/home/sinjan/hrt_pipe_results/sep_2021_no_flat/',  
-  'out_demod_file' : True,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
-  'out_demod_filename' : None, #if specific and not default name
+  'out_dir' : '/data/slam/home/sinjan/hrt_pipe_results/sep_2021_west_flat_inv/',  
+  'out_stokes_file' : True,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
+  'out_stokes_filename' : None, #if specific and not default name
   'out_rte_filename' : None,  #if specific and not default name
-  'config_file' : False #now redudant if json input files used
 }
 
-json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_west_noflat.json", "w"))
+json.dump(input_dict, open(f"./input_jsons/sep_2021_L1_west_flat.json", "w"))

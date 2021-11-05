@@ -610,7 +610,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         
         
         #write out data to temp fits for cmilos-fits input
-        input_arr = np.transpose(sdata, axes = (3,2,0,1)) #must transpose due to cfitsio (wl,pol,y,x)
+        input_arr = np.transpose(sdata, axes = (3,2,0,1)) #must transpose due to cfitsio (wl,pol,y,x) #3201 originally
         
         # DC CHANGE (same number of digits of cmilos)
 #         hdr['LAMBDA0'] = float('%e' % wave_axis[0])#needs it in Angstrom 6173.1 etc

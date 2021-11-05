@@ -2,7 +2,7 @@ from hrt_pipe import phihrt_pipe
 import numpy as np
 #import json
 
-input_json_file = './input_jsons/sep_2021_L1_west.txt'
+input_json_file = './input_jsons/sep_2021_L1_west_flat.json'
 
 #prefilter_f = '../fits_files/fitted_prefilter.fits'
 
