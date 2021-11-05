@@ -2,7 +2,7 @@ from hrt_pipe import phihrt_pipe
 import numpy as np
 import json
 
-input_json_file = './input_jsons/north_limb.txt' # sep11_500_2021.txt' # feb_2k_2021_L1.txt' # nov_2020_L1.txt' # nov_2020_L1_feb_flats.txt' # 
+input_json_file = './input_jsons/center_limb.txt' # nov_2020_L1.txt' # feb_2k_2021_L1.txt' # sep11_500_2021.txt' # nov_2020_L1_feb_flats.txt' # 
 
 dataset = 'limb'
 
@@ -32,7 +32,7 @@ if dataset == 'nov2020':
     q_int = 0.0138#-0.0056#0.0016#-0.0056#-0.0015# #the offset, normalised to I_c
     u_int = -0.0016#0.0031#0.0016##0.0007#
     v_int = 0.0057#-0.0002#0.0007##0.0006# 
-    sigma = 59
+    sigma = 49
 
 if dataset == 'feb2021':
     q_slope = 0.0038#-0.0140##-0.0098#-0.0263#
@@ -74,10 +74,10 @@ c_talk_params[1,2] = v_int
 
 phihrt_pipe(data_f, flat_f = flat_f, dark_f = dark_f, 
             L1_input = True, scale_data = True, bit_conversion = True, accum_scaling = True, norm_f = True, 
-            clean_f = 'blurring', sigma = sigma, clean_mode = 'V', flat_states = 24, norm_stokes = True, prefilter_f = None, 
-            dark_c = True, flat_c = True, fs_c = True, demod = True, ctalk_params = c_talk_params, 
+            clean_f = 'blurring', sigma = sigma, clean_mode = 'UV', flat_states = 24, norm_stokes = True, prefilter_f = None, 
+            dark_c = True, flat_c = True, fs_c = True, limb = None, demod = True, ctalk_params = c_talk_params, 
             ItoQUV = True, out_demod_file = True, out_demod_filename = None, 
-            out_dir = '/data/slam/home/calchetti/hrt_pipe_results/'+dataset+'_north/', out_intermediate = True, 
+            out_dir = '/data/slam/home/calchetti/hrt_pipe_results/'+dataset+'_center/', out_intermediate = True, 
             rte = 'RTE', out_rte_filename=None, p_milos = False, cmilos_fits_opt = False, config_file = True) 
 """
  Input Parameters:
@@ -133,6 +133,9 @@ dark_c: bool, DEFAULT: True
 
 fs_c: bool, DEFAULT True
     apply HRT field stop
+
+limb: str, DEFAULT None
+    specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
 
 demod: bool, DEFAULT: True
     apply demodulate to the stokes
