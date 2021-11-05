@@ -12,11 +12,24 @@ dummy*.txt
 # cmilos/*.c
 # cmilos/*.h
 # cmilos/*
+cmilos-fits/milos
+cmilos-fits/*.o
 _RTE.npz
 *.npz
 .env
 run.py
-P-MILOS/*
+P-MILOS/src/*.o
 utils.py
 file_names.txt
 april_2020_flat_us_sigma.py
+Line_Flat.png
+.ipynb_checkpoints/test_pmilos-checkpoint.ipynb
+__pycache__/hrt_pipe_sub.cpython-36.pyc
+cmilos/me_der_fitscopy.c
+cmilos/mil_sinrf_copyfits.c
+cmilos/milosfits_copy.c
+.gitignore
+test_pmilos.ipynb
+cmilos/defines_cmilosifts.h
+cmilos-fits/testp.per
+.gitignore

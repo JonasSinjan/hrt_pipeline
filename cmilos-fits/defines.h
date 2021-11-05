@@ -17,7 +17,7 @@
 //---------------------------------------------------------
 // USER CONFIGURATION
 
-#define CENTRAL_WL 6173.335400
+#define CENTRAL_WL 6173.34 
 
 
 //##############################################
@@ -33,36 +33,26 @@
 #define LIMITE_INFERIOR_PRECISION_SINCOS pow(2.0,-39)
 //#############################################
 
-//INITIAL MODEL 
-// #define INITIAL_MODEL_B 1200
-// #define INITIAL_MODEL_GM 170
-// #define INITIAL_MODEL_AZI 20
-// #define INITIAL_MODEL_ETHA0 8
-// #define INITIAL_MODEL_LAMBDADOPP 0.04  //en A
-// #define INITIAL_MODEL_AA 0.18
-// #define INITIAL_MODEL_VLOS 0.05 // Km/s
-// #define INITIAL_MODEL_S0 0.35
-// #define INITIAL_MODEL_S1 0.85
-
-#define INITIAL_MODEL_B 400
-#define INITIAL_MODEL_GM 30
-#define INITIAL_MODEL_AZI 120
-#define INITIAL_MODEL_ETHA0 3
-#define INITIAL_MODEL_LAMBDADOPP 0.025  //en A
-#define INITIAL_MODEL_AA 1.0
-#define INITIAL_MODEL_VLOS 0.01 // Km/s
-#define INITIAL_MODEL_S0 0.15
+//INITIAL MODEL
+#define INITIAL_MODEL_B 1200
+#define INITIAL_MODEL_GM 170
+#define INITIAL_MODEL_AZI 20
+#define INITIAL_MODEL_ETHA0 8
+#define INITIAL_MODEL_LAMBDADOPP 0.04  //en A
+#define INITIAL_MODEL_AA 0.18
+#define INITIAL_MODEL_VLOS 0.05 // Km/s
+#define INITIAL_MODEL_S0 0.35
 #define INITIAL_MODEL_S1 0.85
 
 
 //NumeroS cuanticos
 #define CUANTIC_NWL 1
-#define CUANTIC_SLOI 2
-#define CUANTIC_LLOI 1
-#define CUANTIC_JLOI 1
-#define CUANTIC_SUPI 2
-#define CUANTIC_LUPI 2
-#define CUANTIC_JUPI 0
+#define CUANTIC_SLOI 2 
+#define CUANTIC_LLOI 1 
+#define CUANTIC_JLOI 1 
+#define CUANTIC_SUPI 2 
+#define CUANTIC_LUPI 2 
+#define CUANTIC_JUPI 0 
 
 
 #define NOISE_SIGMA 0.001 
@@ -139,6 +129,49 @@ struct CUANTIC{
 
 typedef struct INIT_MODEL Init_Model;
 typedef struct CUANTIC Cuantic;
+
+struct img_t {
+  int xdim;
+  int ydim;
+  int pol; 
+  int wl; 
+  long npix; 
+  int  nimg;
+  int  naxis;
+
+  double *lambda;
+
+  double **i;
+  double **q;
+  double **u;
+  double **v; 
+  
+  int *mask;
+};
+
+struct mask_t {
+  int xdim;
+  int ydim;
+  long npix; 
+  int  naxis;
+
+  int *mask;
+};
+
+struct inv_t {
+		int    *iter;
+		double *B;
+		double *gm;
+		double *az;
+		double *eta0;
+		double *dopp;
+		double *aa;
+		double *vlos; //km/s
+        double *alfa; //stay light factor
+		double *S0;
+		double *S1;
+		double *nchisqrf;
+};
 
 
 /******************************************************/

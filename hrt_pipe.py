@@ -12,10 +12,7 @@ from utils import *
 from hrt_pipe_sub import *
 
 
-def phihrt_pipe(data_f, dark_f = '', flat_f = '', L1_input = True, L1_8_generate = False, scale_data = True, accum_scaling = True, 
-                bit_conversion = True, norm_f = True, clean_f = None, sigma = 59, clean_mode = "V", flat_states = 24, prefilter_f = None,flat_c = True, 
-                dark_c = True, fs_c = True, limb = False, demod = True, norm_stokes = True, out_dir = './',  out_demod_file = False,  out_demod_filename = None,
-                ItoQUV = False, ctalk_params = None, rte = False, out_rte_filename = None, p_milos = True, cmilos_fits_opt = True, out_intermediate = False, config_file = True):
+def phihrt_pipe(input_json_file):
 
     '''
     PHI-HRT data reduction pipeline
@@ -122,6 +119,44 @@ Lisa-Mari
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
+     #-----------------
+    # READ INPUT JSON
+    #-----------------
+    
+    input_dict = json.load(open(input_json_file))
+
+    data_f = input_dict['data_f']
+    flat_f = input_dict['flat_f']
+    dark_f = input_dict['dark_f']
+
+    L1_input = input_dict['L1_input']
+    L1_8_generate = input_dict['L1_8_generate']
+    scale_data = input_dict['scale_data']
+    accum_scaling = input_dict['accum_scaling']
+    bit_conversion = input_dict['bit_conversion']
+
+    dark_c = input_dict['dark_c']
+    flat_c = input_dict['flat_c']
+    norm_f = input_dict['norm_f']
+    clean_f = input_dict['clean_f']
+    sigma = input_dict['sigma']
+    clean_mode = input_dict['clean_mode']
+    flat_states = input_dict['flat_states']
+    prefilter_f = input_dict['prefilter_f']
+    fs_c = input_dict['fs_c']
+    demod = input_dict['demod']
+    norm_stokes = input_dict['norm_stokes']
+    CT_ItoQUV = input_dict['ItoQUV']
+    ctalk_params = input_dict['ctalk_params']
+    rte = input_dict['rte']
+    p_milos = input_dict['p_milos']
+    cmilos_fits_opt = input_dict['cmilos_fits_opt']
+
+    out_dir = input_dict['out_dir']
+    out_demod_filename = input_dict['out_demod_filename']
+    out_rte_filename = input_dict['out_rte_filename']
+    config_file = input_dict['config_file']
+    
     overall_time = time.time()
     saved_args = locals()
     saved_args['ctalk_params'] = ctalk_params.tolist()
@@ -287,9 +322,13 @@ Lisa-Mari
 
         print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
 
-        if flat_f[-15:] == '0162201100.fits': 
-#             print("This flat has a missing line - filling in with neighbouring pixels")
-            print("This flat has a missing line - filling in with cubic spline interpolation")
+
+        #--------
+        # correct for missing line in particular flat field
+        #--------
+
+        if flat_f[-15:] == '0162201100.fits':  # flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+            print("This flat has a missing line - filling in with neighbouring pixels")
             flat_copy = flat.copy()
             flat[:,:,1,1] = filling_data(flat_copy[:,:,1,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
@@ -352,15 +391,16 @@ Lisa-Mari
 
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+        
+        #-----------------
+        # LOAD DARK
+        #-----------------  
 
 
         #-----------------
         # APPLY DARK CORRECTION 
-        #-----------------    
-        print(" ")
-        print("-->>>>>>> Subtracting dark field")
-        
-        start_time = time.time()
+        #-----------------  
+
 
         data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
@@ -370,6 +410,10 @@ Lisa-Mari
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+        #data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols)  
+        
+
 
     else:
         print(" ")
@@ -386,7 +430,7 @@ Lisa-Mari
 
         start_time = time.time()
 
-        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f)
+        flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode, clean_f = "blurring")
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -403,21 +447,7 @@ Lisa-Mari
 
     if norm_f and flat_c:
         
-        print(" ")
-        printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
-
-        start_time = time.time()
-
-        try:
-            norm_fac = np.mean(flat[ceny,cenx, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
-            flat /= norm_fac
-
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            
-        except Exception:
-            printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+        flat = normalise_flat(flat, flat_f, ceny, cenx)
 
     else:
         print(" ")
@@ -429,12 +459,6 @@ Lisa-Mari
     #-----------------
 
     if flat_c:
-        print(" ")
-        printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
-
-        start_time = time.time()
-
-        try:
 
             data = flat_correction(data,flat,flat_states,rows,cols)
             
@@ -488,25 +512,8 @@ Lisa-Mari
     #-----------------
 
     if fs_c:
-    
-        print(" ")
-        printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
+        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
 
-        start_time = time.time()
-        
-        field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
-        
-        field_stop = np.where(field_stop > 0,1,0)
-
-        if header_imgdirx_exists:
-            if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
-                field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
-
-        data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
-
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     else:
         print(" ")
@@ -520,7 +527,7 @@ Lisa-Mari
     if demod:
 
         print(" ")
-        printc('-->>>>>>> Demodulating data         ',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Demodulating data',color=bcolors.OKGREEN)
 
         start_time = time.time()
 
@@ -604,15 +611,18 @@ Lisa-Mari
             print("ctalk_params is not in the required (2,3) shape, please reconcile")
 
 
+        slope, offset = 0, 1
+        q, u, v = 0, 1, 2
+
         for scan_hdr in hdr_arr:
             if 'CAL_CRT0' in scan_hdr: #check to make sure the keywords exist
-                scan_hdr['CAL_CRT0'] = ctalk_params[0,0] #I-Q slope
-                scan_hdr['CAL_CRT2'] = ctalk_params[0,1] #I-U slope
-                scan_hdr['CAL_CRT4'] = ctalk_params[0,2] #I-V slope
+                scan_hdr['CAL_CRT0'] = ctalk_params[slope,q] #I-Q slope
+                scan_hdr['CAL_CRT2'] = ctalk_params[slope,u] #I-U slope
+                scan_hdr['CAL_CRT4'] = ctalk_params[slope,v] #I-V slope
 
-                scan_hdr['CAL_CRT1'] = ctalk_params[1,0] #I-Q offset
-                scan_hdr['CAL_CRT3'] = ctalk_params[1,1] #I-U offset
-                scan_hdr['CAL_CRT5'] = ctalk_params[1,2] #I-V offset
+                scan_hdr['CAL_CRT1'] = ctalk_params[offset,q] #I-Q offset
+                scan_hdr['CAL_CRT3'] = ctalk_params[offset,u] #I-U offset
+                scan_hdr['CAL_CRT5'] = ctalk_params[offset,v] #I-V offset
 
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
@@ -732,6 +742,7 @@ Lisa-Mari
         if out_dir[-1] != "/":
             print("Desired Output directory missing / character, will be added")
             out_dir = out_dir + "/"
+
         
         if limb is not None:
             mask = limb_mask*field_stop
@@ -747,6 +758,7 @@ Lisa-Mari
 
         else:
             if cmilos_fits_opt:
+
                  cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
             else:
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)

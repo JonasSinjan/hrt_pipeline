@@ -7,7 +7,97 @@ import os
 import time
 import subprocess
 
-def demod_hrt(data,pmp_temp,verbose=True):
+def load_dark(dark_f) -> np.ndarray:
+    """
+    loads dark field from given path
+    """
+    print(" ")
+    printc('-->>>>>>> Reading Darks',color=bcolors.OKGREEN)
+
+    start_time = time.time()
+
+    try:
+        dark,_ = get_data(dark_f)
+
+        dark_shape = dark.shape
+
+        if dark_shape != (2048,2048):
+            
+            printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
+            printc("Attempting to correct ",color=bcolors.WARNING)
+
+            
+            try:
+                if dark_shape[0] > 2048:
+                    dark = dark[dark_shape[0]-2048:,:]
+            
+            except Exception:
+                printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
+
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+        return dark
+
+    except Exception:
+        printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+
+
+def apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols) -> np.ndarray:
+    """
+    subtracts dark field from flat field and science data
+    """
+    print(" ")
+    print("-->>>>>>> Subtracting dark field")
+    
+    start_time = time.time()
+
+    if header_imgdirx_exists:
+        if imgdirx_flipped == 'YES':
+            dark_copy = np.copy(dark)
+            dark_copy = dark_copy[:,::-1]
+
+            data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
+            flat -= dark_copy[..., np.newaxis, np.newaxis]
+            
+        elif imgdirx_flipped == 'NO':
+            data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            flat -= dark[..., np.newaxis, np.newaxis]
+    else:
+        data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
+        flat -= dark[..., np.newaxis, np.newaxis]
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    return data, flat
+
+
+def normalise_flat(flat, flat_f, ceny, cenx) -> np.ndarray:
+    """
+    normalise flat fields at each wavelength position to remove the spectral line
+    """
+    print(" ")
+    printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
+
+    start_time = time.time()
+
+    try:
+        norm_fac = np.mean(flat[ceny,cenx, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
+        flat /= norm_fac
+
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        
+        return flat
+
+    except Exception:
+        printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+
+
+def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     '''
     Use constant demodulation matrices to demodulate input data
     '''
@@ -105,35 +195,52 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end
     return np.matmul(invM, new_demod_flats*norm_factor)
 
 
-def flat_correction(data,flat,flat_states,rows,cols):
+def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
     """
     correct science data with flat fields
     """
-    if flat_states == 6:
-        
-        printc("Dividing by 6 flats, one for each wavelength",color=bcolors.OKGREEN)
+    print(" ")
+    printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
+
+    start_time = time.time()
+
+    try: 
+        if flat_states == 6:
             
-        tmp = np.mean(flat,axis=-2) #avg over pol states for the wavelength
+            printc("Dividing by 6 flats, one for each wavelength",color=bcolors.OKGREEN)
+                
+            tmp = np.mean(flat,axis=-2) #avg over pol states for the wavelength
 
-        return data / tmp[rows,cols, np.newaxis, :, np.newaxis]
+            return data / tmp[rows,cols, np.newaxis, :, np.newaxis]
 
 
-    elif flat_states == 24:
+        elif flat_states == 24:
 
-        printc("Dividing by 24 flats, one for each image",color=bcolors.OKGREEN)
+            printc("Dividing by 24 flats, one for each image",color=bcolors.OKGREEN)
 
-        return data / flat[rows,cols, :, :, np.newaxis] #only one new axis for the scans
+            return data / flat[rows,cols, :, :, np.newaxis] #only one new axis for the scans
+                
+        elif flat_states == 4:
+
+            printc("Dividing by 4 flats, one for each pol state",color=bcolors.OKGREEN)
+
+            tmp = np.mean(flat,axis=-1) #avg over wavelength
+
+            return data / tmp[rows,cols, :, np.newaxis, np.newaxis]
+        else:
+            print(" ")
+            printc('-->>>>>>> Unable to apply flat correction. Please insert valid flat_states',color=bcolors.WARNING)
+
             
-    elif flat_states == 4:
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-        printc("Dividing by 4 flats, one for each pol state",color=bcolors.OKGREEN)
+        return data
 
-        tmp = np.mean(flat,axis=-1) #avg over wavelength
+    except: 
+        printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
-        return data / tmp[rows,cols, :, np.newaxis, np.newaxis]
-    else:
-        print(" ")
-        printc('-->>>>>>> Unable to apply flat correction. Please insert valid flat_states',color=bcolors.WARNING)
 
 
 def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
@@ -172,7 +279,32 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
             
     return data
 
-def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
+def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
+    """
+    apply field stop mask to the science data
+    """
+    print(" ")
+    printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
+
+    start_time = time.time()
+    
+    field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
+
+    field_stop = np.where(field_stop > 0,1,0)
+
+    if header_imgdirx_exists:
+        if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
+            field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
+
+    data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
+
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    return data, field_stop
+
+def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr):
     """
     performs cross talk correction for I -> Q,U,V
     """
@@ -265,7 +397,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
 
         #must invert each scan independently, as cmilos only takes in one dataset at a time
 
-        #get wave_axis from the header information of the science scans
+        #get wave_axis from the hdr information of the science scans
         if cpos_arr[0] == 0:
             shift_w =  wave_axis[3] - wavelength
         elif cpos_arr[0] == 5:
@@ -273,7 +405,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         # DC TEST
         wave_axis = wave_axis - shift_w
 
-        print('It is assumed the wavelength array is given by the header')
+        print('It is assumed the wavelength array is given by the hdr')
         #print(wave_axis,color = bcolors.WARNING)
         print("Wave axis is: ", (wave_axis - wavelength)*1000.)
         print('Saving data into dummy_in.txt for RTE input')
@@ -430,6 +562,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
 
 def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir):
     """
@@ -731,7 +864,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         hdul.writeto(f'./P-MILOS/run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
-            cmd = "mpiexec -n 16 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
+            cmd = "mpiexec -n 64 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
         
         if rte == 'CE':
             cmd = "mpiexec -np 16 ../pmilos.x pmilos_ce.minit"
@@ -742,7 +875,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
 
         if rte == 'RTE_seq':
             cmd = '../milos.x pmilos.mtrol'
-            
+
         del sdata
         #need to change settings for CE or CE+RTE in the pmilos.minit file here
         
@@ -768,7 +901,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         #result has dimensions [rows,cols,13]
         result = np.moveaxis(result,0,2)
         print(result.shape)
-        printc(f'  ---- >>>>> You are HERE .... ',color=bcolors.WARNING)
+        #printc(f'  ---- >>>>> You are HERE .... ',color=bcolors.WARNING)
         """
         PMILOS Output 13 columns
         0. eta0 = line-to-continuum absorption coefficient ratio 
@@ -797,7 +930,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
 
         #flipping taken care of for the field stop in the hrt_pipe 
-        printc(f'  ---- >>>>> and HERE now .... ',color=bcolors.WARNING)
+        #printc(f'  ---- >>>>> and HERE now .... ',color=bcolors.WARNING)
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
         else:
