@@ -14,8 +14,58 @@ input_json_file = './input_jsons/sep_2021_L1_west_flat.json'
 #
 #######################################################################################################
 
+c_talk_params = np.zeros((2,3))
 
-#out_names = ['nov_17_0051170001']#, '0024160032000_noflat', '0024160033000_noflat', '0024160034000_noflat', '0024160035000_noflat', '0024160036000_noflat', '0024160037000_noflat', '0024160038000_noflat', '0024160039000_noflat']
+dataset = None
+
+if dataset == 'nov2020':
+    q_slope = -0.0263#0.0038#-0.0140##-0.0098#
+    u_slope = 0.0023#-0.0077#-0.0008##-0.0003#
+    v_slope = -0.0116#-0.0009#-0.0073##-0.0070#
+
+    q_int = 0.0138#-0.0056#0.0016#-0.0056#-0.0015# #the offset, normalised to I_c
+    u_int = -0.0016#0.0031#0.0016##0.0007#
+    v_int = 0.0057#-0.0002#0.0007##0.0006# 
+    sigma = 49
+
+if dataset == 'feb2021':
+    q_slope = 0.0038#-0.0140##-0.0098#-0.0263#
+    u_slope = -0.0077#-0.0008##-0.0003#0.0023#
+    v_slope = -0.0009#-0.0073##-0.0070#-0.0116#
+
+    q_int =-0.0056#0.0016#-0.0056#-0.0015# 0.0138# #the offset, normalised to I_c
+    u_int = 0.0031#0.0016##0.0007#-0.0016#
+    v_int = -0.0002#0.0007##0.0006# 0.0057#
+    sigma = 59
+
+if dataset == 'sep2021':
+    q_slope = 0.0038#-0.0140##-0.0098#-0.0263#
+    u_slope = -0.0077#-0.0008##-0.0003#0.0023#
+    v_slope = -0.0009#-0.0073##-0.0070#-0.0116#
+
+    q_int =-0.0056#0.0016#-0.0056#-0.0015# 0.0138# #the offset, normalised to I_c
+    u_int = 0.0031#0.0016##0.0007#-0.0016#
+    v_int = -0.0002#0.0007##0.0006# 0.0057#
+    sigma = 59
+
+if dataset == 'limb':
+    q_slope = 0.0038#-0.0140##-0.0098#-0.0263#
+    u_slope = -0.0077#-0.0008##-0.0003#0.0023#
+    v_slope = -0.0009#-0.0073##-0.0070#-0.0116#
+
+    q_int =-0.0056#0.0016#-0.0056#-0.0015# 0.0138# #the offset, normalised to I_c
+    u_int = 0.0031#0.0016##0.0007#-0.0016#
+    v_int = -0.0002#0.0007##0.0006# 0.0057#
+    sigma = 59
+
+c_talk_params[0,0] = q_slope
+c_talk_params[0,1] = u_slope
+c_talk_params[0,2] = v_slope
+
+c_talk_params[1,0] = q_int
+c_talk_params[1,1] = u_int
+c_talk_params[1,2] = v_int
+
 
 phihrt_pipe(input_json_file) 
 """
@@ -49,11 +99,11 @@ bit_conversion: bool, DEFAULT True
 norm_f: bool, DEFAULT: True
     to normalise the flat fields before applying
 
-clean_f: bool, DEFAULT: False
-    clean the flat field with unsharp masking
+clean_f: str, DEFAULT: None
+    clean the flat field with unsharp masking, accepted values = ['blurring','fft']
 
 sigma: int, DEFAULT: 59
-    sigma of the gaussian convolution used for unsharp masking if clean_f == True 
+    sigma of the gaussian convolution used for unsharp masking if clean_f == 'blurring', 'fft'
 
 clean_mode: str, DEFAULT: "V"
     The polarisation states of the flat field to be unsharp masked, options are "V", "UV" and "QUV"
@@ -70,8 +120,11 @@ flat_c: bool, DEFAULT: True
 dark_c: bool, DEFAULT: True
     apply dark field correction
 
-field_stop: bool, DEFAULT True
+fs_c: bool, DEFAULT True
     apply HRT field stop
+
+limb: str, DEFAULT None
+    specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
 
 demod: bool, DEFAULT: True
     apply demodulate to the stokes
@@ -82,10 +135,10 @@ norm_stokes: bool, DEFAULT: True
 out_dir : string, DEFUALT: './'
     directory for the output files
 
-out_demod_file: bool, DEFAULT: False
+out_stokes_file: bool, DEFAULT: False
     output file with the stokes vectors to fits file
 
-out_demod_filename: str, DEFAULT = None
+out_stokes_filename: str, DEFAULT = None
     if None, takes last 10 characters of input scan filename (assumes its a DID), change if want other name
 
 ItoQUV: bool, DEFAULT: False 
@@ -100,6 +153,6 @@ rte: str, DEFAULT: False
 out_rte_filename: str or list, DEFAULT = ''
     if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name(s) for each scan
 
-config_file: bool, DEFAULT = True
-    if True, will generate config.txt file that writes the reduction process steps done
+out_intermediate: bool, DEFAULT = False
+    if True, dark corrected and flat corrected data will be saved
 """

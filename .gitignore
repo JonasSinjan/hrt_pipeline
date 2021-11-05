@@ -35,3 +35,6 @@ cmilos-fits/testp.per
 .gitignore
 file_names.txt
 input_jsons/*
+input_jsons/feb_2k_2021_L1.txt
+input_jsons/nov_2020_L1_feb_flats.txt
+input_jsons/nov_2020_L1.txt

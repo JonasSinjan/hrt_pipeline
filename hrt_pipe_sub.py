@@ -279,7 +279,6 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
             
     return data
 
-
 def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
     """
     apply field stop mask to the science data
@@ -311,14 +310,17 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr):
     """
     before_ctalk_data = np.copy(data)
     data_shape = data.shape
-    ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
-    cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
-    cont_stokes = np.mean(data[ceny,cenx,0,cpos_arr[0],:], axis = (0,1))
+    
+#     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
+#     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
+
+    cont_stokes = np.mean(data[Ic_mask,0,cpos_arr[0],:], axis = 0)
     
     for i in range(6):
                 
-        stokes_i_wv_avg = np.mean(data[ceny,cenx,0,i,:], axis = (0,1))
-
+#         stokes_i_wv_avg = np.mean(data[ceny,cenx,0,i,:], axis = (0,1))
+        stokes_i_wv_avg = np.mean(data[Ic_mask,0,i,:], axis = 0)
+        
         if norm_stokes:
             #if normed, applies normalised offset to normed stokes
 
@@ -531,6 +533,21 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
             hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+        # DC change 20211101 Gherdardo needs separate fits files from inversion
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[3,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[2,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[1,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
             hdu_list[0].hdr = hdr
@@ -541,7 +558,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
             hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
-
+            
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -739,6 +756,21 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
             hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+        # DC change 20211101 Gherdardo needs separate fits files from inversion
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[3,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[2,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[1,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
             hdu_list[0].hdr = hdr
@@ -751,7 +783,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- CMILOS-FITS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
@@ -844,7 +876,6 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         if rte == 'RTE_seq':
             cmd = '../milos.x pmilos.mtrol'
 
-       
         del sdata
         #need to change settings for CE or CE+RTE in the pmilos.minit file here
         
@@ -891,7 +922,6 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         rte_data_products = np.zeros((6,result.shape[0],result.shape[1]))
 
         rte_data_products[0,:,:] = result[:,:,7] + result[:,:,8] #continuum
-        rte_data_products[1,:,:] = result[:,:,1] #b mag strength
         rte_data_products[2,:,:] = result[:,:,5] #inclination
         rte_data_products[3,:,:] = result[:,:,6] #azimuth
         rte_data_products[4,:,:] = result[:,:,2] #vlos
@@ -907,18 +937,37 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
             filename_root = out_rte_filename
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+        # DC change 20211101 Gherdardo needs separate fits files from inversion
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[3,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[2,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[1,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 

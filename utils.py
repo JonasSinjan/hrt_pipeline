@@ -68,6 +68,12 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
             
             data *= maxRange[0]/maxRange[-1] 
         
+        if scale_data: #not for commissioning data
+                
+            maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
+            
+            data *= maxRange[0]/maxRange[-1] #conversion factor if 16 bits
+                
         return data, header
 
     except Exception:
@@ -276,6 +282,9 @@ def stokes_reshape(data):
     converting science to [y,x,pol,wv,scans]
     """
     data_shape = data.shape
+    if data_shape[2] == 25:
+        data = data[:,:,:24]
+        data_shape = data.shape
     data = data.reshape(data_shape[0],data_shape[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
     data = np.moveaxis(data, 2,-2)
     
@@ -306,7 +315,41 @@ def fix_path(path,dir='forward',verbose=False):
     else:
         pass   
 
-#from Daniele Calchetti - integrated by Jonas Sinjan
+
+def filling_data(arr, thresh, mode, axis = -1):
+    from scipy.interpolate import CubicSpline
+    
+    N = arr.shape[axis]
+    
+    a0 = np.zeros(arr.shape)
+    a0 = arr.copy()
+    if mode == 'max':
+        a0[a0>thresh] = np.nan
+    if mode == 'min':
+        a0[a0<thresh] = np.nan
+    if mode == 'abs':
+        a0[np.abs(a0)>thresh] = np.nan
+    if 'exact rows' in mode.keys():
+        rows = mode['exact rows']
+        for r in rows:
+            a0[r] = np.nan
+    if 'exact columns' in mode.keys():
+        cols = mode['exact columns']
+        for c in cols:
+            a0[:,r] = np.nan
+    
+    with np.errstate(divide='ignore'):
+        for i in range(N):
+            a1 = a0.take(i, axis=axis)
+            nans, index = np.isnan(a1), lambda z: z.nonzero()[0]
+            if nans.sum()>0:
+                a1[nans] = CubicSpline(np.arange(N)[~nans], a1[~nans])(np.arange(N))[nans]
+                if axis == 0:
+                    a0[i] = a1
+                else:
+                    a0[:,i] = a1
+    return a0
+
 def limb_fitting(img, mode = 'columns', switch = False):
     def _residuals(p,x,y):
         xc,yc,R = p
@@ -376,10 +419,6 @@ def limb_fitting(img, mode = 'columns', switch = False):
             
             yi += [gi.argmax()/m]
         yi = np.asarray(yi)
-        #out_one = _is_outlier(yi)
-        #out_two = ~out_one
-        #xi = xi[out_two]; yi = yi[out_two]
-
         xi = xi[~_is_outlier(yi)]
         yi = yi[~_is_outlier(yi)]
     
