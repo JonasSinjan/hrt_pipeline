@@ -19,7 +19,7 @@ text = file.read()
 
 text_split = get_file_list(text)
 
-target_directory = '/data/slam/home/sinjan/fits_files/'
+target_directory = '/data/slam/home/calchetti/fits_files/sep2021_flat/'
 
 os.chdir(target_directory)
 

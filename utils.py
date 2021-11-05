@@ -42,8 +42,7 @@ def load_fits(path):
   
   return data, header 
 
-
-def get_data(path, scaling = True, bit_convert_scale = True):
+def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
     """
     load science data from path
     """
@@ -61,6 +60,12 @@ def get_data(path, scaling = True, bit_convert_scale = True):
 
             printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
         
+        if scale_data: #not for commissioning data
+                
+            maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
+            
+            data *= maxRange[0]/maxRange[-1] #conversion factor if 16 bits
+                
         return data, header
 
     except Exception:
@@ -269,6 +274,9 @@ def stokes_reshape(data):
     converting science to [y,x,pol,wv,scans]
     """
     data_shape = data.shape
+    if data_shape[2] == 25:
+        data = data[:,:,:24]
+        data_shape = data.shape
     data = data.reshape(data_shape[0],data_shape[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
     data = np.moveaxis(data, 2,-2)
     
@@ -298,4 +306,111 @@ def fix_path(path,dir='forward',verbose=False):
         return path
     else:
         pass   
+
+def filling_data(arr, thresh, mode, axis = -1):
+    from scipy.interpolate import CubicSpline
+    
+    N = arr.shape[axis]
+    
+    a0 = np.zeros(arr.shape)
+    a0 = arr.copy()
+    if mode == 'max':
+        a0[a0>thresh] = np.nan
+    if mode == 'min':
+        a0[a0<thresh] = np.nan
+    if mode == 'abs':
+        a0[np.abs(a0)>thresh] = np.nan
+    if 'exact rows' in mode.keys():
+        rows = mode['exact rows']
+        for r in rows:
+            a0[r] = np.nan
+    if 'exact columns' in mode.keys():
+        cols = mode['exact columns']
+        for c in cols:
+            a0[:,r] = np.nan
+    
+    with np.errstate(divide='ignore'):
+        for i in range(N):
+            a1 = a0.take(i, axis=axis)
+            nans, index = np.isnan(a1), lambda z: z.nonzero()[0]
+            if nans.sum()>0:
+                a1[nans] = CubicSpline(np.arange(N)[~nans], a1[~nans])(np.arange(N))[nans]
+                if axis == 0:
+                    a0[i] = a1
+                else:
+                    a0[:,i] = a1
+    return a0
+
+def limb_fitting(img, mode = 'columns', switch = False):
+    def _residuals(p,x,y):
+        xc,yc,R = p
+        return R**2 - (x-xc)**2 - (y-yc)**2
+    
+    def _is_outlier(points, thresh=3.5):
+        if len(points.shape) == 1:
+            points = points[:,None]
+        median = np.median(points, axis=0)
+        diff = np.sum((points - median)**2, axis=-1)
+        diff = np.sqrt(diff)
+        med_abs_deviation = np.median(diff)
+
+        modified_z_score = 0.6745 * diff / med_abs_deviation
+
+        return modified_z_score > thresh
+    
+    def _interp(y, m, kind='cubic',fill_value='extrapolate'):
+        
+        from scipy.interpolate import interp1d
+        x = np.arange(np.size(y))
+        fn = interp1d(x, y, kind=kind,fill_value=fill_value)
+        x_new = np.arange(len(y), step=1./m)
+        return fn(x_new)
+    
+    def _circular_mask(h, w, center, radius):
+
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+        mask = dist_from_center <= radius
+        return mask
+
+    from scipy import optimize
+    
+    if switch:
+        norm = -1
+    else:
+        norm = 1
+        
+    if mode == 'columns':
+        xi = np.arange(100,2000,50)
+        yi = []
+        m = 10
+        for c in xi:
+            col = img[:,c]
+            g = np.gradient(col*norm)
+            gi = _interp(g,m)
+            
+            yi += [gi.argmax()/m]
+        yi = np.asarray(yi)
+        xi = xi[~_is_outlier(yi)]
+        yi = yi[~_is_outlier(yi)]
+    
+    elif mode == 'rows':
+        yi = np.arange(100,2000,50)
+        xi = []
+        m = 10
+        for r in yi:
+            row = img[r,:]
+            g = np.gradient(row*norm)
+            gi = _interp(g,m)
+            
+            xi += [gi.argmax()/m]
+        xi = np.asarray(xi)
+        yi = yi[~_is_outlier(xi)]
+        xi = xi[~_is_outlier(xi)]
+        
+    p = optimize.least_squares(_residuals,x0 = [1024,1024,3000], args=(xi,yi))
+       
+    mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
+    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80
 

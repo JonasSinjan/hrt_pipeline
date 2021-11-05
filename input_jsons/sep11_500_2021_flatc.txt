@@ -1,0 +1,1 @@
+{"data_f": ["/data/slam/home/calchetti/fits_files/solo_L1_phi-hrt-ilam_20210911T204503_V202109240900C_0149112420.fits"], "flat_f": "/data/slam/home/calchetti/fits_files/solo_L1_phi-hrt-flat_20210220T110215_V202107221024I_0162201100.fits", "dark_f": "../fits_files/solo_L1_phi-hrt-ilam_20210428T130238_V202109240900C_0164281001.fits"}
