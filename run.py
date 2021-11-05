@@ -2,9 +2,9 @@ from hrt_pipe import phihrt_pipe
 import numpy as np
 import json
 
-input_json_file = './input_jsons/nov_2020_L1.txt' # feb_2k_2021_L1.txt' # center_limb.txt' # sep11_500_2021.txt' # nov_2020_L1_feb_flats.txt' # 
+input_json_file = './input_jsons/center_limb.txt' # nov_2020_L1.txt' # feb_2k_2021_L1.txt' # sep11_500_2021.txt' # nov_2020_L1_feb_flats.txt' # 
 
-dataset = 'nov2020'
+dataset = 'limb'
 
 input_dict = json.load(open(input_json_file))
 
@@ -74,10 +74,10 @@ c_talk_params[1,2] = v_int
 
 phihrt_pipe(data_f, flat_f = flat_f, dark_f = dark_f, 
             L1_input = True, scale_data = True, bit_conversion = True, accum_scaling = True, norm_f = True, 
-            clean_f = 'blurring', sigma = sigma, clean_mode = 'V', flat_states = 24, norm_stokes = True, prefilter_f = None, 
+            clean_f = 'blurring', sigma = sigma, clean_mode = 'UV', flat_states = 24, norm_stokes = True, prefilter_f = None, 
             dark_c = True, flat_c = True, fs_c = True, limb = None, demod = True, ctalk_params = c_talk_params, 
             ItoQUV = True, out_demod_file = True, out_demod_filename = None, 
-            out_dir = '/data/slam/home/calchetti/hrt_pipe_results/'+dataset+'/', out_intermediate = True, 
+            out_dir = '/data/slam/home/calchetti/hrt_pipe_results/'+dataset+'_center/', out_intermediate = True, 
             rte = 'RTE', out_rte_filename=None, p_milos = False, cmilos_fits_opt = False, config_file = True) 
 """
  Input Parameters:

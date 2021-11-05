@@ -650,7 +650,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- CMILOS-FITS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
@@ -789,7 +789,6 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         rte_data_products = np.zeros((6,result.shape[0],result.shape[1]))
 
         rte_data_products[0,:,:] = result[:,:,7] + result[:,:,8] #continuum
-        rte_data_products[1,:,:] = result[:,:,1] #b mag strength
         rte_data_products[2,:,:] = result[:,:,5] #inclination
         rte_data_products[3,:,:] = result[:,:,6] #azimuth
         rte_data_products[4,:,:] = result[:,:,2] #vlos
@@ -805,18 +804,37 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
             filename_root = out_rte_filename
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
+        # DC change 20211101 Gherdardo needs separate fits files from inversion
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[3,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[2,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
+            hdu_list[0].data = rte_data_products[1,:,:]
+            hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
+
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
+            hdu_list[0].hdr = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 

@@ -129,9 +129,9 @@ Lisa-Mari
 
     if L1_input:
         print("L1_input param set to True - Assuming L1 science data")
-        accum_scaling = True # False #all False for latest version of L1 processed data: 09.09.21
-        bit_conversion = True # False
-        scale_data = True # False
+        accum_scaling = True 
+        bit_conversion = True
+        scale_data = True
 
     #-----------------
     # READ DATA
@@ -160,19 +160,14 @@ Lisa-Mari
         tuning_constant_arr = [0]*number_of_scans
 
         for scan in range(number_of_scans):
-            # DC change 20211025 get_data with scale_data included
+            
             data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion,
                                                      scale_data = scale_data)
 
             wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
 
-#             if scale_data: #not for commissioning data
-
-#                 data_arr[scan] *= 81920/127 #conversion factor if 16 bits
-
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
                 print(f"This scan has been flipped in the Y axis to conform to orientation standards. \n File: {data_f[scan]}")
-
 
         #--------
         # test if the scans have different sizes
@@ -250,13 +245,14 @@ Lisa-Mari
 
         start_time = time.time()
         
-        # DC change 20211018
-        if '0024151020000' not in flat_f or '0024150020000' not in flat_f:
+        # flat from IP-5
+        if '0024151020000' in flat_f or '0024150020000' in flat_f:
             flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
                                         scale_data=False)
-            
-#         flat, header_flat = get_data(flat_f, scaling = False,  bit_convert_scale=False)
-        
+        else:
+            flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
+                                        scale_data=scale_data)
+                    
         if 'IMGDIRX' in header_flat:
             header_fltdirx_exists = True
             fltdirx_flipped = str(header_flat['IMGDIRX'])
@@ -266,14 +262,6 @@ Lisa-Mari
         
         print(f"Flat field shape is {flat.shape}")
         
-        # DC change 20211014
-#         if header_flat['BITPIX'] == 16:
-#         if scale_data:
-
-#             print("Number of bits per pixel is: 16")
-
-#             flat *= 614400/128
-
         # correction based on science data - see if flat and science are both flipped or not
         flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
         
@@ -303,8 +291,7 @@ Lisa-Mari
 #             print("This flat has a missing line - filling in with neighbouring pixels")
             print("This flat has a missing line - filling in with cubic spline interpolation")
             flat_copy = flat.copy()
-            for i in range(4):
-                flat[:,:,i,2] = filling_data(flat_copy[:,:,i,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
+            flat[:,:,1,1] = filling_data(flat_copy[:,:,1,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
 #             flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
 #             flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
@@ -331,23 +318,18 @@ Lisa-Mari
         start_time = time.time()
 
         try:
-            
 
-            
-            # DC change 20211018
             if dark_f[-19:] != '0022210004_000.fits':
-                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = scale_data)
- 
+                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = scale_data) 
             else:
-                dark,h = get_data(dark_f, scaling = True, bit_convert_scale = True,scale_data = False)
+                dark,h = get_data(dark_f, scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = False)
             
             dark_shape = dark.shape
             if dark_shape != (2048,2048):
                 
                 printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
                 printc("Attempting to correct ",color=bcolors.WARNING)
-
-                
+          
                 try:
                     if dark_shape[0] > 2048:
                         dark = dark[dark_shape[0]-2048:,:]
@@ -379,26 +361,9 @@ Lisa-Mari
         print("-->>>>>>> Subtracting dark field")
         
         start_time = time.time()
-        # DC change 20211018
-#         if header_imgdirx_exists:
-#             if imgdirx_flipped == 'YES':
-#                 dark_copy = np.copy(dark)
-#                 dark_copy = dark_copy[:,::-1]
 
-#                 data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-#                 if flat_c:
-#                     flat -= dark_copy[..., np.newaxis, np.newaxis]
-
-#             elif imgdirx_flipped == 'NO':
-#                 data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-#                 if flat_c:
-#                     flat -= dark[..., np.newaxis, np.newaxis]
-#         else:
         data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-#         if flat_c:
-#             flat -= dark[..., np.newaxis, np.newaxis]
-                
-        #DC change 20211018
+
         if out_intermediate:
             data_darkc = data.copy()
             
@@ -420,14 +385,6 @@ Lisa-Mari
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
         start_time = time.time()
-
-        #cleaning the stripe in the flats for a particular flat
-
-        # if flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits': 
-        #     flat[1345, 296:, 1, 2] = flat[1344, 296:, 1, 2]
-        #     flat[1346, :291, 1, 2] = flat[1345, :291, 1, 2]
-
-        #demod the flats
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f)
         
@@ -480,7 +437,7 @@ Lisa-Mari
         try:
 
             data = flat_correction(data,flat,flat_states,rows,cols)
-            # DC change 20211014
+            
             if out_intermediate:
                 data_flatc = data.copy()
             
@@ -537,7 +494,6 @@ Lisa-Mari
 
         start_time = time.time()
         
-        # DC change 20211018 Only for Limb data
         field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
         
         field_stop = np.where(field_stop > 0,1,0)
@@ -545,9 +501,6 @@ Lisa-Mari
         if header_imgdirx_exists:
             if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
                 field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
-
-#         field_stop,_ = load_fits('/data/slam/home/calchetti/fits_files/limb/0149140301_mask_300.fits')
-#         field_stop = (field_stop == 1)
 
         data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
 
@@ -594,7 +547,8 @@ Lisa-Mari
         start_time = time.time()
 
         for scan in range(data_shape[-1]):
-            # DC change 20211028 only for Limb data
+            
+            # Limb fitting and Intensity continuum mask before normalization
             if limb is not None:
                 if limb == 'N':
                     limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True, show = False)
@@ -604,6 +558,7 @@ Lisa-Mari
                     limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True, show = False)
                 if limb == 'E':
                     limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False, show = False)
+                    
                 limb_mask = np.where(limb_mask>0,1,0)
                 Ic_mask = np.where(Ic_mask>0,1,0)
                 data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_mask[:,:,np.newaxis,np.newaxis]
@@ -618,7 +573,9 @@ Lisa-Mari
             Ic_mask = np.array(Ic_mask, dtype=bool)
             I_c = np.mean(data[Ic_mask,0,cpos_arr[0],int(scan)])
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c 
-       
+            
+        if out_intermediate:
+            data_demod = data.copy()
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -638,8 +595,6 @@ Lisa-Mari
         printc('-->>>>>>> Cross-talk correction I to Q,U,V ',color=bcolors.OKGREEN)
 
         start_time = time.time()
-
-        # before_ctalk_data = np.copy(data)
 
         num_of_scans = data_shape[-1]
 
@@ -661,9 +616,6 @@ Lisa-Mari
 
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
-        # cont_stokes = np.mean(data[ceny,cenx,0,cpos_arr[0],:], axis = (0,1))
-        
-        # DC change 20211021 CT should be change according to the Sun position in the FoV (not implemented yet)
         data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
 
 
@@ -742,6 +694,12 @@ Lisa-Mari
                     hdu_list[0].data = data_flatc[:,:,:,:,count]
                     hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                     hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
+                    
+                with fits.open(scan) as hdu_list:
+                    print(f"Writing out demod file as: {scan_name_list[count]}_demodulated.fits")
+                    hdu_list[0].data = data_demod[:,:,:,:,count]
+                    hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                    hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
 
         # if isinstance(data_f, str):
         #     print(" ")
@@ -774,21 +732,24 @@ Lisa-Mari
         if out_dir[-1] != "/":
             print("Desired Output directory missing / character, will be added")
             out_dir = out_dir + "/"
-
+        
+        if limb is not None:
+            mask = limb_mask*field_stop
+        
         if p_milos:
 
             try:
-                pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+                pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
                     
             except ValueError:
                 print("Running CMILOS instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
 
         else:
             if cmilos_fits_opt:
-                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
 
     else:
         print(" ")

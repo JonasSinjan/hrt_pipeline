@@ -42,7 +42,6 @@ def load_fits(path):
   
   return data, header 
 
-# DC change 20211025
 def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
     """
     load science data from path
@@ -342,33 +341,12 @@ def filling_data(arr, thresh, mode, axis = -1):
                     a0[:,i] = a1
     return a0
 
-def limb_fitting(img, mode = 'columns', switch = False, show = False):
+def limb_fitting(img, mode = 'columns', switch = False):
     def _residuals(p,x,y):
         xc,yc,R = p
         return R**2 - (x-xc)**2 - (y-yc)**2
     
     def _is_outlier(points, thresh=3.5):
-        """
-        Returns a boolean array with True if points are outliers and False 
-        otherwise.
-
-        Parameters:
-        -----------
-            points : An numobservations by numdimensions array of observations
-            thresh : The modified z-score to use as a threshold. Observations with
-                a modified z-score (based on the median absolute deviation) greater
-                than this value will be classified as outliers.
-
-        Returns:
-        --------
-            mask : A numobservations-length boolean array.
-
-        References:
-        ----------
-            Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
-            Handle Outliers", The ASQC Basic References in Quality Control:
-            Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
-        """
         if len(points.shape) == 1:
             points = points[:,None]
         median = np.median(points, axis=0)
@@ -414,10 +392,11 @@ def limb_fitting(img, mode = 'columns', switch = False, show = False):
             
             yi += [gi.argmax()/m]
         yi = np.asarray(yi)
-        xi = xi[~_is_outlier(yi)]; yi = yi[~_is_outlier(yi)]
+        xi = xi[~_is_outlier(yi)]
+        yi = yi[~_is_outlier(yi)]
     
     elif mode == 'rows':
-        yi = np.arange(100,200,50)
+        yi = np.arange(100,2000,50)
         xi = []
         m = 10
         for r in yi:
@@ -427,31 +406,11 @@ def limb_fitting(img, mode = 'columns', switch = False, show = False):
             
             xi += [gi.argmax()/m]
         xi = np.asarray(xi)
-        xi = xi[~_is_outlier(xi)]; yi = yi[~_is_outlier(xi)]
+        yi = yi[~_is_outlier(xi)]
+        xi = xi[~_is_outlier(xi)]
         
     p = optimize.least_squares(_residuals,x0 = [1024,1024,3000], args=(xi,yi))
-    if show:
-        plt.plot(xi,yi,'b.')
-        print('center = [{:.2f}, {:.2f}], Radius = {:.2f}'.format(*p.x))
-        plt.imshow((img0-D)*dc.circular_mask(2048,2048,[p.x[0],p.x[1]],p.x[2]))
-        circle = plt.Circle((p.x[0], p.x[1]), p.x[2], color='b', linestyle='--', fill=False)
-        plt.gca().add_patch(circle)#; plt.xlim(0,2048); plt.ylim(0,2048);
-        
+       
     mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
     return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80
-
-
-def auto_norm(file_name):
-    d = fits.open(file_name)
-    try:
-        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
-        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
-        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
-        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
-        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
-    except:
-        norm = 1/256/ \
-        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
-    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
-    return norm
 
