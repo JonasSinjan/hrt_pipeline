@@ -4,6 +4,7 @@ import os.path
 from astropy.io import fits
 # from scipy.ndimage import gaussian_filter
 import time
+import datetime
 from operator import itemgetter
 import json
 import matplotlib.pyplot as plt
@@ -765,6 +766,20 @@ def phihrt_pipe(input_json_file):
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
     printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
+
+    #-----------------
+    # SAVING CONFIG FILE
+    #-----------------
+   
+    print(" ")
+    printc('-->>>>>>> Saving copy of input config file ',color=bcolors.OKGREEN)
+
+    dt = datetime.datetime.fromtimestamp(overall_time)
+    runtime = dt.strftime("%d_%m_%YT%H_%M_%S")
+
+    with open(input_json_file, "w+") as f:
+        json.dump(out_dir + f"config_file_{runtime}.json", f)
+
 
     if flat_c:
         return data, flat
