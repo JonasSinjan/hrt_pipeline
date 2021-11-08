@@ -152,7 +152,12 @@ def phihrt_pipe(input_json_file):
         out_stokes_file = input_dict['out_stokes_file']
         out_stokes_filename = input_dict['out_stokes_filename']
         out_rte_filename = input_dict['out_rte_filename']
-        config = input_dict['config']
+        
+        if 'config' not in input_dict:
+            config = True
+        else:
+            config = input_dict['config']
+            
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
         raise KeyError

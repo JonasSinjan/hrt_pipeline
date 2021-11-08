@@ -34,8 +34,14 @@ def test_flat_as_dark():
     phihrt_pipe(f"./test_jsons/test_5.json")
 
 def test_missing_limb_keyword():
-  with pytest.raises(KeyError):
+  with pytest.raises(KeyError) as e:
     phihrt_pipe(f"./test_jsons/test_8.json")
+    assert 'limb' in e
+
+def test_missing_config_keyword():
+  with pytest.raises(KeyError) as e:
+    phihrt_pipe(f"./test_jsons/test_9.json")
+    assert 'config' in e
 
   
 
