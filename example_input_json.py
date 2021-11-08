@@ -3,25 +3,24 @@ import json
 
 #Nov 17 2020 L1 Exmaple
 
-science_fits_filenames = ['solo_L1_phi-hrt-ilam_20201117T170209_V202108301639C_0051170001.fits']#['solo_L1_phi-hrt-ilam_20201117T170209_V202107060747C_0051170001.fits']
-
-flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/april_avgd_2020_flat.fits' #solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+science_fits_filenames = ['solo_L1_phi-hrt-ilam_20201117T170209_V202108301639C_0051170001.fits']
+flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/april_avgd_2020_flat.fits'
 
 darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits'
 
-science_dir = '/data/solo/phi/data/fmdb/2020-11-17/' #'/data/slam/home/sinjan/fits_files/'
+science_dir = '/data/solo/phi/data/fmdb/l1/2020-11-17/'
 
-science_nov = [science_dir + i for i in science_fits_filenames]
+science = [science_dir + i for i in science_fits_filenames]
 
 input_dict = {
 
     #input data
-    'data_f' : science_fits_filenames, #hrt pipeline allows multiple files at once to be processed (if same flat, dark, continuum position, pmp temp etc)
+    'data_f' : science, #hrt pipeline allows multiple files at once to be processed (if same flat, dark, continuum position, pmp temp etc)
     'flat_f' : flatfield_fits_filename,
     'dark_f' : darkfield_fits_filename,
     
     #input/output type + scaling
-    'L1_input' : True, 
+    'L1_input' : False, 
     'L1_8_generate': False, #not developed yet
     'scale_data' : True,  #these 3 will be made redundant once L1 data scaling is normalised - needed mainly for comissioning (IP5) data
     'accum_scaling' : True, 
@@ -37,19 +36,20 @@ input_dict = {
     'flat_states' : 24, #options 4 (one each pol state), 6 (one each wavelength), 24
     'prefilter_f': None,
     'fs_c' : True, 
+    'limb' : 'W', # for limb images - must know what limb in FOV: 'N','E','W','S'
     'demod' : True, 
     'norm_stokes' : True, 
     'ItoQUV' : False, #missing VtoQU - not developed yet
     'ctalk_params' : None, #VtoQU parameters will be required in this argument once ready
     'rte' : False, #options: ''RTE', 'CE', 'CE+RTE'
     'p_milos' : False, #attempted, ran into problems - on hold
+    'cmilos_fits_opt': False, #use cmilos with .fits IO - 16% speed up
     
     #output dir/filenames
     'out_dir' : './',  
-    'out_demod_file' : False,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
-    'out_demod_filename' : None, #if specific and not default name
+    'out_stokes_file' : False,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
+    'out_stokes_filename' : None, #if specific and not default name
     'out_rte_filename' : None,  #if specific and not default name
-    'config_file' : True #now redudant if json input files used
 }
 
 json.dump(input_dict, open(f"./input_jsons/nov_2020_L1.txt", "w"))

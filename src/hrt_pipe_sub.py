@@ -798,7 +798,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
     try:
         PMILOS_LOC = os.path.realpath(__file__)
 
-        PMILOS_LOC = PMILOS_LOC[:-15] + 'P-MILOS/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
+        PMILOS_LOC = PMILOS_LOC[:-15] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
 
         if os.path.isfile(PMILOS_LOC+'pmilos.x'):
             printc("Pmilos executable located at:", PMILOS_LOC,color=bcolors.WARNING)
@@ -833,7 +833,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         print('It is assumed the wavelength array is given by the hdr')
         #print(wave_axis,color = bcolors.WARNING)
         print("Wave axis is: ", (wave_axis - wavelength)*1000.)
-        print('Saving data into ./P-MILOS/run/data/input_tmp.fits for pmilos RTE input')
+        print('Saving data into ./p-milos/run/data/input_tmp.fits for pmilos RTE input')
 
         #write wavelengths to wavelength.fits file for the settings
 
@@ -847,7 +847,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
 
         primary_hdu = fits.PrimaryHDU(wave_input, header = hdr)
         hdul = fits.HDUList([primary_hdu])
-        hdul.writeto(f'./P-MILOS/run/wavelength_tmp.fits', overwrite=True)
+        hdul.writeto(f'./p-milos/run/wavelength_tmp.fits', overwrite=True)
 
         sdata = data[:,:,:,:,scan].T
         sdata = sdata.astype(np.float32)
@@ -861,7 +861,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
     
         primary_hdu = fits.PrimaryHDU(sdata, header = hdr)
         hdul = fits.HDUList([primary_hdu])
-        hdul.writeto(f'./P-MILOS/run/data/input_tmp.fits', overwrite=True)
+        hdul.writeto(f'./p-milos/run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
             cmd = "mpiexec -n 64 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
@@ -882,7 +882,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
 
         cwd = os.getcwd()
-        os.chdir("./P-MILOS/run/")
+        os.chdir("./p-milos/run/")
         rte_on = subprocess.call(cmd,shell=True)
         os.chdir(cwd)
         
@@ -892,11 +892,11 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         else:
             out_file = 'inv__mod.fits' #only when one datacube and 16 processors
 
-        with fits.open(f'./P-MILOS/run/results/{out_file}') as hdu_list:
+        with fits.open(f'./p-milos/run/results/{out_file}') as hdu_list:
             result = hdu_list[0].data
 
-        #del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}.fits",shell=True) 
-        del_dummy = subprocess.call(f"rm ./P-MILOS/run/results/{out_file}",shell=True) #must delete the output file
+        #del_dummy = subprocess.call(f"rm ./p-milos/run/results/{out_file}.fits",shell=True) 
+        del_dummy = subprocess.call(f"rm ./p-milos/run/results/{out_file}",shell=True) #must delete the output file
       
         #result has dimensions [rows,cols,13]
         result = np.moveaxis(result,0,2)
