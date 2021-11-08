@@ -762,11 +762,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> No RTE Inversion mode',color=bcolors.WARNING)
 
-    print(" ")
-    printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
-    printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
-    printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
-
+    
     #-----------------
     # SAVING CONFIG FILE
     #-----------------
@@ -779,6 +775,11 @@ def phihrt_pipe(input_json_file):
 
     with open(input_json_file, "w+") as f:
         json.dump(out_dir + f"config_file_{runtime}.json", f)
+    
+    print(" ")
+    printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
+    printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
     if flat_c:
