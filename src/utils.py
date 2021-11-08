@@ -71,8 +71,9 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
         return data, header
 
     except Exception:
-       printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
-
+        printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
+        raise ValueError()
+       
 
 def fits_get_sampling(file,verbose = False):
     '''

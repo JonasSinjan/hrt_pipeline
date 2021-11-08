@@ -88,6 +88,10 @@ def load_dark(dark_f) -> np.ndarray:
         dark_shape = dark.shape
 
         if dark_shape != (2048,2048):
+
+            if dark.ndim > 2:
+                printc("Dark Field Input File has more dimensions than the expected 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
+                raise ValueError
             
             printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
             printc("Attempting to correct ",color=bcolors.WARNING)
@@ -99,6 +103,7 @@ def load_dark(dark_f) -> np.ndarray:
             
             except Exception:
                 printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
+                raise ValueError
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -107,7 +112,7 @@ def load_dark(dark_f) -> np.ndarray:
         return dark
 
     except Exception:
-        printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+        printc("ERROR, Unable to open and process darks file: {}",dark_f,color=bcolors.FAIL)
 
 
 def apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols) -> np.ndarray:

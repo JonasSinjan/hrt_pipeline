@@ -10,8 +10,8 @@ import json
 import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 
-from utils import *
-from hrt_pipe_sub import *
+from .utils import *
+from .hrt_pipe_sub import *
 
 
 def phihrt_pipe(input_json_file):
@@ -119,38 +119,43 @@ def phihrt_pipe(input_json_file):
     
     input_dict = json.load(open(input_json_file))
 
-    data_f = input_dict['data_f']
-    flat_f = input_dict['flat_f']
-    dark_f = input_dict['dark_f']
+    try:
+        data_f = input_dict['data_f']
+        flat_f = input_dict['flat_f']
+        dark_f = input_dict['dark_f']
 
-    L1_input = input_dict['L1_input']
-    L1_8_generate = input_dict['L1_8_generate']
-    scale_data = input_dict['scale_data']
-    accum_scaling = input_dict['accum_scaling']
-    bit_conversion = input_dict['bit_conversion']
+        L1_input = input_dict['L1_input']
+        L1_8_generate = input_dict['L1_8_generate']
+        scale_data = input_dict['scale_data']
+        accum_scaling = input_dict['accum_scaling']
+        bit_conversion = input_dict['bit_conversion']
 
-    dark_c = input_dict['dark_c']
-    flat_c = input_dict['flat_c']
-    norm_f = input_dict['norm_f']
-    clean_f = input_dict['clean_f']
-    sigma = input_dict['sigma']
-    clean_mode = input_dict['clean_mode']
-    flat_states = input_dict['flat_states']
-    prefilter_f = input_dict['prefilter_f']
-    fs_c = input_dict['fs_c']
-    limb = input_dict['limb']
-    demod = input_dict['demod']
-    norm_stokes = input_dict['norm_stokes']
-    CT_ItoQUV = input_dict['ItoQUV']
-    ctalk_params = input_dict['ctalk_params']
-    rte = input_dict['rte']
-    p_milos = input_dict['p_milos']
-    cmilos_fits_opt = input_dict['cmilos_fits_opt']
+        dark_c = input_dict['dark_c']
+        flat_c = input_dict['flat_c']
+        norm_f = input_dict['norm_f']
+        clean_f = input_dict['clean_f']
+        sigma = input_dict['sigma']
+        clean_mode = input_dict['clean_mode']
+        flat_states = input_dict['flat_states']
+        prefilter_f = input_dict['prefilter_f']
+        fs_c = input_dict['fs_c']
+        limb = input_dict['limb']
+        demod = input_dict['demod']
+        norm_stokes = input_dict['norm_stokes']
+        CT_ItoQUV = input_dict['ItoQUV']
+        ctalk_params = input_dict['ctalk_params']
+        rte = input_dict['rte']
+        p_milos = input_dict['p_milos']
+        cmilos_fits_opt = input_dict['cmilos_fits_opt']
 
-    out_dir = input_dict['out_dir']
-    out_stokes_file = input_dict['out_stokes_file']
-    out_stokes_filename = input_dict['out_stokes_filename']
-    out_rte_filename = input_dict['out_rte_filename']
+        out_dir = input_dict['out_dir']
+        out_stokes_file = input_dict['out_stokes_file']
+        out_stokes_filename = input_dict['out_stokes_filename']
+        out_rte_filename = input_dict['out_rte_filename']
+        config = input_dict['config']
+    except Exception as e:
+        print(f"Missing key(s) in the input config file: {e}")
+        raise KeyError
     
     overall_time = time.time()
 
@@ -377,6 +382,7 @@ def phihrt_pipe(input_json_file):
 
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
+            raise ValueError()
         
         #-----------------
         # LOAD DARK
@@ -767,14 +773,15 @@ def phihrt_pipe(input_json_file):
     # SAVING CONFIG FILE
     #-----------------
    
-    print(" ")
-    printc('-->>>>>>> Saving copy of input config file ',color=bcolors.OKGREEN)
+    if config:
+        print(" ")
+        printc('-->>>>>>> Saving copy of input config file ',color=bcolors.OKGREEN)
 
-    dt = datetime.datetime.fromtimestamp(overall_time)
-    runtime = dt.strftime("%d_%m_%YT%H_%M_%S")
+        dt = datetime.datetime.fromtimestamp(overall_time)
+        runtime = dt.strftime("%d_%m_%YT%H_%M_%S")
 
-    with open(input_json_file, "w+") as f:
-        json.dump(out_dir + f"config_file_{runtime}.json", f)
+        with open(input_json_file, "w+") as f:
+            json.dump(out_dir + f"config_file_{runtime}.json", f)
     
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
