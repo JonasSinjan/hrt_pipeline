@@ -24,11 +24,13 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 
 #### **CONFIGURATION**
 
-Any and all steps can be turned oon or off as you wish using the keywords in the `phihrt_pipe` function
+Any and all steps can be turned on or off as you wish using the keywords in the input json file passed to the `phihrt_pipe` function
 
+See `/input_jsons/create_input_json.py` for example to create json file
 
 ## **DOWNLOAD INPUT FILES**
 
+This needs the 'dataproc' environment - see **SETUP**
 
 EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg.de/services/proton/phi/imgdb/
 
@@ -43,7 +45,7 @@ gunzip file.gz
 ```
 Gunzip used to unpack the .gz to the file you want  <br>
 
-Can also use `download_from_db.py` to perform multi download from database
+Can also use `/download/download_from_db.py` to perform multi download from database
 
 Instructions:
   1. From the database find the files you wish to download
@@ -80,10 +82,7 @@ COMPILE
 ```bash
 make clean
 make
-```
-
-ONLY TESTED WITH 16 PROCESSES AND ONE CUBE AT A TIME
-        
+```    
 3. Setup virtual environment from requirements.txt
 
 using pip - REQUIRES PYTHON >= 3.6
@@ -95,12 +94,17 @@ using conda (Anaconda3) - creates virtual environment called 'dataproc'
 conda env create -f environment.yml
 ```
 
-4. Genetate json files with the science, dark and flat you desire to reduce
+4. Activate 'dataproc'
+```bash
+source activate dataproc
+```
 
-5. Change the json file being read in ```run.py```
+5. Download files - see **DOWNLOAD INPUT FILES** Section
 
-6. Take care of cross talk parameters - and check all other parameters being fed into the `hrt_pipe' function
- 
+5. Genetate json files with the science, dark and flat you desire to reduce
+
+6. Make sure the correct input.json file is being given to `hrt_pipe` in ```run.py```
+
 7. Execute ```run.py```
 
 ```bash
@@ -108,7 +112,7 @@ python run.py
 ```
 ## **OUTPUT**
 
-#### **Demod File**
+#### **Stokes File**
 Filename: `_reduced.fits `
 
 Shape: [Y,X,POL,WAVE]
@@ -125,6 +129,23 @@ Shape: [Y,X,POL,WAVE]
   - 4: Vlos (km/s)
   - 5: Blos (Gauss) </p>
 
+- File: `_bmag_rte.fits`
+
+  Shape: [1,Y,X] <br>
+  First Index: <br>
+  - 0: |B| (Gauss) </p>
+
+- File: `_binc_rte.fits`
+
+  Shape: [1,Y,X] <br>
+  First Index: <br>
+  - 0: Inclination (Degrees) </p>
+
+- File: `_bazi_rte.fits`
+
+  Shape: [1,Y,X] <br>
+  First Index: <br>
+  - 0: Aimuth (Degrees) </p>
 
 - File: `_blos_rte.fits`
 
@@ -151,6 +172,10 @@ Shape: [Y,X,POL,WAVE]
 ### **Authors**: <br>
 
 Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germany
+
+### **Contributors**: <br>
+
+Daniele Calchetti - Max Planck Institute for Solar System Research, Goettingen, Germany
 
 ### **Credit**: <br>
 

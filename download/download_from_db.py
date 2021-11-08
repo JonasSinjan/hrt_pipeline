@@ -19,6 +19,10 @@ text = file.read()
 
 text_split = get_file_list(text)
 
+#######################################################
+#                 TARGET DIRECTORY
+#######################################################
+
 target_directory = '/data/slam/home/sinjan/fits_files/'
 
 os.chdir(target_directory)
