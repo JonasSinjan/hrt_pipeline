@@ -1,0 +1,42 @@
+Number of cycles          (*):0          	! 0=synth,n=max iter,-1=classic
+Observed profiles         (*):obs.per 		!    
+Stray light file             :straylight.fits 	! (none=no stray light)
+PSF file                     :    		! file or Gaussian FWHM in mA
+Wavelength grid file      (*):malla.grid 	! 
+Atomic parameters file    (*):LINES      	! 
+Abundance file		     : 			! not used
+Initial guess model 1     (*):obs.mod 	!
+Initial guess model 2        :			! not implemented
+Weight for Stokes I          :1               	! (DEFAULT=1; 0=not inverted)
+Weight for Stokes Q          :1                 ! (DEFAULT=1; 0=not inverted)
+Weight for Stokes U          :1                 ! (DEFAULT=1; 0=not inverted)
+Weight for Stokes V          :1                 ! (DEFAULT=1; 0=not inverted)
+AUTOMATIC SELECT. OF NODES?  :			! not implemented 
+Nodes for S_0 1     	     :1              	! (0 or blank=no, 1=yes)
+Nodes for S_1 1		     :1                 ! (0 or blank=no, 1=yes)
+Nodes for eta0 1             :1                 ! (0 or blank=no, 1=yes)
+Nodes for magnetic field 1   :1			! (0 or blank=no, 1=yes)
+Nodes for LOS velocity 1     :1              	! (0 or blank=no, 1=yes)
+Nodes for gamma 1            :1             	! (0 or blank=no, 1=yes)
+Nodes for phi 1              :1              	! (0 or blank=no, 1=yes)
+Nodes for lambda_doppler 1   :1			! (0 or blank=no, 1=yes)
+Nodes for damping 1	     :1			! (0 or blank=no, 1=yes)
+Invert macroturbulence 1     :0                	! (0 or blank=no, 1=yes)
+Nodes for S_0 2     	     :                  ! not used 
+Nodes for S_1 2  	     :             	! not used                      
+Nodes for eta0 2             :                  ! not used 
+Nodes for magnetic field 2   :			! not used 
+Nodes for LOS velocity 2     :              	! not used 
+Nodes for gamma 2            :              	! not used 
+Nodes for phi 2              :              	! not used 
+Nodes for lambda_doppler 2   :		  	! not used 
+Nodes for damping 2	     :			! not used 
+Invert macroturbulence 2?    :                  ! not used 
+Invert filling factor?       :                  ! not used 
+Invert stray light factor?   :1                 ! (0 or blank=no, 1=yes)
+mu=cos (theta)               :                  ! (DEFAULT mu=1, mu<0 => West)
+Estimated S/N for I          :1000              ! 
+Continuum contrast           :            	! Not used 
+Initial diagonal element     :0.1               ! (DEFAULT value: 1.e-1)
+Use FFT for convolutions     :                  ! (0, blank=direct conv;1=FFT)
+Diagonal element acceleration:                  ! (0 or blank=no, 1=yes)

@@ -1,0 +1,5 @@
+
+milos.x:97960 terminated with signal 11 at PC=42c558 SP=7fffcf912980.  Backtrace:
+../milos.x[0x42c558]
+/lib64/libc.so.6(__libc_start_main+0xf5)[0x2aab149c1765]
+../milos.x[0x4030e9]
