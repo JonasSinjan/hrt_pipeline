@@ -2,10 +2,76 @@ import numpy as np
 from astropy.io import fits
 from scipy.ndimage import gaussian_filter
 from operator import itemgetter
-from utils import *
+from .utils import *
 import os
 import time
 import subprocess
+
+def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
+    """
+    load, scale, flip and correct flat
+    """
+    print(" ")
+    printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
+
+    start_time = time.time()
+    
+    # flat from IP-5
+    if '0024151020000' in flat_f or '0024150020000' in flat_f:
+        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
+                                    scale_data=False)
+    else:
+        flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
+                                    scale_data=scale_data)
+                
+    if 'IMGDIRX' in header_flat:
+        header_fltdirx_exists = True
+        fltdirx_flipped = str(header_flat['IMGDIRX'])
+    else:
+        header_fltdirx_exists = False
+        fltdirx_flipped = 'NO'
+    
+    print(f"Flat field shape is {flat.shape}")
+    # correction based on science data - see if flat and science are both flipped or not
+    flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
+    
+    flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
+    flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
+    flat = np.moveaxis(flat, 2,-1)
+    
+    print(flat.shape)
+
+    _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True) #get flat continuum position
+
+    print(f"The continuum position of the flat field is at {cpos_f} index position")
+    
+    #--------
+    # test if the science and flat have continuum at same position
+    #--------
+
+    flat = compare_cpos(flat,cpos_f,cpos_arr[0]) 
+
+    flat_pmp_temp = str(header_flat['HPMPTSP1'])
+
+    print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
+
+    #--------
+    # correct for missing line in particular flat field
+    #--------
+
+    if flat_f[-15:] == '0162201100.fits':  # flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
+        print("This flat has a missing line - filling in with neighbouring pixels")
+        flat_copy = flat.copy()
+        flat[:,:,1,1] = filling_data(flat_copy[:,:,1,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
+
+        del flat_copy
+        
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    return flat
+
 
 def load_dark(dark_f) -> np.ndarray:
     """
@@ -59,14 +125,14 @@ def apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipp
             dark_copy = dark_copy[:,::-1]
 
             data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-            flat -= dark_copy[..., np.newaxis, np.newaxis]
+            #flat -= dark_copy[..., np.newaxis, np.newaxis]
             
         elif imgdirx_flipped == 'NO':
             data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-            flat -= dark[..., np.newaxis, np.newaxis]
+            #flat -= dark[..., np.newaxis, np.newaxis]
     else:
         data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-        flat -= dark[..., np.newaxis, np.newaxis]
+        #flat -= dark[..., np.newaxis, np.newaxis]
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
