@@ -364,7 +364,7 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
 
     return data, field_stop
 
-def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr):
+def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
     """
     performs cross talk correction for I -> Q,U,V
     """

@@ -605,6 +605,7 @@ def phihrt_pipe(input_json_file):
             assert ctalk_params.shape == (2,3)
         except AssertionError:
             print("ctalk_params is not in the required (2,3) shape, please reconcile")
+            raise AssertionError
 
 
         slope, offset = 0, 1
@@ -622,8 +623,31 @@ def phihrt_pipe(input_json_file):
 
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
-        data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
 
+        try:
+            data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
+        except Exception:
+            print("There was an issue applying the I -> Q,U,V cross talk correction")
+            if 'Ic_mask' not in vars():
+                print("This could be because 'norm_f' was not set to True")
+                if data.shape[:2] == (2048,2048):
+                    response = input("The input data is 2k x 2k \n Are all the input data files disk centre pointing? [y/n]")
+                    if response == 'y' or response == 'Y':
+                        try:
+                            Ic_mask = np.zeros(data_size)
+                            Ic_mask[ceny,cenx] = 1
+                            Ic_mask = np.where(Ic_mask>0,1,0)
+                            Ic_mask = np.array(Ic_mask, dtype = bool)
+                            data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
+                        except Exception:
+                            print("The issue could not be overcome\n Please check the input config file\n Aborting")
+                            exit()
+                    else:
+                        raise KeyError("Response was not 'y' or 'Y'\n 'norm_f' keyword in input config file not set to True\n Aborting")
+                else:
+                    raise KeyError("The issue could not be overcome as the Input data is not 2k x 2k\n 'norm_f' keyword in input config file not set to True\n Aborting")
+            else:
+                raise KeyError("'norm_f' keyword in input config file not set to True \n Aborting")
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
