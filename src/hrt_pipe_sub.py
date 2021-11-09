@@ -115,7 +115,7 @@ def load_dark(dark_f) -> np.ndarray:
         printc("ERROR, Unable to open and process darks file: {}",dark_f,color=bcolors.FAIL)
 
 
-def apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols) -> np.ndarray:
+def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
     """
     subtracts dark field from flat field and science data
     """
@@ -124,20 +124,9 @@ def apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipp
     
     start_time = time.time()
 
-    if header_imgdirx_exists:
-        if imgdirx_flipped == 'YES':
-            dark_copy = np.copy(dark)
-            dark_copy = dark_copy[:,::-1]
+    data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
+    #flat -= dark[..., np.newaxis, np.newaxis] - # all processed flat fields should already be dark corrected
 
-            data -= dark_copy[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-            #flat -= dark_copy[..., np.newaxis, np.newaxis]
-            
-        elif imgdirx_flipped == 'NO':
-            data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-            #flat -= dark[..., np.newaxis, np.newaxis]
-    else:
-        data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-        #flat -= dark[..., np.newaxis, np.newaxis]
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)

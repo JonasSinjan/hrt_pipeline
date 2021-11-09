@@ -387,12 +387,7 @@ def phihrt_pipe(input_json_file):
 
         except Exception:
             printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
-            raise ValueError()
-        
-        #-----------------
-        # LOAD DARK
-        #-----------------  
-
+            raise ValueError() 
 
         #-----------------
         # APPLY DARK CORRECTION 
@@ -401,21 +396,13 @@ def phihrt_pipe(input_json_file):
         if flat_c == False:
             flat = np.empty((2048,2048,4,6))
 
-        data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols)  
+        data, flat = apply_dark_correction(data, flat, dark, rows, cols)  
         
         if flat_c == False:
             flat = np.empty((2048,2048,4,6))
 
         # if out_intermediate:
         #     data_darkc = data.copy()
-            
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
-        #data, flat = apply_dark_correction(data, flat, dark, header_imgdirx_exists, imgdirx_flipped, rows, cols)  
-        
-
 
     else:
         print(" ")
@@ -423,7 +410,7 @@ def phihrt_pipe(input_json_file):
 
 
     #-----------------
-    # OPTIONAL Unsharp Masking clean the flat field stokes V images
+    # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
     if clean_f is not None and flat_c:
