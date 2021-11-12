@@ -432,7 +432,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC[:-15] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC[:-19] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
@@ -634,7 +634,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC[:-15] + 'cmilos-fits/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC[:-19] + 'cmilos-fits/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos-fits executable located at:", CMILOS_LOC,color=bcolors.WARNING)
