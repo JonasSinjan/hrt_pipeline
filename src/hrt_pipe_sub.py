@@ -2,7 +2,7 @@ import numpy as np
 from astropy.io import fits
 from scipy.ndimage import gaussian_filter
 from operator import itemgetter
-from .utils import *
+from utils import *
 import os
 import time
 import subprocess
@@ -348,7 +348,7 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
 
     start_time = time.time()
     
-    field_stop,_ = load_fits('./field_stop/HRT_field_stop.fits')
+    field_stop,_ = load_fits('../field_stop/HRT_field_stop.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
 

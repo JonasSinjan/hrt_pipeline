@@ -10,8 +10,8 @@ import json
 import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 
-from .utils import *
-from .hrt_pipe_sub import *
+from utils import *
+from hrt_pipe_sub import *
 
 
 def phihrt_pipe(input_json_file):
