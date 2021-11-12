@@ -142,7 +142,7 @@ def phihrt_pipe(input_json_file):
         limb = input_dict['limb']
         demod = input_dict['demod']
         norm_stokes = input_dict['norm_stokes']
-        CT_ItoQUV = input_dict['ItoQUV']
+        ItoQUV = input_dict['ItoQUV']
         ctalk_params = input_dict['ctalk_params']
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
@@ -328,8 +328,6 @@ def phihrt_pipe(input_json_file):
             flat_copy = flat.copy()
             flat[:,:,1,1] = filling_data(flat_copy[:,:,1,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
-#             flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
-#             flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
             del flat_copy
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -575,7 +573,7 @@ def phihrt_pipe(input_json_file):
             
             Ic_mask = np.array(Ic_mask, dtype=bool)
             I_c = np.mean(data[Ic_mask,0,cpos_arr[0],int(scan)])
-            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c 
+            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
             
         # if out_intermediate:
         #     data_demod = data.copy()
@@ -592,7 +590,7 @@ def phihrt_pipe(input_json_file):
     # CROSS-TALK CALCULATION 
     #-----------------
 
-    if CT_ItoQUV:
+    if ItoQUV:
         
         print(" ")
         printc('-->>>>>>> Cross-talk correction I to Q,U,V ',color=bcolors.OKGREEN)
@@ -623,9 +621,8 @@ def phihrt_pipe(input_json_file):
 
         ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
 
-
         try:
-            data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
+           data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
         except Exception:
             print("There was an issue applying the I -> Q,U,V cross talk correction")
             if 'Ic_mask' not in vars():
