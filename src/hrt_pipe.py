@@ -796,8 +796,7 @@ def phihrt_pipe(input_json_file):
         dt = datetime.datetime.fromtimestamp(overall_time)
         runtime = dt.strftime("%d_%m_%YT%H_%M_%S")
 
-        with open(input_json_file, "w+") as f:
-            json.dump(out_dir + f"config_file_{runtime}.json", f)
+        json.dump(input_dict, open(out_dir + f"config_file_{runtime}.json", "w"))
     
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
