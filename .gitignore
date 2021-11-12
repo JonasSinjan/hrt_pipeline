@@ -37,3 +37,5 @@ input_jsons/nov_2020_L1_feb_flats.txt
 input_jsons/nov_2020_L1.txt
 src/create_input_json.py
 *.pyc
+input_jsons/sep_2021_L1_west.json
+input_jsons/sep_2021_L1_south_noflat.json
