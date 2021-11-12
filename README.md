@@ -101,7 +101,7 @@ source activate dataproc
 
 5. Download files - see **DOWNLOAD INPUT FILES** Section
 
-5. Genetate json files with the science, dark and flat you desire to reduce
+5. Generate json files with the science, dark and flat you desire to reduce
 
 6. Make sure the correct input.json file is being given to `hrt_pipe` in ```run.py```
 
