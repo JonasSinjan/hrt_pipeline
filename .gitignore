@@ -14,6 +14,8 @@ dummy*.txt
 # cmilos/*
 cmilos-fits/milos
 cmilos-fits/*.o
+cmilos/milos
+cmilos/*.o
 _RTE.npz
 *.npz
 .env
