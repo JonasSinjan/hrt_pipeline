@@ -44,6 +44,21 @@
 // #define INITIAL_MODEL_S0 0.35
 // #define INITIAL_MODEL_S1 0.85
 
+// RTE init model config ONBOARD
+// Inv Iterations                                   = 15
+// Initial Model Continuum Absoprtion               = 12.0000 // INITIAL_MODEL_ETHA0
+// Initial Model Vector Magnetic Field Strength     = 1200.00000 // INITIAL_MODEL_B
+// Initial Model Line-Of-Sight Velocity             = 0.05000 // INITIAL_MODEL_VLOS
+// Initial Model Doppler Width Of Line              = 0.05000 // INITIAL_MODEL_LAMBDADOPP
+// Initial Model Damping Parameter                  = 0.05000 // INITIAL_MODEL_AA
+// Initial Model Vector Magnetic Field Inclination  = 170.00000 // INITIAL_MODEL_GM
+// Initial Model Vector Magnetic Field Azimuth      = 25.00000 // INITIAL_MODEL_AZI
+// Initial Model Source Function Ordinate At Origin = 0.30000 // INITIAL_MODEL_S0
+// Initial Model Source Function Slope              = 0.80000 // INITIAL_MODEL_S1
+// Wavelength Setting Initial Sampling Wavelength   = 6173.20117
+// Wavelength Setting Spectral Line Step            = 0.07000
+// Wavelength Setting Wavelength Of Line Continuum  = 6173.04117 (blue) 6173.64117 (red)
+
 #define INITIAL_MODEL_B 400
 #define INITIAL_MODEL_GM 30
 #define INITIAL_MODEL_AZI 120
@@ -53,7 +68,6 @@
 #define INITIAL_MODEL_VLOS 0.01 // Km/s
 #define INITIAL_MODEL_S0 0.15
 #define INITIAL_MODEL_S1 0.85
-
 
 //NumeroS cuanticos
 #define CUANTIC_NWL 1

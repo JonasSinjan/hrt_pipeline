@@ -74,6 +74,8 @@ def phihrt_pipe(input_json_file):
         apply dark field correction
     fs_c: bool, DEFAULT True
         apply HRT field stop
+    ghost_c: bool, DEFAULT True
+        apply HRT field stop and avoid ghost region in CrossTalk parameters computation
     limb: str, DEFAULT None
         specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
     demod: bool, DEFAULT: True
@@ -94,6 +96,8 @@ def phihrt_pipe(input_json_file):
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     out_rte_filename: str, DEFAULT = ''
         if '', takes last 10 characters of input scan filename (assumes its a DID), change if want other name
+    out_intermediate: bool, DEFAULT = False
+        if True, dark corrected, flat corrected, prefilter corrected and demodulated data will be saved
     p_milos: bool, DEFAULT = True
         if True, will execute the RTE inversion using the parallel version of the CMILOS code on 16 processors
     Returns
@@ -139,11 +143,14 @@ def phihrt_pipe(input_json_file):
         flat_states = input_dict['flat_states']
         prefilter_f = input_dict['prefilter_f']
         fs_c = input_dict['fs_c']
+        ghost_c = input_dict['ghost_c']  # DC 20211116
         limb = input_dict['limb']
         demod = input_dict['demod']
         norm_stokes = input_dict['norm_stokes']
         ItoQUV = input_dict['ItoQUV']
-        ctalk_params = input_dict['ctalk_params']
+#         ctalk_params = input_dict['ctalk_params']
+        out_intermediate = input_dict['out_intermediate']  # DC 20211116
+
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
         cmilos_fits_opt = input_dict['cmilos_fits_opt']
@@ -326,7 +333,7 @@ def phihrt_pipe(input_json_file):
         if flat_f[-15:] == '0162201100.fits':  # flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
             print("This flat has a missing line - filling in with neighbouring pixels")
             flat_copy = flat.copy()
-            flat[:,:,1,1] = filling_data(flat_copy[:,:,1,1], 0, mode = {'exact rows':[1345,1346]}, axis=1)
+            flat[:,:,1,2] = filling_data(flat_copy[:,:,1,2], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
             del flat_copy
             
@@ -399,8 +406,8 @@ def phihrt_pipe(input_json_file):
         if flat_c == False:
             flat = np.empty((2048,2048,4,6))
 
-        # if out_intermediate:
-        #     data_darkc = data.copy()
+        if out_intermediate:
+            data_darkc = data.copy()
 
     else:
         print(" ")
@@ -449,8 +456,8 @@ def phihrt_pipe(input_json_file):
         try:
             data = flat_correction(data,flat,flat_states,rows,cols)
             
-            # if out_intermediate:
-            #     data_flatc = data.copy()
+            if out_intermediate:
+                data_flatc = data.copy()
             
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -485,6 +492,7 @@ def phihrt_pipe(input_json_file):
 
         data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
 
+        data_PFc = data.copy()  # DC 20211116
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Prefilter correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -500,7 +508,7 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if fs_c:
-        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
+        data, field_stop, field_stop_ghost = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
 
 
     else:
@@ -521,6 +529,9 @@ def phihrt_pipe(input_json_file):
 
         data,_ = demod_hrt(data, pmp_temp)
         
+        if out_intermediate:
+            data_demod = data.copy()
+
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -541,6 +552,11 @@ def phihrt_pipe(input_json_file):
         
         start_time = time.time()
 
+        Ic_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]),dtype=bool)
+        I_c = np.ones(data_shape[-1])
+        if limb is not None:
+            limb_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]))
+        
         for scan in range(data_shape[-1]):
             
             #I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
@@ -548,35 +564,39 @@ def phihrt_pipe(input_json_file):
             #I_c = np.mean(data[1500:2000,800:1300,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun south limb
             #I_c = np.mean(data[350:1700,200:900,0,cpos_arr[0],int(scan)]) # West limb
             limb_copy = np.copy(data)
+            
             #from Daniele Calchetti
+            
             if limb is not None:
                 if limb == 'N':
-                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True)
+                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True)
                 if limb == 'S':
-                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = False)
+                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = False)
                 if limb == 'W':
-                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True)
+                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True)
                 if limb == 'E':
-                    limb_mask, Ic_mask = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False)
+                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False)
                 
-                limb_mask = np.where(limb_mask>0,1,0)
-                Ic_mask = np.where(Ic_mask>0,1,0)
+                limb_temp = np.where(limb_temp>0,1,0)
+                Ic_temp = np.where(Ic_temp>0,1,0)
                 
-                data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_mask[:,:,np.newaxis,np.newaxis]
+                data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
+                limb_mask[...,scan] = limb_temp
             else:
-                Ic_mask = np.zeros(data_size)
-                Ic_mask[ceny,cenx] = 1
-                Ic_mask = np.where(Ic_mask>0,1,0)
+                Ic_temp = np.zeros(data_size)
+                Ic_temp[ceny,cenx] = 1
+                Ic_temp = np.where(Ic_temp>0,1,0)
              
             if fs_c:
-                Ic_mask *= field_stop
+                Ic_temp *= field_stop
             
-            Ic_mask = np.array(Ic_mask, dtype=bool)
-            I_c = np.mean(data[Ic_mask,0,cpos_arr[0],int(scan)])
-            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c
+            Ic_temp = np.array(Ic_temp, dtype=bool)
+            I_c[scan] = np.mean(data[Ic_temp,0,cpos_arr[0],int(scan)])
+            data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c[scan]
+            Ic_mask[...,scan] = Ic_temp
+            hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],0) # DC 20211116
+
             
-        # if out_intermediate:
-        #     data_demod = data.copy()
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -599,30 +619,32 @@ def phihrt_pipe(input_json_file):
 
         num_of_scans = data_shape[-1]
 
-        try:
-            assert ctalk_params.shape == (2,3)
-        except AssertionError:
-            print("ctalk_params is not in the required (2,3) shape, please reconcile")
-            raise AssertionError
-
-
         slope, offset = 0, 1
         q, u, v = 0, 1, 2
-
-        for scan_hdr in hdr_arr:
+        CTparams = np.zeros((2,3,number_of_scans))
+        
+        for scan, scan_hdr in enumerate(hdr_arr):
+            printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
+            if ghost_c: # DC 20211116
+                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],0,roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool)) # DC 20211116
+            else: # DC 20211116
+                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],0,roi=Ic_mask[...,scan]) # DC 20211116
+            
+            CTparams[...,scan] = ctalk_params
+            
             if 'CAL_CRT0' in scan_hdr: #check to make sure the keywords exist
-                scan_hdr['CAL_CRT0'] = ctalk_params[slope,q] #I-Q slope
-                scan_hdr['CAL_CRT2'] = ctalk_params[slope,u] #I-U slope
-                scan_hdr['CAL_CRT4'] = ctalk_params[slope,v] #I-V slope
+            
+                scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
+                scan_hdr['CAL_CRT2'] = round(ctalk_params[slope,u],4) #I-U slope
+                scan_hdr['CAL_CRT4'] = round(ctalk_params[slope,v],4) #I-V slope
+                scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
+                scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
+                scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
+                
+        try:    
+            data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask)
 
-                scan_hdr['CAL_CRT1'] = ctalk_params[offset,q] #I-Q offset
-                scan_hdr['CAL_CRT3'] = ctalk_params[offset,u] #I-U offset
-                scan_hdr['CAL_CRT5'] = ctalk_params[offset,v] #I-V offset
 
-        ctalk_params = np.repeat(ctalk_params[:,:,np.newaxis], num_of_scans, axis = 2)
-
-        try:
-           data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
         except Exception:
             print("There was an issue applying the I -> Q,U,V cross talk correction")
             if 'Ic_mask' not in vars():
@@ -653,7 +675,7 @@ def phihrt_pipe(input_json_file):
         data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
         # DC change 20211019 only for limb
         if limb is not None:
-            data *= limb_mask[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -715,26 +737,36 @@ def phihrt_pipe(input_json_file):
                 hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
             
             # DC change 20211014
-            """
-            if out_intermediate:
-                with fits.open(scan) as hdu_list:
-                    print(f"Writing out demod file as: {scan_name_list[count]}_dark_corrected.fits")
-                    hdu_list[0].data = data_darkc[:,:,:,:,count]
-                    hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                    hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
+            
+            if out_intermediate: # DC 20211116
+                if dark_c: # DC 20211116
+                    with fits.open(scan) as hdu_list:
+                        print(f"Writing out demod file as: {scan_name_list[count]}_dark_corrected.fits")
+                        hdu_list[0].data = data_darkc[:,:,:,:,count]
+                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
 
-                with fits.open(scan) as hdu_list:
-                    print(f"Writing out demod file as: {scan_name_list[count]}_flat_corrected.fits")
-                    hdu_list[0].data = data_flatc[:,:,:,:,count]
-                    hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                    hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
-                    
-                with fits.open(scan) as hdu_list:
-                    print(f"Writing out demod file as: {scan_name_list[count]}_demodulated.fits")
-                    hdu_list[0].data = data_demod[:,:,:,:,count]
-                    hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                    hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
-            """
+                if flat_c: # DC 20211116
+                    with fits.open(scan) as hdu_list:
+                        print(f"Writing out demod file as: {scan_name_list[count]}_flat_corrected.fits")
+                        hdu_list[0].data = data_flatc[:,:,:,:,count]
+                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
+                
+                if prefilter_f is not None: # DC 20211116
+                    with fits.open(scan) as hdu_list:
+                        print(f"Writing out demod file as: {scan_name_list[count]}_flat_corrected.fits")
+                        hdu_list[0].data = data_PFc[:,:,:,:,count]
+                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
+                
+                if demod: # DC 20211116          
+                    with fits.open(scan) as hdu_list:
+                        print(f"Writing out demod file as: {scan_name_list[count]}_demodulated.fits")
+                        hdu_list[0].data = data_demod[:,:,:,:,count]
+                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
+            
 
             # with fits.open(scan) as hdu_list:
             #     hdu_list[0].data = limb_copy
@@ -759,8 +791,10 @@ def phihrt_pipe(input_json_file):
 
         
         if limb is not None:
-            mask = limb_mask*field_stop
-        
+            mask = limb_mask*field_stop[...,np.newaxis]
+        else:
+            mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[...,np.newaxis]
+            
         if p_milos:
 
             try:
@@ -794,7 +828,7 @@ def phihrt_pipe(input_json_file):
         runtime = dt.strftime("%d_%m_%YT%H_%M_%S")
 
         json.dump(input_dict, open(out_dir + f"config_file_{runtime}.json", "w"))
-    
+        
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
     printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
