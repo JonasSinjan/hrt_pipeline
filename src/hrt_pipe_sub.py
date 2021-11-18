@@ -945,7 +945,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
     try:
         PMILOS_LOC = os.path.realpath(__file__)
 
-        PMILOS_LOC = PMILOS_LOC[:-15] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
+        PMILOS_LOC = PMILOS_LOC.split('src/')[0] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
 
         if os.path.isfile(PMILOS_LOC+'pmilos.x'):
             printc("Pmilos executable located at:", PMILOS_LOC,color=bcolors.WARNING)
