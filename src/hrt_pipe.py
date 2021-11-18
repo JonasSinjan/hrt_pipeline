@@ -150,6 +150,7 @@ def phihrt_pipe(input_json_file):
         ItoQUV = input_dict['ItoQUV']
 #         ctalk_params = input_dict['ctalk_params']
         out_intermediate = input_dict['out_intermediate']  # DC 20211116
+
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
         cmilos_fits_opt = input_dict['cmilos_fits_opt']
@@ -334,8 +335,6 @@ def phihrt_pipe(input_json_file):
             flat_copy = flat.copy()
             flat[:,:,1,2] = filling_data(flat_copy[:,:,1,2], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
-#             flat[1345, 296:, 1, 1] = flat_copy[1344, 296:, 1, 1]
-#             flat[1346, :291, 1, 1] = flat_copy[1345, :291, 1, 1]
             del flat_copy
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -596,6 +595,7 @@ def phihrt_pipe(input_json_file):
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c[scan]
             Ic_mask[...,scan] = Ic_temp
             hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],0) # DC 20211116
+
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -637,13 +637,13 @@ def phihrt_pipe(input_json_file):
                 scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
                 scan_hdr['CAL_CRT2'] = round(ctalk_params[slope,u],4) #I-U slope
                 scan_hdr['CAL_CRT4'] = round(ctalk_params[slope,v],4) #I-V slope
-
                 scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
                 scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
                 scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
                 
         try:    
             data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask)
+
 
         except Exception:
             print("There was an issue applying the I -> Q,U,V cross talk correction")
