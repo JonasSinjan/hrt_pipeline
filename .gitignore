@@ -33,12 +33,7 @@ test_pmilos.ipynb
 cmilos/defines_cmilosifts.h
 cmilos-fits/testp.per
 file_names.txt
-input_jsons/*
-input_jsons/feb_2k_2021_L1.txt
-input_jsons/nov_2020_L1_feb_flats.txt
-input_jsons/nov_2020_L1.txt
+input_jsons/*.txt
 src/create_input_json.py
 *.pyc
-input_jsons/sep_2021_L1_west.json
-input_jsons/sep_2021_L1_south_noflat.json
 test.ipynb
