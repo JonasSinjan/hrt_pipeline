@@ -81,8 +81,8 @@ double fchisqr(PRECISION * spectra,int nspectro,PRECISION *spectro,PRECISION *w,
 			dif=spectra[i+nspectro*j]-spectro[i+nspectro*j];
 			opa+= (dif*dif);
 		}
-		// TOT+=((w[j]*opa)/(sig[j]*sig[j]));
-		TOT+= opa;///(sig[j]*sig[j]);
+		TOT+=((w[j]*opa)/(sig[j]*sig[j]));
+		//TOT+= opa;///(sig[j]*sig[j]);
 	}
 		
 	//return TOT/15;		

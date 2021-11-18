@@ -306,6 +306,7 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
     """
     applies prefilter correction
+    adapted from SPGPylibs
     """
     def _get_v1_index1(x):
         index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
@@ -349,12 +350,15 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     start_time = time.time()
     
     field_stop,_ = load_fits('../field_stop/HRT_field_stop.fits')
+    field_stop_ghost,_ = load_fits('../field_stop/HRT_field_stop_ghost.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
+    field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
 
     if header_imgdirx_exists:
         if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
             field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
+            field_stop_ghost = field_stop_ghost[:,::-1]
 
     data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
 
@@ -362,7 +366,85 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    return data, field_stop
+    return data, field_stop, field_stop_ghost
+
+def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,limit=0.2):
+    import random, statistics
+    from scipy.optimize import curve_fit
+    def linear(x,a,b):
+        return a*x + b
+    my = []
+    sy = []
+    
+    x = data_demod[roi>0,0,cpos].flatten()
+    ids = np.logical_and(x > limit, x < 1.5)
+    x = x[ids].flatten()
+
+    N = x.size
+    idx = random.sample(range(N),npoints)
+    mx = x[idx].mean() 
+    sx = x[idx].std() 
+    xp = np.linspace(x.min(), x.max(), 100)
+
+    A = np.vstack([x, np.ones(len(x))]).T
+
+    # I to Q
+    yQ = data_demod[roi>0,1,wl].flatten()
+    yQ = yQ[ids].flatten()
+    my.append(yQ[idx].mean())
+    sy.append(yQ[idx].std())
+    cQ = curve_fit(linear,x,yQ,p0=[0,0])[0]
+    pQ = np.poly1d(cQ)
+
+    # I to U
+    yU = data_demod[roi>0,2,wl].flatten()
+    yU = yU[ids].flatten()
+    my.append(yU[idx].mean())
+    sy.append(yU[idx].std())
+    cU = curve_fit(linear,x,yU,p0=[0,0])[0]
+    pU = np.poly1d(cU)
+
+    # I to V
+    yV = data_demod[roi>0,3,wl].flatten()
+    yV = yV[ids].flatten()
+    my.append(yV[idx].mean())
+    sy.append(yV[idx].std())
+    cV = curve_fit(linear,x,yV,p0=[0,0])[0]
+    pV = np.poly1d(cV)
+
+    if verbose:
+        
+        PLT_RNG = 3
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.scatter(x[idx],yQ[idx],color='red',alpha=0.6,s=10)
+        ax.plot(xp, pQ(xp), color='red', linestyle='dashed',linewidth=3.0)
+
+        ax.scatter(x[idx],yU[idx],color='blue',alpha=0.6,s=10)
+        ax.plot(xp, pU(xp), color='blue', linestyle='dashed',linewidth=3.0)
+
+        ax.scatter(x[idx],yV[idx],color='green',alpha=0.6,s=10)
+        ax.plot(xp, pV(xp), color='green', linestyle='dashed',linewidth=3.0)
+
+        ax.set_xlim([mx - PLT_RNG * sx,mx + PLT_RNG * sx])
+        ax.set_ylim([min(my) - 1.8*PLT_RNG * statistics.mean(sy),max(my) + PLT_RNG * statistics.mean(sy)])
+        ax.set_xlabel('Stokes I')
+        ax.set_ylabel('Stokes Q/U/V')
+        ax.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.4*PLT_RNG * statistics.mean(sy), 'Cross-talk from I to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4), style='italic',bbox={'facecolor': 'red', 'alpha': 0.1, 'pad': 1}, fontsize=15)
+        ax.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.55*PLT_RNG * statistics.mean(sy), 'Cross-talk from I to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4), style='italic',bbox={'facecolor': 'blue', 'alpha': 0.1, 'pad': 1}, fontsize=15)
+        ax.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.7*PLT_RNG * statistics.mean(sy), 'Cross-talk from I to V: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cV[0],cV[1],width=8,prec=4), style='italic',bbox={'facecolor': 'green', 'alpha': 0.1, 'pad': 1}, fontsize=15)
+#         fig.show()
+
+        print('Cross-talk from I to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4))
+        print('Cross-talk from I to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4))
+        print('Cross-talk from I to V: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cV[0],cV[1],width=8,prec=4))
+    
+#         return cQ,cU,cV, (idx,x,xp,yQ,yU,yV,pQ,pU,pV,mx,sx,my,sy)
+    else:
+        printc('Cross-talk from I to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4),color=bcolors.OKGREEN)
+        printc('Cross-talk from I to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4),color=bcolors.OKGREEN)
+        printc('Cross-talk from I to V: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cV[0],cV[1],width=8,prec=4),color=bcolors.OKGREEN)
+        ct = np.asarray((cQ,cU,cV)).T
+        return ct
 
 def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
     """
@@ -374,13 +456,18 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
 #     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
 #     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
 
-    cont_stokes = np.mean(data[Ic_mask,0,cpos_arr[0],:], axis = 0)
+    cont_stokes = np.ones(data_shape[-1])
+    
+    for scan in range(data_shape[-1]):
+        cont_stokes[scan] = np.mean(data[Ic_mask[...,scan],0,cpos_arr[0],scan])
     
     for i in range(6):
                 
 #         stokes_i_wv_avg = np.mean(data[ceny,cenx,0,i,:], axis = (0,1))
-        stokes_i_wv_avg = np.mean(data[Ic_mask,0,i,:], axis = 0)
-        
+        stokes_i_wv_avg = np.ones(data_shape[-1])
+        for scan in range(data_shape[-1]):
+            stokes_i_wv_avg[scan] = np.mean(data[Ic_mask[...,scan],0,i,scan])
+            
         if norm_stokes:
             #if normed, applies normalised offset to normed stokes
 
@@ -399,7 +486,7 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
             data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,0,i,:]*u_slope - u_int
 
             data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int
-
+            
         else:
             #if not normed, applies raw offset cross talk correction to raw stokes counts
 
@@ -432,7 +519,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC[:-19] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC.split('src/')[0] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
@@ -569,7 +656,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
 
-        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
+        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
 
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
@@ -585,37 +672,37 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
                 print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header= hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
         # DC change 20211101 Gherdardo needs separate fits files from inversion
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[3,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[2,:,:]
             hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[1,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
             
@@ -634,7 +721,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC[:-19] + 'cmilos-fits/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC.split('src/')[0] + 'cmilos-fits/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos-fits executable located at:", CMILOS_LOC,color=bcolors.WARNING)
@@ -655,7 +742,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
-        hdr = hdr_arr[scan]
+        hdr_scan = hdr_arr[scan] # DC 20211117
 
         #must invert each scan independently, as cmilos only takes in one dataset at a time
 
@@ -792,7 +879,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_data_products[4,:,:] = rte_out[7,:,:] #vlos
         rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
 
-        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
+        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
 
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
@@ -808,37 +895,37 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
                 print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
         # DC change 20211101 Gherdardo needs separate fits files from inversion
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products[3,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products[2,:,:]
             hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products[1,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr_scan # DC 20211117
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
@@ -858,7 +945,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
     try:
         PMILOS_LOC = os.path.realpath(__file__)
 
-        PMILOS_LOC = PMILOS_LOC[:-19] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
+        PMILOS_LOC = PMILOS_LOC[:-15] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
 
         if os.path.isfile(PMILOS_LOC+'pmilos.x'):
             printc("Pmilos executable located at:", PMILOS_LOC,color=bcolors.WARNING)
@@ -987,7 +1074,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
         rte_data_products[4,:,:] = result[:,:,2] #vlos
         rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
 
-        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1]] #field stop, set outside to 0
+        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
 
         #flipping taken care of for the field stop in the hrt_pipe 
         #printc(f'  ---- >>>>> and HERE now .... ',color=bcolors.WARNING)
@@ -997,37 +1084,37 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
             filename_root = out_rte_filename
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
         # DC change 20211101 Gherdardo needs separate fits files from inversion
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[3,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[2,:,:]
             hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[1,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].hdr = hdr
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
