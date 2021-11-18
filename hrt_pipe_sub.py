@@ -350,15 +350,12 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     start_time = time.time()
     
     field_stop,_ = load_fits('../field_stop/HRT_field_stop.fits')
-    field_stop_ghost,_ = load_fits('../field_stop/HRT_field_stop_ghost.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
-    field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
 
     if header_imgdirx_exists:
         if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
             field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
-            field_stop_ghost = field_stop_ghost[:,::-1]
 
     data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
 
@@ -366,7 +363,7 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    return data, field_stop, field_stop_ghost
+    return data, field_stop
 
 def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,limit=0.2):
     import random, statistics
@@ -440,9 +437,6 @@ def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,
     
 #         return cQ,cU,cV, (idx,x,xp,yQ,yU,yV,pQ,pU,pV,mx,sx,my,sy)
     else:
-        printc('Cross-talk from I to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4),color=bcolors.OKGREEN)
-        printc('Cross-talk from I to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4),color=bcolors.OKGREEN)
-        printc('Cross-talk from I to V: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cV[0],cV[1],width=8,prec=4),color=bcolors.OKGREEN)
         ct = np.asarray((cQ,cU,cV)).T
         return ct
 
@@ -457,10 +451,11 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
 #     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
 
     cont_stokes = np.ones(data_shape[-1])
-    
+    printc(data_shape[-1],color=bcolors.WARNING)
+    printc(Ic_mask.shape,color=bcolors.WARNING)
     for scan in range(data_shape[-1]):
         cont_stokes[scan] = np.mean(data[Ic_mask[...,scan],0,cpos_arr[0],scan])
-    
+    print('here1')   
     for i in range(6):
                 
 #         stokes_i_wv_avg = np.mean(data[ceny,cenx,0,i,:], axis = (0,1))
@@ -468,6 +463,7 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
         for scan in range(data_shape[-1]):
             stokes_i_wv_avg[scan] = np.mean(data[Ic_mask[...,scan],0,i,scan])
             
+        print('here2')   
         if norm_stokes:
             #if normed, applies normalised offset to normed stokes
 
@@ -486,7 +482,8 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
             data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,0,i,:]*u_slope - u_int
 
             data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int
-            
+            print('here3')   
+        
         else:
             #if not normed, applies raw offset cross talk correction to raw stokes counts
 
@@ -519,7 +516,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC.split('src/')[0] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC[:-15] + 'cmilos/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
@@ -677,7 +674,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header= hdr
+            hdu_list[0].hdrheader= hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
         # DC change 20211101 Gherdardo needs separate fits files from inversion
@@ -721,7 +718,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
     try:
         CMILOS_LOC = os.path.realpath(__file__)
 
-        CMILOS_LOC = CMILOS_LOC.split('src/')[0] + 'cmilos-fits/' #-11 as hrt_pipe.py is 11 characters
+        CMILOS_LOC = CMILOS_LOC[:-15] + 'cmilos-fits/' #-11 as hrt_pipe.py is 11 characters
 
         if os.path.isfile(CMILOS_LOC+'milos'):
             printc("Cmilos-fits executable located at:", CMILOS_LOC,color=bcolors.WARNING)
@@ -742,7 +739,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
-        hdr_scan = hdr_arr[scan] # DC 20211117
+        hdr = hdr_arr[scan]
 
         #must invert each scan independently, as cmilos only takes in one dataset at a time
 
@@ -895,37 +892,37 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
                 print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products
             hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[5,:,:]
             hdu_list.writeto(out_dir+filename_root+'_blos_rte.fits', overwrite=True)
         # DC change 20211101 Gherdardo needs separate fits files from inversion
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[3,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bazi_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[2,:,:]
             hdu_list.writeto(out_dir+filename_root+'_binc_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[1,:,:]
             hdu_list.writeto(out_dir+filename_root+'_bmag_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[4,:,:]
             hdu_list.writeto(out_dir+filename_root+'_vlos_rte.fits', overwrite=True)
 
         with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan # DC 20211117
+            hdu_list[0].header = hdr
             hdu_list[0].data = rte_data_products[0,:,:]
             hdu_list.writeto(out_dir+filename_root+'_Icont_rte.fits', overwrite=True)
 
