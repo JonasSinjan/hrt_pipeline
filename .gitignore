@@ -38,3 +38,4 @@ src/create_input_json.py
 *.pyc
 test.ipynb
 .ipynb_checkpoints/*
+field_stop/secondary_ghost_mask.fits
