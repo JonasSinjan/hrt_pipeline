@@ -36,20 +36,23 @@ input_dict = {
     'flat_states' : 24, #options 4 (one each pol state), 6 (one each wavelength), 24
     'prefilter_f': None,
     'fs_c' : True, 
-    'limb' : 'W', # for limb images - must know what limb in FOV: 'N','E','W','S'
+    'limb' : None, # for limb images - must know what limb in FOV: 'N','E','W','S'
     'demod' : True, 
     'norm_stokes' : True, 
     'ItoQUV' : False, #missing VtoQU - not developed yet
+    'ghost_c' : True,
     'ctalk_params' : None, #VtoQU parameters will be required in this argument once ready
     'rte' : False, #options: ''RTE', 'CE', 'CE+RTE'
     'p_milos' : False, #attempted, ran into problems - on hold
-    'cmilos_fits_opt': False, #use cmilos with .fits IO - 16% speed up
+    'cmilos_fits': False, #use cmilos with .fits IO - 16% speed up
     
     #output dir/filenames
     'out_dir' : './',  
     'out_stokes_file' : False,  #if True, will save stokes array to fits, the array that is fed into the RTE inversions
     'out_stokes_filename' : None, #if specific and not default name
     'out_rte_filename' : None,  #if specific and not default name
+    'config': True,
+    'out_intermediate': False,
 }
 
 json.dump(input_dict, open(f"./input_jsons/nov_2020_L1.txt", "w"))

@@ -26,9 +26,12 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 
 Operating System Required: Linux
 
-If running on bob MPS server and you have access
+##############################################################
 
-Run bash script - setup.sh - to skip the first four steps
+If running on bob MPS server and you have access
+### RUN bash script - setup.sh - to skip the first 4 steps
+##############################################################
+
 
 OTHERWISE:
 
@@ -54,15 +57,27 @@ using pip - REQUIRES PYTHON >= 3.6
 ```bash
 pip install -r requirements.txt
 ```
-OR using conda (Anaconda3) - creates virtual environment called 'dataproc'
+OR using conda (Anaconda3) - creates virtual environment called 'hrt_pipeline_env'
 ```bash
 conda env create -f environment.yml
 ```
 
-4. Activate 'dataproc'
+4. Activate 'hrt_pipeline_env'
 ```bash
-source activate dataproc
+source activate hrt_pipeline_env
 ```
+##############################################################
+### OPTIONAL - LOAD JUPYTER NOTEBOOK `hrt_pipeline_notebook.ipynb` WHICH HAS ALL THE FOLLOWING STEPS
+
+(once environment loaded and activated - need the environment to start and use all the steps in the notebook)
+
+First let jupyter notebook know the environment exists:
+
+```
+python -m ipykernel install --user --name hrt_pipeline_env
+```
+Now start the notebook
+##############################################################
 
 5. Download files - see **DOWNLOAD INPUT FILES** Section
 
@@ -111,7 +126,7 @@ Instructions:
       PHIDATAPASSWORD =
       ```  
   5. Set the target download folder in the `download_from_db.py` file
-  6. Run the file (will require dotenv python module to be installed - included in `dataproc`) 
+  6. Run the file (will require dotenv python module to be installed - included in `hrt_pipeline_env`) 
 
 OR : use `download_files.py` to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
 ## **OUTPUT**
