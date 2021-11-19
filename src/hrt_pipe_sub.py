@@ -348,9 +348,13 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
 
     start_time = time.time()
-    
-    field_stop,_ = load_fits('../field_stop/HRT_field_stop.fits')
-    field_stop_ghost,_ = load_fits('../field_stop/HRT_field_stop_ghost.fits')
+
+    field_stop_loc = os.path.realpath(__file__)
+
+    field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
+
+    field_stop,_ = load_fits(field_stop_loc + 'HRT_field_stop.fits')
+    field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
     field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
