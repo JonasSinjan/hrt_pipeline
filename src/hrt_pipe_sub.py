@@ -348,25 +348,52 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
 
     start_time = time.time()
-    
-    field_stop,_ = load_fits('../field_stop/HRT_field_stop.fits')
-    field_stop_ghost,_ = load_fits('../field_stop/HRT_field_stop_ghost.fits')
+
+    field_stop_loc = os.path.realpath(__file__)
+
+    field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
+
+    field_stop,_ = load_fits(field_stop_loc + 'HRT_field_stop.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
-    field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
 
     if header_imgdirx_exists:
         if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
             field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
-            field_stop_ghost = field_stop_ghost[:,::-1]
+
 
     data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
-
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    return data, field_stop, field_stop_ghost
+    return data, field_stop
+
+
+def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
+    """
+    apply field stop ghost mask to the science data
+    """
+    print(" ")
+    printc("-->>>>>>> Loading ghost field stop",color=bcolors.OKGREEN)
+
+    start_time = time.time()
+
+    field_stop_loc = os.path.realpath(__file__)
+    field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
+
+    field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost.fits')
+    field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
+
+    if header_imgdirx_exists:
+        if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
+            field_stop_ghost = field_stop_ghost[:,::-1]
+
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------- Load Ghost Field Stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    return field_stop_ghost
+
 
 def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,limit=0.2):
     import random, statistics
@@ -945,7 +972,7 @@ def pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, st
     try:
         PMILOS_LOC = os.path.realpath(__file__)
 
-        PMILOS_LOC = PMILOS_LOC[:-15] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
+        PMILOS_LOC = PMILOS_LOC.split('src/')[0] + 'p-milos/' #11 as hrt_pipe.py is 11 characters -8 if in utils.py
 
         if os.path.isfile(PMILOS_LOC+'pmilos.x'):
             printc("Pmilos executable located at:", PMILOS_LOC,color=bcolors.WARNING)

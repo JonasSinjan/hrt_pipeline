@@ -153,7 +153,7 @@ def phihrt_pipe(input_json_file):
 
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
-        cmilos_fits_opt = input_dict['cmilos_fits_opt']
+        cmilos_fits_opt = input_dict['cmilos_fits']
 
         out_dir = input_dict['out_dir']
         out_stokes_file = input_dict['out_stokes_file']
@@ -172,7 +172,7 @@ def phihrt_pipe(input_json_file):
     overall_time = time.time()
 
     if L1_input:
-        print("L1_input param set to True - Assuming L1 science data")
+        #print("L1_input param set to True - Assuming L1 science data")
         accum_scaling = True 
         bit_conversion = True
         scale_data = True
@@ -508,7 +508,10 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if fs_c:
-        data, field_stop, field_stop_ghost = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
+        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
+
+        if ghost_c:
+            field_stop_ghost = load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped)
 
 
     else:
@@ -617,8 +620,6 @@ def phihrt_pipe(input_json_file):
 
         start_time = time.time()
 
-        num_of_scans = data_shape[-1]
-
         slope, offset = 0, 1
         q, u, v = 0, 1, 2
         CTparams = np.zeros((2,3,number_of_scans))
@@ -708,7 +709,7 @@ def phihrt_pipe(input_json_file):
     if out_stokes_file:
         
         print(" ")
-        printc('Saving demodulated data to one _reduced.fits file per scan')
+        printc('Saving demodulated data to one _stokes.fits file per scan')
 
         if out_stokes_filename is not None:
 
@@ -719,7 +720,7 @@ def phihrt_pipe(input_json_file):
                 scan_name_list = out_stokes_filename
                 scan_name_defined = True
             else:
-                print("Input demod filenames do not match the number of input arrays, reverting to default naming")
+                print("Input stokes filenames do not match the number of input arrays, reverting to default naming")
                 scan_name_defined = False
         else:
             scan_name_defined = False
@@ -731,38 +732,38 @@ def phihrt_pipe(input_json_file):
         for count, scan in enumerate(data_f):
 
             with fits.open(scan) as hdu_list:
-                print(f"Writing out demod file as: {scan_name_list[count]}_reduced.fits")
+                print(f"Writing out stokes file as: {scan_name_list[count]}_reduced.fits")
                 hdu_list[0].data = data[:,:,:,:,count]
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                hdu_list.writeto(out_dir + scan_name_list[count] + '_reduced.fits', overwrite=True)
+                hdu_list.writeto(out_dir + scan_name_list[count] + '_stokes.fits', overwrite=True)
             
             # DC change 20211014
             
             if out_intermediate: # DC 20211116
                 if dark_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing out demod file as: {scan_name_list[count]}_dark_corrected.fits")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits")
                         hdu_list[0].data = data_darkc[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
 
                 if flat_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing out demod file as: {scan_name_list[count]}_flat_corrected.fits")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_flat_corrected.fits")
                         hdu_list[0].data = data_flatc[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
                 
                 if prefilter_f is not None: # DC 20211116
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing out demod file as: {scan_name_list[count]}_flat_corrected.fits")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits")
                         hdu_list[0].data = data_PFc[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
                 
                 if demod: # DC 20211116          
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing out demod file as: {scan_name_list[count]}_demodulated.fits")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
                         hdu_list[0].data = data_demod[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
