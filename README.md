@@ -28,7 +28,7 @@ Operating System Required: Linux
 
 If running on bob MPS server and you have access
 
-Run bash script - setup.sh - to skip the first four steps
+Run bash script - setup.sh - to skip the first 3 steps
 
 OTHERWISE:
 
