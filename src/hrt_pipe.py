@@ -508,7 +508,10 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if fs_c:
-        data, field_stop, field_stop_ghost = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
+        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
+
+        if ghost_c:
+            field_stop_ghost = load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped)
 
 
     else:
@@ -616,8 +619,6 @@ def phihrt_pipe(input_json_file):
         printc('-->>>>>>> Cross-talk correction I to Q,U,V ',color=bcolors.OKGREEN)
 
         start_time = time.time()
-
-        num_of_scans = data_shape[-1]
 
         slope, offset = 0, 1
         q, u, v = 0, 1, 2
