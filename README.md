@@ -54,14 +54,14 @@ using pip - REQUIRES PYTHON >= 3.6
 ```bash
 pip install -r requirements.txt
 ```
-OR using conda (Anaconda3) - creates virtual environment called 'dataproc'
+OR using conda (Anaconda3) - creates virtual environment called 'hrt_pipeline_env'
 ```bash
 conda env create -f environment.yml
 ```
 
-4. Activate 'dataproc'
+4. Activate 'hrt_pipeline_env'
 ```bash
-source activate dataproc
+source activate hrt_pipeline_env
 ```
 
 5. Download files - see **DOWNLOAD INPUT FILES** Section
