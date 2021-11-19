@@ -354,23 +354,54 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
 
     field_stop,_ = load_fits(field_stop_loc + 'HRT_field_stop.fits')
-    field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost.fits')
+    if ghost_c:
+        field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
-    field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
+    if ghost_c:
+        field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
 
     if header_imgdirx_exists:
         if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
             field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
-            field_stop_ghost = field_stop_ghost[:,::-1]
+            if ghost_c:
+                field_stop_ghost = field_stop_ghost[:,::-1]
 
     data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    if ghost_c:
+        return data, field_stop, field_stop_ghost
+    else:
+        return data, field_stop
 
-    return data, field_stop, field_stop_ghost
+
+def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
+    """
+    apply field stop ghost mask to the science data
+    """
+    print(" ")
+    printc("-->>>>>>> Loading ghost field stop",color=bcolors.OKGREEN)
+
+    start_time = time.time()
+
+    field_stop_loc = os.path.realpath(__file__)
+    field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
+
+    field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost.fits')
+    field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
+
+    if header_imgdirx_exists:
+        if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
+            field_stop_ghost = field_stop_ghost[:,::-1]
+
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    printc(f"------------- Load Ghost Field Stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    return field_stop_ghost
+
 
 def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,limit=0.2):
     import random, statistics
