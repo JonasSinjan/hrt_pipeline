@@ -2,7 +2,6 @@ from posix import listdir
 import numpy as np 
 import os.path
 from astropy.io import fits
-# from scipy.ndimage import gaussian_filter
 import time
 import datetime
 from operator import itemgetter
@@ -11,8 +10,8 @@ import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 
 from utils import *
-from hrt_pipe_sub import *
-
+from processes import *
+from inversions import *
 
 def phihrt_pipe(input_json_file):
 
