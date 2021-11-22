@@ -36,7 +36,7 @@ file_names.txt
 input_jsons/*.txt
 src/create_input_json.py
 *.pyc
-test.ipynb
-.ipynb_checkpoints/*
-.pat
-field_stop/secondary_ghost_mask.fits
+input_jsons/sep_2021_L1_west.json
+input_jsons/sep_2021_L1_south_noflat.json
+.ipynb_checkpoints/hrt_pipeline_notebook-checkpoint.ipynb
+
