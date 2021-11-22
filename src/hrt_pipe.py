@@ -806,7 +806,7 @@ def phihrt_pipe(input_json_file):
                 pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
-                print("Running CMILOS instead!")
+                print("Running CMILOS txt instead!")
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
 
         else:
