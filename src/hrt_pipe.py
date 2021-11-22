@@ -168,6 +168,9 @@ def phihrt_pipe(input_json_file):
             vrs = '01'
         else:
             vrs = input_dict['vers']
+            if len(vrs) != 2:
+                print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
+                raise KeyError
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
@@ -422,7 +425,7 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
-    if clean_f is not None and flat_c:
+    if clean_f and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
@@ -735,10 +738,10 @@ def phihrt_pipe(input_json_file):
         
         for count, scan in enumerate(data_f):
 
-            stokes_file, _ = create_output_filenames(scan, scan_name_list[count], version = vrs)
+            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
 
             with fits.open(scan) as hdu_list:
-                print(f"Writing out stokes file as: {scan_name_list[count]}_reduced.fits")
+                print(f"Writing out stokes file as: {stokes_file}")
                 hdu_list[0].data = data[:,:,:,:,count]
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                 hdu_list.writeto(out_dir + stokes_file, overwrite=True)
@@ -837,7 +840,5 @@ def phihrt_pipe(input_json_file):
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
-    if flat_c:
-        return data, flat
-    else:
-        return data
+   
+    return data

@@ -7,8 +7,10 @@ import subprocess
 
 def create_output_filenames(filename, DID, version = '01'):
         try:
-            L2_str = filename.replace('L1', 'L2')
-            versioned = L2_str.split('V')[0] + version + DID + '.fits'
+            file_start = filename.split('solo_')[1]
+            file_start = 'solo_' + file_start
+            L2_str = file_start.replace('L1', 'L2')
+            versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
             stokes_file = versioned.replace('ilam', 'stokes')
             icnt_file = versioned.replace('ilam', 'icnt')
             bmag_file = versioned.replace('ilam', 'bmag')
@@ -495,7 +497,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
-        hdr_scan = hdr_scan[scan]
+        hdr_scan = hdr_arr[scan]
 
         #must invert each scan independently, as cmilos only takes in one dataset at a time
 
