@@ -23,7 +23,7 @@
 "ItoQUV": true, 
 "rte": "", 
 "p_milos": false, 
-"cmilos_fits_opt": false, 
+"cmilos_fits": false, 
 "out_dir": "/data/slam/home/calchetti/hrt_pipe_results/newCT/nov2021_test/", 
 "out_stokes_file": true, 
 "out_stokes_filename": null, 
