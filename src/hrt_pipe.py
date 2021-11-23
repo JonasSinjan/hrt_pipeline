@@ -563,8 +563,6 @@ def phihrt_pipe(input_json_file):
         for hdr in hdr_arr:
             hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
-        if out_intermediate:
-            data_demod = data.copy()
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -626,7 +624,9 @@ def phihrt_pipe(input_json_file):
             Ic_mask[...,scan] = Ic_temp
             hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],4) # DC 20211116
 
-            
+        if out_intermediate:
+            data_demod_normed = data.copy()
+
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -798,7 +798,7 @@ def phihrt_pipe(input_json_file):
                 if demod: # DC 20211116          
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
-                        hdu_list[0].data = data_demod[:,:,:,:,count]
+                        hdu_list[0].data = data_demod_normed[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
 
