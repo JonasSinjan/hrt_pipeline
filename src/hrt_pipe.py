@@ -2,7 +2,6 @@ from posix import listdir
 import numpy as np 
 import os.path
 from astropy.io import fits
-# from scipy.ndimage import gaussian_filter
 import time
 import datetime
 from operator import itemgetter
@@ -11,8 +10,8 @@ import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 
 from utils import *
-from hrt_pipe_sub import *
-
+from processes import *
+from inversions import *
 
 def phihrt_pipe(input_json_file):
 
@@ -164,6 +163,14 @@ def phihrt_pipe(input_json_file):
             config = True
         else:
             config = input_dict['config']
+
+        if 'vers' not in input_dict:
+            vrs = '01'
+        else:
+            vrs = input_dict['vers']
+            if len(vrs) != 2:
+                print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
+                raise KeyError
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
@@ -418,7 +425,7 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
-    if clean_f is not None and flat_c:
+    if clean_f and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
@@ -709,8 +716,9 @@ def phihrt_pipe(input_json_file):
     if out_stokes_file:
         
         print(" ")
-        printc('Saving demodulated data to one _stokes.fits file per scan')
+        printc('Saving demodulated data to one \'stokes\' file per scan')
 
+        #check if user set specific output filenames, check for duplicates, otherwise use the DID
         if out_stokes_filename is not None:
 
             if isinstance(out_stokes_filename,str):
@@ -725,17 +733,18 @@ def phihrt_pipe(input_json_file):
         else:
             scan_name_defined = False
 
-        if not scan_name_defined: #check if already defined by input, otherwise generate
-            scan_name_list = check_filenames(data_f)
+        if not scan_name_defined: #check if already defined by user
+            scan_name_list = check_filenames(data_f) #extract the DIDs and check no duplicates
         
-
         for count, scan in enumerate(data_f):
 
+            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
+
             with fits.open(scan) as hdu_list:
-                print(f"Writing out stokes file as: {scan_name_list[count]}_reduced.fits")
+                print(f"Writing out stokes file as: {stokes_file}")
                 hdu_list[0].data = data[:,:,:,:,count]
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                hdu_list.writeto(out_dir + scan_name_list[count] + '_stokes.fits', overwrite=True)
+                hdu_list.writeto(out_dir + stokes_file, overwrite=True)
             
             # DC change 20211014
             
@@ -767,11 +776,6 @@ def phihrt_pipe(input_json_file):
                         hdu_list[0].data = data_demod[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
-            
-
-            # with fits.open(scan) as hdu_list:
-            #     hdu_list[0].data = limb_copy
-            #     hdu_list.writeto(out_dir+scan_name_list[count]+'_limb_fit_input.fits', overwrite=True)
 
     else:
         print(" ")
@@ -799,18 +803,18 @@ def phihrt_pipe(input_json_file):
         if p_milos:
 
             try:
-                pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
-                print("Running CMILOS instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                print("Running CMILOS txt instead!")
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
 
         else:
             if cmilos_fits_opt:
 
-                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
 
     else:
         print(" ")
@@ -836,7 +840,5 @@ def phihrt_pipe(input_json_file):
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
-    if flat_c:
-        return data, flat
-    else:
-        return data
+   
+    return data
