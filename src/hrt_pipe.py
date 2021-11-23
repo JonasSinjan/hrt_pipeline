@@ -2,7 +2,6 @@ from posix import listdir
 import numpy as np 
 import os.path
 from astropy.io import fits
-# from scipy.ndimage import gaussian_filter
 import time
 import datetime
 from operator import itemgetter
@@ -11,8 +10,8 @@ import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 
 from utils import *
-from hrt_pipe_sub import *
-
+from processes import *
+from inversions import *
 
 def phihrt_pipe(input_json_file):
 
@@ -112,9 +111,11 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
+    version = 'V1.0 November 23rd 2021'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
+    printc('Version: '+version,bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     #-----------------
@@ -164,6 +165,14 @@ def phihrt_pipe(input_json_file):
             config = True
         else:
             config = input_dict['config']
+
+        if 'vers' not in input_dict:
+            vrs = '01'
+        else:
+            vrs = input_dict['vers']
+            if len(vrs) != 2:
+                print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
+                raise KeyError
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
@@ -270,6 +279,8 @@ def phihrt_pipe(input_json_file):
     cols = slice(start_col,start_col + data_size[1])
     ceny = slice(data_size[0]//2 - data_size[0]//4, data_size[0]//2 + data_size[0]//4)
     cenx = slice(data_size[1]//2 - data_size[1]//4, data_size[1]//2 + data_size[1]//4)
+
+    hdr_arr = setup_header(hdr_arr)
     
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -409,6 +420,11 @@ def phihrt_pipe(input_json_file):
         if out_intermediate:
             data_darkc = data.copy()
 
+        DID_dark = h['PHIDATID']
+
+        for hdr in hdr_arr:
+            hdr['CAL_DARK'] = DID_dark
+
     else:
         print(" ")
         printc('-->>>>>>> No dark mode',color=bcolors.WARNING)
@@ -418,13 +434,17 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
-    if clean_f is not None and flat_c:
+    if clean_f and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
         start_time = time.time()
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode, clean_f = "blurring")
+
+        for hdr in hdr_arr:
+            hdr['CAL_USH'] = clean_mode
+            hdr['SIGM_USH'] = sigma
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -459,6 +479,11 @@ def phihrt_pipe(input_json_file):
             if out_intermediate:
                 data_flatc = data.copy()
             
+            DID_flat = header_flat['PHIDATID']
+
+            for hdr in hdr_arr:
+                hdr['CAL_FLAT'] = DID_flat
+
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -491,6 +516,9 @@ def phihrt_pipe(input_json_file):
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
         data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
+
+        for hdr in hdr_arr:
+            hdr['CAL_PRE'] = prefilter_f
 
         data_PFc = data.copy()  # DC 20211116
 
@@ -531,9 +559,10 @@ def phihrt_pipe(input_json_file):
         start_time = time.time()
 
         data,_ = demod_hrt(data, pmp_temp)
+
+        for hdr in hdr_arr:
+            hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
-        if out_intermediate:
-            data_demod = data.copy()
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -562,11 +591,7 @@ def phihrt_pipe(input_json_file):
         
         for scan in range(data_shape[-1]):
             
-            #I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
-            #I_c = np.mean(data[50:500,700:1700,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun north limb
-            #I_c = np.mean(data[1500:2000,800:1300,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun south limb
-            #I_c = np.mean(data[350:1700,200:900,0,cpos_arr[0],int(scan)]) # West limb
-            limb_copy = np.copy(data)
+            #limb_copy = np.copy(data)
             
             #from Daniele Calchetti
             
@@ -597,9 +622,11 @@ def phihrt_pipe(input_json_file):
             I_c[scan] = np.mean(data[Ic_temp,0,cpos_arr[0],int(scan)])
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c[scan]
             Ic_mask[...,scan] = Ic_temp
-            hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],0) # DC 20211116
+            hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],4) # DC 20211116
 
-            
+        if out_intermediate:
+            data_demod_normed = data.copy()
+
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -641,6 +668,11 @@ def phihrt_pipe(input_json_file):
                 scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
                 scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
                 scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
+
+                scan_hdr['CAL_CRT6'] = 0 #V-Q slope
+                scan_hdr['CAL_CRT8'] = 0 #V-U slope
+                scan_hdr['CAL_CRT7'] = 0 #V-Q offset
+                scan_hdr['CAL_CRT9'] = 0 #V-U offset
                 
         try:    
             data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask)
@@ -709,8 +741,9 @@ def phihrt_pipe(input_json_file):
     if out_stokes_file:
         
         print(" ")
-        printc('Saving demodulated data to one _stokes.fits file per scan')
+        printc('Saving demodulated data to one \'stokes\' file per scan')
 
+        #check if user set specific output filenames, check for duplicates, otherwise use the DID
         if out_stokes_filename is not None:
 
             if isinstance(out_stokes_filename,str):
@@ -725,17 +758,18 @@ def phihrt_pipe(input_json_file):
         else:
             scan_name_defined = False
 
-        if not scan_name_defined: #check if already defined by input, otherwise generate
-            scan_name_list = check_filenames(data_f)
+        if not scan_name_defined: #check if already defined by user
+            scan_name_list = check_filenames(data_f) #extract the DIDs and check no duplicates
         
-
         for count, scan in enumerate(data_f):
 
+            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
+
             with fits.open(scan) as hdu_list:
-                print(f"Writing out stokes file as: {scan_name_list[count]}_reduced.fits")
+                print(f"Writing out stokes file as: {stokes_file}")
                 hdu_list[0].data = data[:,:,:,:,count]
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                hdu_list.writeto(out_dir + scan_name_list[count] + '_stokes.fits', overwrite=True)
+                hdu_list.writeto(out_dir + stokes_file, overwrite=True)
             
             # DC change 20211014
             
@@ -764,14 +798,9 @@ def phihrt_pipe(input_json_file):
                 if demod: # DC 20211116          
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
-                        hdu_list[0].data = data_demod[:,:,:,:,count]
+                        hdu_list[0].data = data_demod_normed[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
-            
-
-            # with fits.open(scan) as hdu_list:
-            #     hdu_list[0].data = limb_copy
-            #     hdu_list.writeto(out_dir+scan_name_list[count]+'_limb_fit_input.fits', overwrite=True)
 
     else:
         print(" ")
@@ -799,18 +828,18 @@ def phihrt_pipe(input_json_file):
         if p_milos:
 
             try:
-                pmilos(data_f, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
-                print("Running CMILOS instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                print("Running CMILOS txt instead!")
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
 
         else:
             if cmilos_fits_opt:
 
-                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
 
     else:
         print(" ")
@@ -836,7 +865,5 @@ def phihrt_pipe(input_json_file):
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
-    if flat_c:
-        return data, flat
-    else:
-        return data
+   
+    return data

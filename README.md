@@ -76,7 +76,7 @@ First let jupyter notebook know the environment exists:
 ```
 python -m ipykernel install --user --name hrt_pipeline_env
 ```
-Now start the notebook
+Now start the notebook <br>
 ##############################################################
 
 5. Download files - see **DOWNLOAD INPUT FILES** Section

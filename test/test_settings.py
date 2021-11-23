@@ -6,8 +6,12 @@ import unittest
 import numpy as np
 import sys
 sys.path.append('../')
+sys.path.append('../src/')
 
 from src.hrt_pipe import phihrt_pipe
+from src.utils import *
+from src.inversions import *
+from src.processes import *
 
 def test_one():
   #test with almost everything off after reading in all files
