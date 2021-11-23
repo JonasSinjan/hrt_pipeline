@@ -5,6 +5,40 @@ from utils import *
 import os
 import time
 
+def setup_header(hdr_arr):
+    k = ['CAL_FLAT','CAL_USH','SIGM_USH',
+    'CAL_PRE','CAL_GHST','CAL_REAL',
+    'CAL_CRT0','CAL_CRT1','CAL_CRT2','CAL_CRT3','CAL_CRT4','CAL_CRT5',
+    'CAL_CRT6','CAL_CRT7','CAL_CRT8','CAL_CRT9',
+    'CAL_NORM','CAL_FRIN','CAL_PSF','CAL_IPOL',
+    'CAL_SCIP','RTE_MOD','RTE_SW','RTE_ITER']
+
+    v = [0,' ',' ',
+    ' ','None ','NA',
+    0,0,0,0,0,0,
+    0,0,0,0,
+    ' ','NA','NA',' ',
+    'None',' ',' ',4294967295]
+
+    c = ['Onboard calibrated for gain table','Unsharp masking correction','Sigma for unsharp masking [px]',
+    'Prefilter correction (DID/file)','Ghost correction (name + version of module','Prealigment of images before demodulation',
+    'cross-talk from I to Q (slope)','cross-talk from I to Q (offset)','cross-talk from I to U (slope)','cross-talk from I to U (offset)','cross-talk from I to V (slope)','cross-talk from I to V (offset)',
+    'cross-talk from V to Q (slope)','cross-talk from V to Q (offset)','cross-talk from V to U (slope)','cross-talk from V to U (offset)',
+    'Normalization (normalization constant PROC_Ic)','Fringe correction (name + version of module)','Onboard calibrated for instrumental PSF','Onboard calibrated for instrumental polarization',
+    'Onboard scientific data analysis','Inversion mode','Inversion software','Number RTE inversion iterations']
+
+    for h in hdr_arr:
+        for i in range(len(k)):
+            if k[i] in h:  # Check for existence
+                h[k[i]] = v[i]
+            else:
+                if i==0:
+                    h.set(k[i], v[i], c[i], after='CAL_DARK')
+                else:
+                    h.set(k[i], v[i], c[i], after=k[i-1])
+    return hdr_arr
+
+
 def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
     """
     load, scale, flip and correct flat
