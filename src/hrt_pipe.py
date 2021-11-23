@@ -111,9 +111,11 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
+    version = 'V1.0 November 23rd 2021'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
+    printc('version: '+version,bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     #-----------------
@@ -278,6 +280,8 @@ def phihrt_pipe(input_json_file):
     ceny = slice(data_size[0]//2 - data_size[0]//4, data_size[0]//2 + data_size[0]//4)
     cenx = slice(data_size[1]//2 - data_size[1]//4, data_size[1]//2 + data_size[1]//4)
     
+    hdr_arr = setup_header(hdr_arr)
+    
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -415,7 +419,12 @@ def phihrt_pipe(input_json_file):
 
         if out_intermediate:
             data_darkc = data.copy()
-
+        
+        DID_dark = h['PHIDATID']
+            
+        for hdr in hdr_arr:
+            hdr['CAL_DARK'] = DID_dark
+            
     else:
         print(" ")
         printc('-->>>>>>> No dark mode',color=bcolors.WARNING)
@@ -432,7 +441,10 @@ def phihrt_pipe(input_json_file):
         start_time = time.time()
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode, clean_f = "blurring")
-        
+        for hdr in hdr_arr:
+            hdr['CAL_USH'] = clean_mode
+            hdr['SIGM_USH'] = sigma
+            
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -462,6 +474,11 @@ def phihrt_pipe(input_json_file):
     if flat_c:
         try:
             data = flat_correction(data,flat,flat_states,rows,cols)
+            
+            DID_flat = header_flat['PHIDATID']
+            
+            for hdr in hdr_arr:
+                hdr['CAL_FLAT'] = DID_flat
             
             if out_intermediate:
                 data_flatc = data.copy()
@@ -498,6 +515,9 @@ def phihrt_pipe(input_json_file):
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
         data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
+        
+        for hdr in hdr_arr:
+            hdr['CAL_PRE'] = prefilter_f
 
         data_PFc = data.copy()  # DC 20211116
 
@@ -538,6 +558,9 @@ def phihrt_pipe(input_json_file):
         start_time = time.time()
 
         data,_ = demod_hrt(data, pmp_temp)
+        
+        for hdr in hdr_arr:
+            hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
         if out_intermediate:
             data_demod = data.copy()
@@ -604,7 +627,7 @@ def phihrt_pipe(input_json_file):
             I_c[scan] = np.mean(data[Ic_temp,0,cpos_arr[0],int(scan)])
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c[scan]
             Ic_mask[...,scan] = Ic_temp
-            hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],0) # DC 20211116
+            hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],4) # DC 20211116
 
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -640,14 +663,17 @@ def phihrt_pipe(input_json_file):
             
             CTparams[...,scan] = ctalk_params
             
-            if 'CAL_CRT0' in scan_hdr: #check to make sure the keywords exist
+            scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
+            scan_hdr['CAL_CRT2'] = round(ctalk_params[slope,u],4) #I-U slope
+            scan_hdr['CAL_CRT4'] = round(ctalk_params[slope,v],4) #I-V slope
+            scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
+            scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
+            scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
             
-                scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
-                scan_hdr['CAL_CRT2'] = round(ctalk_params[slope,u],4) #I-U slope
-                scan_hdr['CAL_CRT4'] = round(ctalk_params[slope,v],4) #I-V slope
-                scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
-                scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
-                scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
+            scan_hdr['CAL_CRT6'] = 0 #V-Q slope
+            scan_hdr['CAL_CRT8'] = 0 #V-U slope
+            scan_hdr['CAL_CRT7'] = 0 #V-Q offset
+            scan_hdr['CAL_CRT9'] = 0 #V-U offset
                 
         try:    
             data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask)
@@ -842,3 +868,4 @@ def phihrt_pipe(input_json_file):
 
    
     return data
+
