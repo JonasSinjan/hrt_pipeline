@@ -115,7 +115,7 @@ def phihrt_pipe(input_json_file):
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
-    printc('version: '+version,bcolors.OKGREEN)
+    printc('Version: '+version,bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     #-----------------
@@ -279,6 +279,8 @@ def phihrt_pipe(input_json_file):
     cols = slice(start_col,start_col + data_size[1])
     ceny = slice(data_size[0]//2 - data_size[0]//4, data_size[0]//2 + data_size[0]//4)
     cenx = slice(data_size[1]//2 - data_size[1]//4, data_size[1]//2 + data_size[1]//4)
+
+    hdr_arr = setup_header(hdr_arr)
     
     hdr_arr = setup_header(hdr_arr)
     
@@ -419,12 +421,12 @@ def phihrt_pipe(input_json_file):
 
         if out_intermediate:
             data_darkc = data.copy()
-        
+
         DID_dark = h['PHIDATID']
-            
+
         for hdr in hdr_arr:
             hdr['CAL_DARK'] = DID_dark
-            
+
     else:
         print(" ")
         printc('-->>>>>>> No dark mode',color=bcolors.WARNING)
@@ -441,10 +443,11 @@ def phihrt_pipe(input_json_file):
         start_time = time.time()
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode, clean_f = "blurring")
+
         for hdr in hdr_arr:
             hdr['CAL_USH'] = clean_mode
             hdr['SIGM_USH'] = sigma
-            
+        
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -483,6 +486,11 @@ def phihrt_pipe(input_json_file):
             if out_intermediate:
                 data_flatc = data.copy()
             
+            DID_flat = header_flat['PHIDATID']
+
+            for hdr in hdr_arr:
+                hdr['CAL_FLAT'] = DID_flat
+
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -516,6 +524,9 @@ def phihrt_pipe(input_json_file):
 
         data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
         
+        for hdr in hdr_arr:
+            hdr['CAL_PRE'] = prefilter_f
+
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
 
@@ -558,12 +569,10 @@ def phihrt_pipe(input_json_file):
         start_time = time.time()
 
         data,_ = demod_hrt(data, pmp_temp)
-        
+
         for hdr in hdr_arr:
             hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
-        if out_intermediate:
-            data_demod = data.copy()
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -592,11 +601,7 @@ def phihrt_pipe(input_json_file):
         
         for scan in range(data_shape[-1]):
             
-            #I_c = np.mean(data[ceny,cenx,0,cpos_arr[0],int(scan)]) #mean of central 1k x 1k of continuum stokes I
-            #I_c = np.mean(data[50:500,700:1700,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun north limb
-            #I_c = np.mean(data[1500:2000,800:1300,0,cpos_arr[0],int(scan)]) # mean in the not-out-of the Sun south limb
-            #I_c = np.mean(data[350:1700,200:900,0,cpos_arr[0],int(scan)]) # West limb
-            limb_copy = np.copy(data)
+            #limb_copy = np.copy(data)
             
             #from Daniele Calchetti
             
@@ -629,7 +634,9 @@ def phihrt_pipe(input_json_file):
             Ic_mask[...,scan] = Ic_temp
             hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],4) # DC 20211116
 
-            
+        if out_intermediate:
+            data_demod_normed = data.copy()
+
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -799,7 +806,7 @@ def phihrt_pipe(input_json_file):
                 if demod: # DC 20211116          
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
-                        hdu_list[0].data = data_demod[:,:,:,:,count]
+                        hdu_list[0].data = data_demod_normed[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
 

@@ -174,11 +174,11 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
 
         rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
-        
+
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'cmilos'
         hdr_scan['RTE_ITER'] = str(15)
-        
+
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
             stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
@@ -196,10 +196,10 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
 
             blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
 
-        # with fits.open(file_path) as hdu_list:
-        #     hdu_list[0].header = hdr_scan
-        #     hdu_list[0].data = rte_data_products
-        #     hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+        with fits.open(file_path) as hdu_list:
+            hdu_list[0].header = hdr_scan
+            hdu_list[0].data = rte_data_products
+            hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
 
         #blos
         with fits.open(file_path) as hdu_list:
@@ -411,11 +411,11 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
 
         rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
-        
+
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'cmilos-fits'
         hdr_scan['RTE_ITER'] = str(15)
-        
+
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
             stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
@@ -620,7 +620,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'pmilos'
         hdr_scan['RTE_ITER'] = str(15)
-        
+
         if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
             stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
