@@ -314,8 +314,6 @@ def fix_path(path,dir='forward',verbose=False):
 def filling_data(arr, thresh, mode, axis = -1):
     from scipy.interpolate import CubicSpline
     
-    N = arr.shape[axis]
-    
     a0 = np.zeros(arr.shape)
     a0 = arr.copy()
     if mode == 'max':
@@ -328,22 +326,27 @@ def filling_data(arr, thresh, mode, axis = -1):
         rows = mode['exact rows']
         for r in rows:
             a0[r] = np.nan
+        axis = 1
     if 'exact columns' in mode.keys():
         cols = mode['exact columns']
         for c in cols:
             a0[:,r] = np.nan
+        axis = 0
+    
+    N = arr.shape[axis]; n = arr.shape[axis-1]
     
     with np.errstate(divide='ignore'):
         for i in range(N):
             a1 = a0.take(i, axis=axis)
             nans, index = np.isnan(a1), lambda z: z.nonzero()[0]
             if nans.sum()>0:
-                a1[nans] = CubicSpline(np.arange(N)[~nans], a1[~nans])(np.arange(N))[nans]
+                a1[nans] = CubicSpline(np.arange(n)[~nans], a1[~nans])(np.arange(n))[nans]
                 if axis == 0:
                     a0[i] = a1
                 else:
                     a0[:,i] = a1
     return a0
+    
 
 def limb_fitting(img, mode = 'columns', switch = False):
     def _residuals(p,x,y):

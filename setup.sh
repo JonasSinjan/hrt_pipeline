@@ -28,7 +28,7 @@ make
 
 cd ..
 
-#conda env create -f environment.yml
+conda env create -f environment.yml
 #pip install -r requrements.txt
 
 source activate hrt_pipeline_env
