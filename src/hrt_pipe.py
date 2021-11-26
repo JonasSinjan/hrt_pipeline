@@ -828,18 +828,18 @@ def phihrt_pipe(input_json_file):
         if p_milos:
 
             try:
-                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
+                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
                 print("Running CMILOS txt instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
         else:
             if cmilos_fits_opt:
 
-                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
+                cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, out_rte_filename, out_dir, vers = vrs)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:
         print(" ")
