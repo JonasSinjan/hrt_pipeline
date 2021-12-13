@@ -4,6 +4,7 @@ from utils import *
 import os
 import time
 import subprocess
+import datetime
 
 def create_output_filenames(filename, DID, version = '01'):
     """
@@ -57,6 +58,9 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
         blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
 
+    ntime = datetime.datetime.now()
+    hdr_scan['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+
     with fits.open(file_path) as hdu_list:
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products
@@ -64,36 +68,42 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
     #blos
     with fits.open(file_path) as hdu_list:
-        hdu_list[0].header= hdr_scan
+        hdr_scan['FILENAME'] = blos_file
+        hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[5,:,:]
         hdu_list.writeto(out_dir+blos_file, overwrite=True)
 
     #bazi
     with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = bazi_file
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[3,:,:]
         hdu_list.writeto(out_dir+bazi_file, overwrite=True)
 
     #binc
     with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = binc_file
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[2,:,:]
         hdu_list.writeto(out_dir+binc_file, overwrite=True)
 
     #bmag
     with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = bmag_file
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[1,:,:]
         hdu_list.writeto(out_dir+bmag_file, overwrite=True)
 
     #vlos
     with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = vlos_file
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[4,:,:]
         hdu_list.writeto(out_dir+vlos_file, overwrite=True)
 
     #Icnt
     with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = icnt_file
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[0,:,:]
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)

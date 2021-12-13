@@ -286,7 +286,9 @@ def phihrt_pipe(input_json_file):
     printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-
+    for hdr in hdr_arr:
+        hdr['VERS_SW'] = version #version of pipeline
+        hdr['VERSION'] = vrs #version of the file V01
     #-----------------
     # READ FLAT FIELDS
     #-----------------
@@ -420,7 +422,7 @@ def phihrt_pipe(input_json_file):
         if out_intermediate:
             data_darkc = data.copy()
 
-        DID_dark = h['PHIDATID']
+        DID_dark = h['FILENAME']
 
         for hdr in hdr_arr:
             hdr['CAL_DARK'] = DID_dark
@@ -479,10 +481,14 @@ def phihrt_pipe(input_json_file):
             if out_intermediate:
                 data_flatc = data.copy()
             
-            DID_flat = header_flat['PHIDATID']
-
+            #DID_flat = header_flat['PHIDATID']
+            if '/' in flat_f:
+                filename = flat_f.split('/')[-1]
+            else:
+                filename = flat_f
+            
             for hdr in hdr_arr:
-                hdr['CAL_FLAT'] = DID_flat
+                hdr['CAL_FLAT'] = filename#DID_flat  - not the FILENAME keyword, in case we are trying with extra cleaned flats
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -764,6 +770,9 @@ def phihrt_pipe(input_json_file):
         for count, scan in enumerate(data_f):
 
             stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
+
+            ntime = datetime.datetime.now()
+            hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
