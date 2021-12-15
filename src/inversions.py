@@ -61,6 +61,23 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     ntime = datetime.datetime.now()
     hdr_scan['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
 
+    version_k = hdr_scan['VERS_SW']
+    if '.fits' in hdr_scan['CAL_DARK']:
+        dark_f_k = 'True'
+    else:
+        dark_f_k = 'False'
+    if '.fits' in hdr_scan['CAL_FLAT']:
+        flat_f_k = 'True'
+    else:
+        flat_f_k = 'False'
+    clean_f_k = hdr_scan['CAL_USH']
+    if hdr_scan['CAL_CRT1'] > 0:
+        ItoQUV_k ='True'
+    else:
+        ItoQUV_k = 'False'
+    rte_sw_k = hdr_scan['RTE_SW']
+    rte_mod_k = hdr_scan['RTE_MOD']
+
     with fits.open(file_path) as hdu_list:
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products
@@ -69,6 +86,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #blos
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = blos_file
+        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Blos file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[5,:,:]
         hdu_list.writeto(out_dir+blos_file, overwrite=True)
@@ -76,6 +94,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #bazi
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = bazi_file
+        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Bazi file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[3,:,:]
         hdu_list.writeto(out_dir+bazi_file, overwrite=True)
@@ -83,6 +102,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #binc
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = binc_file
+        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Binc file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[2,:,:]
         hdu_list.writeto(out_dir+binc_file, overwrite=True)
@@ -90,6 +110,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #bmag
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = bmag_file
+        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Bmag file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[1,:,:]
         hdu_list.writeto(out_dir+bmag_file, overwrite=True)
@@ -97,6 +118,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #vlos
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = vlos_file
+        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a vlos file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[4,:,:]
         hdu_list.writeto(out_dir+vlos_file, overwrite=True)
@@ -104,6 +126,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #Icnt
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = icnt_file
+        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Icnt file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[0,:,:]
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)

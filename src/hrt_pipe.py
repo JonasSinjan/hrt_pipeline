@@ -111,7 +111,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.0 November 23rd 2021'
+    version = 'V1.1 December 15th 2021'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -733,6 +733,10 @@ def phihrt_pipe(input_json_file):
     #WRITE OUT STOKES VECTOR
     #-----------------
 
+    #rewrite the PARENT keyword to the original FILENAME
+    for count, scan in enumerate(data_f):
+        hdr_arr[count]['PARENT'] = hdr_arr[count]['FILENAME'] 
+
     #these two ifs need to be outside out_stokes_file if statement - needed for inversion
     if out_dir[-1] != "/":
         print("Desired Output directory missing / character, will be added")
@@ -742,7 +746,6 @@ def phihrt_pipe(input_json_file):
     if not os.path.exists(out_dir): 
         print(f"{out_dir} does not exist -->>>>>>> Creating it")
         os.makedirs(out_dir)
-
 
     if out_stokes_file:
         
@@ -773,6 +776,8 @@ def phihrt_pipe(input_json_file):
 
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+            hdr_arr[count]['FILENAME'] = stokes_file
+            hdr_arr[count]['HISTORY'] = f"Reduced with hrt-pipeline {version}, to create a STOKES file. Dark field Applied: {dark_f}. Flat field Applied: {flat_f}, Flat Unsharp Masked: {clean_f}. Flat normalised: {norm_f}. I->QUV ctalk: {ItoQUV}."
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
