@@ -39,7 +39,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     if imgdirx_flipped:
         print("Input image has been flipped as per convention - converting Azimuth to convention")
         azi = rte_data_products[3,:,:].copy()
-        rte_data_products[3,:,:] = np.pi - azi
+        rte_data_products[3,:,:] = 180 - azi
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
