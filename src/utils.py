@@ -243,7 +243,7 @@ def check_IMGDIRX(hdr_arr):
     else:
         header_imgdirx_exists = False
         print("Not all the scan(s) contain the 'IMGDIRX' keyword! Assuming all not flipped - Proceed with caution")
-        return header_imgdirx_exists, None
+        return header_imgdirx_exists, False
 
 
 def compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped):

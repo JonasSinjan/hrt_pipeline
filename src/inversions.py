@@ -4,29 +4,112 @@ from utils import *
 import os
 import time
 import subprocess
+import datetime
 
 def create_output_filenames(filename, DID, version = '01'):
-        try:
-            file_start = filename.split('solo_')[1]
-            file_start = 'solo_' + file_start
-            L2_str = file_start.replace('L1', 'L2')
-            versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
-            stokes_file = versioned.replace('ilam', 'stokes')
-            icnt_file = versioned.replace('ilam', 'icnt')
-            bmag_file = versioned.replace('ilam', 'bmag')
-            bazi_file = versioned.replace('ilam', 'bazi')
-            binc_file = versioned.replace('ilam', 'binc')
-            blos_file = versioned.replace('ilam', 'blos')
-            vlos_file = versioned.replace('ilam', 'vlos')
+    """
+    creating the L2 output filenames from the input, assuming L1
+    """
+    try:
+        file_start = filename.split('solo_')[1]
+        file_start = 'solo_' + file_start
+        L2_str = file_start.replace('L1', 'L2')
+        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+        stokes_file = versioned.replace('ilam', 'stokes')
+        icnt_file = versioned.replace('ilam', 'icnt')
+        bmag_file = versioned.replace('ilam', 'bmag')
+        bazi_file = versioned.replace('ilam', 'bazi')
+        binc_file = versioned.replace('ilam', 'binc')
+        blos_file = versioned.replace('ilam', 'blos')
+        vlos_file = versioned.replace('ilam', 'vlos')
 
-            return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+        return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
 
-        except Exception:
-            print("The input file: {file_path} does not contain 'L1'")
-            raise KeyError
+    except Exception:
+        print("The input file: {file_path} does not contain 'L1'")
+        raise KeyError
 
 
-def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir, vers = '01'):
+def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers):
+    """
+    write out the L2 files + stokes
+    taking care of the azimuth definition if the image is flipped
+    """
+
+    if imgdirx_flipped:
+        print("Input image has been flipped as per convention - converting Azimuth to convention")
+        azi = rte_data_products[3,:,:].copy()
+        rte_data_products[3,:,:] = 180 - azi
+
+    if out_rte_filename is None:
+            filename_root = str(file_path.split('.fits')[0][-10:])
+            stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
+
+    else:
+        if isinstance(out_rte_filename, list):
+            filename_root = out_rte_filename[scan]
+
+        elif isinstance(out_rte_filename, str):
+            filename_root = out_rte_filename
+
+        else:
+            filename_root = str(file_path.split('.fits')[0][-10:])
+            print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
+
+        blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
+
+    ntime = datetime.datetime.now()
+    hdr_scan['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+
+    with fits.open(file_path) as hdu_list:
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products
+        hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+
+    #blos
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = blos_file
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[5,:,:]
+        hdu_list.writeto(out_dir+blos_file, overwrite=True)
+
+    #bazi
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = bazi_file
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[3,:,:]
+        hdu_list.writeto(out_dir+bazi_file, overwrite=True)
+
+    #binc
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = binc_file
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[2,:,:]
+        hdu_list.writeto(out_dir+binc_file, overwrite=True)
+
+    #bmag
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = bmag_file
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[1,:,:]
+        hdu_list.writeto(out_dir+bmag_file, overwrite=True)
+
+    #vlos
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = vlos_file
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[4,:,:]
+        hdu_list.writeto(out_dir+vlos_file, overwrite=True)
+
+    #Icnt
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = icnt_file
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[0,:,:]
+        hdu_list.writeto(out_dir+icnt_file, overwrite=True)
+
+
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using CMILOS
     """
@@ -98,11 +181,8 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         if rte == 'CE+RTE':
             rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
 
-        #print(rte_on)
-
         printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
         del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
-        #print(del_dummy)
 
         res = np.loadtxt('dummy_out.txt')
         npixels = res.shape[0]/12.
@@ -144,25 +224,6 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
         
         del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
-        #print(del_dummy)
-
-        """
-        #vlos S/C vorrection
-        v_x, v_y, v_z = hdr['HCIX_VOB']/1000, hdr['HCIY_VOB']/1000, hdr['HCIZ_VOB']/1000
-
-        #need line of sight velocity, should be total HCI velocity in km/s, with sun at origin. 
-        #need to take care for velocities moving towards the sun, (ie negative) #could use continuum position as if towards or away
-    
-        if cpos_arr[scan] == 5: #moving away, redshifted
-            dir_factor = 1
-        
-        elif cpos_arr[scan] == 0: #moving towards, blueshifted
-            dir_factor == -1
-        
-        v_tot = dir_factor*math.sqrt(v_x**2 + v_y**2+v_z**2) #in km/s
-
-        rte_invs_noth[8,:,:] = rte_invs_noth[8,:,:] - v_tot
-        """
 
         rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
 
@@ -179,70 +240,14 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         hdr_scan['RTE_SW'] = 'cmilos'
         hdr_scan['RTE_ITER'] = str(15)
 
-        if out_rte_filename is None:
-            filename_root = str(file_path.split('.fits')[0][-10:])
-            stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
-
-        else:
-            if isinstance(out_rte_filename, list):
-                filename_root = out_rte_filename[scan]
-
-            elif isinstance(out_rte_filename, str):
-                filename_root = out_rte_filename
-
-            else:
-                filename_root = str(file_path.split('.fits')[0][-10:])
-                print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
-
-            blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
-
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products
-            hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
-
-        #blos
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header= hdr_scan
-            hdu_list[0].data = rte_data_products[5,:,:]
-            hdu_list.writeto(out_dir+blos_file, overwrite=True)
-
-        #bazi
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[3,:,:]
-            hdu_list.writeto(out_dir+bazi_file, overwrite=True)
-
-        #binc
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[2,:,:]
-            hdu_list.writeto(out_dir+binc_file, overwrite=True)
-
-        #bmag
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[1,:,:]
-            hdu_list.writeto(out_dir+bmag_file, overwrite=True)
-
-        #vlos
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[4,:,:]
-            hdu_list.writeto(out_dir+vlos_file, overwrite=True)
-
-        #Icnt
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[0,:,:]
-            hdu_list.writeto(out_dir+icnt_file, overwrite=True)
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
-def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir, vers = '01'):
+def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using CMILOS
     """
@@ -303,25 +308,8 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         hdr['LAMBDA4'] = wave_axis[4]
         hdr['LAMBDA5'] = wave_axis[5]
         
-        
         #write out data to temp fits for cmilos-fits input
         input_arr = np.transpose(sdata, axes = (3,2,0,1)) #must transpose due to cfitsio (wl,pol,y,x) #3201 originally
-        
-        # DC CHANGE (same number of digits of cmilos)
-#         hdr['LAMBDA0'] = float('%e' % wave_axis[0])#needs it in Angstrom 6173.1 etc
-#         hdr['LAMBDA1'] = float('%e' % wave_axis[1])
-#         hdr['LAMBDA2'] = float('%e' % wave_axis[2])
-#         hdr['LAMBDA3'] = float('%e' % wave_axis[3])
-#         hdr['LAMBDA4'] = float('%e' % wave_axis[4])
-#         hdr['LAMBDA5'] = float('%e' % wave_axis[5])
-#         printc('-->>>>>>> CHANGING DATA PRECISION ',color=bcolors.OKGREEN)
-#         for w in range(l):
-#             for s in range(p):
-#                 for i in range(y):
-#                     for j in range(x):
-#                         input_arr[w,s,i,j] = float('%e' % input_arr[w,s,i,j])
-        # DC CHANGE END
-        
         hdu1 = fits.PrimaryHDU(data=input_arr, header = hdr)
 
         #mask
@@ -373,9 +361,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         Constant source function
         Slope source function
         Minimum chisqr value
-        """
 
-        """
         Direct from cmilos-fits/milos.c
         inv->iter = malloc(npix*sizeof(int));
         inv->B    = malloc(npix*sizeof(double));
@@ -390,9 +376,6 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         inv->S1   = malloc(npix*sizeof(double));
         inv->nchisqrf = malloc(npix*sizeof(double));
         
-        """
-
-        """
         noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
         low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
         
@@ -416,57 +399,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         hdr_scan['RTE_SW'] = 'cmilos-fits'
         hdr_scan['RTE_ITER'] = str(15)
 
-        if out_rte_filename is None:
-            filename_root = str(file_path.split('.fits')[0][-10:])
-            stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
-        else:
-            if isinstance(out_rte_filename, list):
-                filename_root = out_rte_filename[scan]
-
-            elif isinstance(out_rte_filename, str):
-                filename_root = out_rte_filename
-
-            else:
-                filename_root = str(file_path.split('.fits')[0][-10:])
-                print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
-
-            blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
-
-        #blos
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header= hdr_scan
-            hdu_list[0].data = rte_data_products[5,:,:]
-            hdu_list.writeto(out_dir+blos_file, overwrite=True)
-
-        #bazi
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[3,:,:]
-            hdu_list.writeto(out_dir+bazi_file, overwrite=True)
-
-        #binc
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[2,:,:]
-            hdu_list.writeto(out_dir+binc_file, overwrite=True)
-
-        #bmag
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[1,:,:]
-            hdu_list.writeto(out_dir+bmag_file, overwrite=True)
-
-        #vlos
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[4,:,:]
-            hdu_list.writeto(out_dir+vlos_file, overwrite=True)
-
-        #Icnt
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[0,:,:]
-            hdu_list.writeto(out_dir+icnt_file, overwrite=True)
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS-FITS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -474,7 +407,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
 
 
 
-def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, out_rte_filename, out_dir, vers = '01'):
+def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using PMILOS
     """
@@ -621,55 +554,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         hdr_scan['RTE_SW'] = 'pmilos'
         hdr_scan['RTE_ITER'] = str(15)
 
-        if out_rte_filename is None:
-            filename_root = str(file_path.split('.fits')[0][-10:])
-            stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
-        else:
-            filename_root = out_rte_filename
-
-            blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
-
-        # with fits.open(file_path) as hdu_list:
-        #     hdu_list[0].header = hdr
-        #     hdu_list[0].data = rte_data_products
-        #     hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
-
-        #blos
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header= hdr_scan
-            hdu_list[0].data = rte_data_products[5,:,:]
-            hdu_list.writeto(out_dir+blos_file, overwrite=True)
-
-        #bazi
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[3,:,:]
-            hdu_list.writeto(out_dir+bazi_file, overwrite=True)
-
-        #binc
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[2,:,:]
-            hdu_list.writeto(out_dir+binc_file, overwrite=True)
-
-        #bmag
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[1,:,:]
-            hdu_list.writeto(out_dir+bmag_file, overwrite=True)
-
-        #vlos
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[4,:,:]
-            hdu_list.writeto(out_dir+vlos_file, overwrite=True)
-
-        #Icnt
-        with fits.open(file_path) as hdu_list:
-            hdu_list[0].header = hdr_scan
-            hdu_list[0].data = rte_data_products[0,:,:]
-            hdu_list.writeto(out_dir+icnt_file, overwrite=True)
-
+    write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- PMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
