@@ -63,10 +63,13 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
             printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
 
         if scale_data: #not for commissioning data
-                
-            maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
+
+            try:    
+                maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
             
-            data *= maxRange[0]/maxRange[-1] 
+                data *= maxRange[0]/maxRange[-1]
+            except IndexError:
+                data *= 81920/128
                 
         return data, header
 

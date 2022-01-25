@@ -132,7 +132,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
 
-def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using CMILOS
     """
@@ -159,7 +159,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
 
     for scan in range(int(data_shape[-1])):
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
@@ -257,7 +257,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
 
-        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
+        rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'cmilos'
@@ -266,11 +266,11 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- CMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- CMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
-def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using CMILOS
     """
@@ -297,7 +297,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
 
     for scan in range(int(data_shape[-1])):
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
@@ -416,7 +416,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_data_products[4,:,:] = rte_out[7,:,:] #vlos
         rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
 
-        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
+        rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'cmilos-fits'
@@ -425,12 +425,12 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- CMILOS-FITS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- CMILOS-FITS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
 
-def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field_stop, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using PMILOS
     """
@@ -457,7 +457,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
 
     for scan in range(int(data_shape[-1])):
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
@@ -571,7 +571,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
         rte_data_products[4,:,:] = result[:,:,2] #vlos
         rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
 
-        rte_data_products *= field_stop[np.newaxis,start_row:start_row + data.shape[0],start_col:start_col + data.shape[1],scan] #field stop, set outside to 0
+        rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'pmilos'
@@ -580,5 +580,5 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, field
     write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------- PMILOS RTE Run Time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+    printc(f"------------- PMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)

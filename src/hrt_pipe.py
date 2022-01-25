@@ -178,7 +178,7 @@ def phihrt_pipe(input_json_file):
         print(f"Missing key(s) in the input config file: {e}")
         raise KeyError
     
-    overall_time = time.time()
+    overall_time = time.perf_counter()
 
     if L1_input:
         #print("L1_input param set to True - Assuming L1 science data")
@@ -193,7 +193,7 @@ def phihrt_pipe(input_json_file):
     print(" ")
     printc('-->>>>>>> Reading Data',color=bcolors.OKGREEN) 
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     if isinstance(data_f, str):
         data_f = [data_f]
@@ -283,7 +283,7 @@ def phihrt_pipe(input_json_file):
     hdr_arr = setup_header(hdr_arr)
     
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------ Load science data time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc(f"------------ Load science data time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     for hdr in hdr_arr:
@@ -297,7 +297,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
 
-        start_time = time.time()
+        start_time = time.perf_counter()
         
         # flat from IP-5
         if '0024151020000' in flat_f or '0024150020000' in flat_f:
@@ -351,7 +351,7 @@ def phihrt_pipe(input_json_file):
             del flat_copy
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
 
@@ -368,7 +368,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         try:
 
@@ -400,7 +400,7 @@ def phihrt_pipe(input_json_file):
             dark = compare_IMGDIRX(dark[np.newaxis],header_imgdirx_exists,imgdirx_flipped,header_drkdirx_exists,drkdirx_flipped)[0]
             
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+            printc(f"------------ Load darks time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         except Exception:
@@ -436,11 +436,13 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
+    flat_copy = flat.copy()
+
     if clean_f and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         flat = unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode, clean_f = "blurring")
 
@@ -449,7 +451,7 @@ def phihrt_pipe(input_json_file):
             hdr['SIGM_USH'] = sigma
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Cleaning flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc(f"------------- Cleaning flat time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     else:
@@ -491,7 +493,7 @@ def phihrt_pipe(input_json_file):
                 hdr['CAL_FLAT'] = filename#DID_flat  - not the FILENAME keyword, in case we are trying with extra cleaned flats
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+            printc(f"------------- Flat Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
         except: 
           printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
@@ -509,7 +511,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Prefilter Correction',color=bcolors.OKGREEN)
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
                             -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
@@ -529,7 +531,7 @@ def phihrt_pipe(input_json_file):
         data_PFc = data.copy()  # DC 20211116
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Prefilter correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc(f"------------- Prefilter correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     else:
@@ -562,7 +564,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Demodulating data',color=bcolors.OKGREEN)
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         data,_ = demod_hrt(data, pmp_temp)
 
@@ -571,7 +573,7 @@ def phihrt_pipe(input_json_file):
         
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Demodulation time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- Demodulation time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     else:
@@ -588,7 +590,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Normalising Stokes to Quiet Sun',color=bcolors.OKGREEN)
         
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         Ic_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]),dtype=bool)
         I_c = np.ones(data_shape[-1])
@@ -622,7 +624,7 @@ def phihrt_pipe(input_json_file):
                 Ic_temp = np.where(Ic_temp>0,1,0)
              
             if fs_c:
-                Ic_temp *= field_stop
+                Ic_temp *= field_stop[rows,cols]
             
             Ic_temp = np.array(Ic_temp, dtype=bool)
             I_c[scan] = np.mean(data[Ic_temp,0,cpos_arr[0],int(scan)])
@@ -634,7 +636,7 @@ def phihrt_pipe(input_json_file):
             data_demod_normed = data.copy()
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Stokes Normalising time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- Stokes Normalising time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     else:
@@ -651,7 +653,7 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Cross-talk correction I to Q,U,V ',color=bcolors.OKGREEN)
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         slope, offset = 0, 1
         q, u, v = 0, 1, 2
@@ -708,7 +710,7 @@ def phihrt_pipe(input_json_file):
                 raise KeyError("'norm_f' keyword in input config file not set to True \n Aborting")
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
         data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
@@ -777,7 +779,7 @@ def phihrt_pipe(input_json_file):
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
             hdr_arr[count]['FILENAME'] = stokes_file
-            hdr_arr[count]['HISTORY'] = f"Reduced with hrt-pipeline {version}, to create a STOKES file. Dark field Applied: {dark_f}. Flat field Applied: {flat_f}, Flat Unsharp Masked: {clean_f}. Flat normalised: {norm_f}. I->QUV ctalk: {ItoQUV}."
+            hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_f.split('/')[-1]}. Flat: {flat_f.split('/')[-1]}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
@@ -801,6 +803,18 @@ def phihrt_pipe(input_json_file):
                         hdu_list[0].data = data_flatc[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
+
+                    with fits.open(flat_f) as hdu_list:
+                        print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
+                        hdu_list[0].data = flat
+                        #update the calibration keywords
+                        hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
+
+                    with fits.open(flat_f) as hdu_list:
+                        print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
+                        hdu_list[0].data = flat_copy
+                        #update the calibration keywords
+                        hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}", overwrite=True)
                 
                 if prefilter_f is not None: # DC 20211116
                     with fits.open(scan) as hdu_list:
@@ -835,25 +849,25 @@ def phihrt_pipe(input_json_file):
 
         
         if limb is not None:
-            mask = limb_mask*field_stop[...,np.newaxis]
+            mask = limb_mask*field_stop[rows,cols,np.newaxis]
         else:
-            mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[...,np.newaxis]
+            mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[rows,cols,np.newaxis]
             
         if p_milos:
 
             try:
-                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
                 print("Running CMILOS txt instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
         else:
             if cmilos_fits_opt:
 
-                cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:
         print(" ")
@@ -875,7 +889,7 @@ def phihrt_pipe(input_json_file):
         
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
-    printc(f'------------ Reduction Complete: {np.round(time.time() - overall_time,3)} seconds',color=bcolors.OKGREEN)
+    printc(f'------------ Reduction Complete: {np.round(time.perf_counter() - overall_time,3)} seconds',color=bcolors.OKGREEN)
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)
 
 
