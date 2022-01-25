@@ -436,6 +436,8 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
+    flat_copy = flat.copy()
+
     if clean_f and flat_c:
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
@@ -622,7 +624,7 @@ def phihrt_pipe(input_json_file):
                 Ic_temp = np.where(Ic_temp>0,1,0)
              
             if fs_c:
-                Ic_temp *= field_stop
+                Ic_temp *= field_stop[rows,cols]
             
             Ic_temp = np.array(Ic_temp, dtype=bool)
             I_c[scan] = np.mean(data[Ic_temp,0,cpos_arr[0],int(scan)])
@@ -777,7 +779,7 @@ def phihrt_pipe(input_json_file):
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
             hdr_arr[count]['FILENAME'] = stokes_file
-            hdr_arr[count]['HISTORY'] = f"Reduced with hrt-pipeline {version}, to create a STOKES file. Dark field Applied: {dark_f}. Flat field Applied: {flat_f}, Flat Unsharp Masked: {clean_f}. Flat normalised: {norm_f}. I->QUV ctalk: {ItoQUV}."
+            hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_f.split('/')[-1]}. Flat: {flat_f.split('/')[-1]}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
@@ -801,6 +803,18 @@ def phihrt_pipe(input_json_file):
                         hdu_list[0].data = data_flatc[:,:,:,:,count]
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
+
+                    with fits.open(flat_f) as hdu_list:
+                        print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
+                        hdu_list[0].data = flat
+                        #update the calibration keywords
+                        hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
+
+                    with fits.open(flat_f) as hdu_list:
+                        print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
+                        hdu_list[0].data = flat_copy
+                        #update the calibration keywords
+                        hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}", overwrite=True)
                 
                 if prefilter_f is not None: # DC 20211116
                     with fits.open(scan) as hdu_list:
@@ -835,25 +849,25 @@ def phihrt_pipe(input_json_file):
 
         
         if limb is not None:
-            mask = limb_mask*field_stop[...,np.newaxis]
+            mask = limb_mask*field_stop[rows,cols,np.newaxis]
         else:
-            mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[...,np.newaxis]
+            mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[rows,cols,np.newaxis]
             
         if p_milos:
 
             try:
-                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
                 print("Running CMILOS txt instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
         else:
             if cmilos_fits_opt:
 
-                cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, start_row, start_col, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:
         print(" ")

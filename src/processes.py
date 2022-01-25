@@ -157,7 +157,7 @@ def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
     start_time = time.perf_counter()
 
     data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-    #flat -= dark[..., np.newaxis, np.newaxis] - # all processed flat fields should already be dark corrected
+    #flat -= dark[..., np.newaxis, np.newaxis] #- # all processed flat fields should already be dark corrected
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- Dark Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -345,6 +345,8 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
         return  v1, index1
     
     data_shape = data.shape
+    # cop = np.copy(data)
+    # new_data = np.zeros(data_shape)
     
     for scan in range(data_shape[-1]):
 
