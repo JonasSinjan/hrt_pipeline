@@ -568,3 +568,11 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
             data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int*stokes_i_wv_avg
     
     return data
+
+
+def hot_pixel_mask(data, rows, cols):
+    """
+    Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
+    """
+    hot_pix_mask,_ = load_fits('./field_stop/hot_pixel_mask.fits')
+    return data*hot_pix_mask[rows,cols,np.newaxis, np.newaxis, np.newaxis]

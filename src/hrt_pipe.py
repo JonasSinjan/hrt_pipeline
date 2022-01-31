@@ -160,6 +160,8 @@ def phihrt_pipe(input_json_file):
         out_stokes_file = input_dict['out_stokes_file']
         out_stokes_filename = input_dict['out_stokes_filename']
         out_rte_filename = input_dict['out_rte_filename']
+
+        hot_px_mask = True
         
         if 'config' not in input_dict:
             config = True
@@ -582,6 +584,18 @@ def phihrt_pipe(input_json_file):
 
 
     #-----------------
+    # HOT PIXEL MASK 
+    #-----------------
+
+    if hot_px_mask:
+        data = hot_pixel_mask(data, rows, cols)
+        printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
+
+    else:
+        printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
+
+
+    #-----------------
     # APPLY NORMALIZATION 
     #-----------------
 
@@ -662,9 +676,9 @@ def phihrt_pipe(input_json_file):
         for scan, scan_hdr in enumerate(hdr_arr):
             printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
             if ghost_c: # DC 20211116
-                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],0,roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool)) # DC 20211116
+                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool)) # DC 20211116
             else: # DC 20211116
-                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],0,roi=Ic_mask[...,scan]) # DC 20211116
+                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=Ic_mask[...,scan]) # DC 20211116
             
             CTparams[...,scan] = ctalk_params
             
