@@ -574,5 +574,7 @@ def hot_pixel_mask(data, rows, cols):
     """
     Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
     """
-    hot_pix_mask,_ = load_fits('./field_stop/hot_pixel_mask.fits')
+    file_loc = os.path.realpath(__file__)
+    field_stop_fol = file_loc.split('src/')[0] + 'field_stop/'
+    hot_pix_mask,_ = load_fits(field_stop_fol + 'hot_pixel_mask.fits')
     return data*hot_pix_mask[rows,cols,np.newaxis, np.newaxis, np.newaxis]
