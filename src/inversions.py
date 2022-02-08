@@ -198,9 +198,12 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         print("Wave axis is: ", (wave_axis - wavelength)*1000.)
         print('Saving data into dummy_in.txt for RTE input')
 
-        if data_shape[-1] > 1:
+        if data.ndim == 5:
             sdata = data[:,:,:,:,scan]
-        else:
+        elif data.ndim > 5 or data.ndim < 4:
+            print("Incorrect dimensions of 'data' array")
+            exit()
+        elif data.ndim == 4:
             sdata = data
         y,x,p,l = sdata.shape
         #print(y,x,p,l)
