@@ -43,7 +43,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
-            stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
+            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
 
     else:
         if isinstance(out_rte_filename, list):
@@ -56,7 +56,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
             filename_root = str(file_path.split('.fits')[0][-10:])
             print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
-        blos_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file = filename_root, filename_root, filename_root, filename_root, filename_root, filename_root
+        blos_file, icnt_file, bmag_file, bazi_file, binc_file, vlos_file = 'blos_' + filename_root, 'icnt_' + filename_root, 'bmag_' + filename_root, 'bazi_' + filename_root, 'binc_' + filename_root, 'vlos_' + filename_root
 
     ntime = datetime.datetime.now()
     hdr_scan['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
@@ -86,7 +86,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #blos
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = blos_file
-        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Blos file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'BLOS'
+        hdr_scan['BUNIT'] = 'Gauss'
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[5,:,:]
         hdu_list.writeto(out_dir+blos_file, overwrite=True)
@@ -94,7 +97,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #bazi
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = bazi_file
-        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Bazi file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'BAZI'
+        hdr_scan['BUNIT'] = 'Degrees'
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[3,:,:]
         hdu_list.writeto(out_dir+bazi_file, overwrite=True)
@@ -102,7 +108,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #binc
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = binc_file
-        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Binc file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'BINC'
+        hdr_scan['BUNIT'] = 'Degrees'
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[2,:,:]
         hdu_list.writeto(out_dir+binc_file, overwrite=True)
@@ -110,7 +119,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #bmag
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = bmag_file
-        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Bmag file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'BMAG'
+        hdr_scan['BUNIT'] = 'Gauss'
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[1,:,:]
         hdu_list.writeto(out_dir+bmag_file, overwrite=True)
@@ -118,7 +130,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #vlos
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = vlos_file
-        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a vlos file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'VLOS'
+        hdr_scan['BUNIT'] = 'km/s'
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[4,:,:]
         hdu_list.writeto(out_dir+vlos_file, overwrite=True)
@@ -126,7 +141,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #Icnt
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = icnt_file
-        hdr_scan['HISTORY'] = f"Reduced with hrt-pipeline {version_k}, to create a Icnt file. Dark field Applied: {dark_f_k}. Flat field Applied: {flat_f_k}, Flat Unsharp Masked Mode: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE software: {rte_sw_k}. RTE mode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'ICNT'
+        hdr_scan['BUNIT'] = 'Normalised Intensity'
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[0,:,:]
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
@@ -167,7 +185,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
 
         #must invert each scan independently, as cmilos only takes in one dataset at a time
 
-        #get wave_axis from the hdr information of the science scans
+        #get wave_axis from the hdr information of the science scans - hard code first one, as must all have cpos in initial science load case
         if cpos_arr[0] == 0:
             shift_w =  wave_axis[3] - wavelength
         elif cpos_arr[0] == 5:
@@ -180,7 +198,10 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         print("Wave axis is: ", (wave_axis - wavelength)*1000.)
         print('Saving data into dummy_in.txt for RTE input')
 
-        sdata = data[:,:,:,:,scan]
+        if data_shape[-1] > 1:
+            sdata = data[:,:,:,:,scan]
+        else:
+            sdata = data
         y,x,p,l = sdata.shape
         #print(y,x,p,l)
 
@@ -237,8 +258,8 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         Minimum chisqr value
         """
 
-        noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
-        low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
+        noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],...]) #ellipsis in case data has 4 dimensions
+        low_values_flags = np.max(np.abs(data[:,:,3,...]),axis=-1) < noise_in_V  # Where values are low
         
         rte_invs[2,low_values_flags] = 0
         rte_invs[3,low_values_flags] = 0
@@ -246,7 +267,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
 
         #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
         
-        del_dummy = subprocess.call("rm dummy_out.txt",shell=True)
+        _ = subprocess.call("rm dummy_out.txt",shell=True)
 
         rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
 
