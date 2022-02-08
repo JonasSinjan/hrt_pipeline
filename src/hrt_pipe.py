@@ -111,7 +111,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.1 December 15th 2021'
+    version = 'V1.2 February 8th 2022'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -162,6 +162,7 @@ def phihrt_pipe(input_json_file):
         out_rte_filename = input_dict['out_rte_filename']
 
         hot_px_mask = True
+        avg_stokes_before_rte = False
         
         if 'config' not in input_dict:
             config = True
@@ -794,6 +795,9 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
             hdr_arr[count]['FILENAME'] = stokes_file
             hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_f.split('/')[-1]}. Flat: {flat_f.split('/')[-1]}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
+            hdr_arr[count]['LEVEL'] = 'L2'
+            hdr_arr[count]['BTYPE'] = 'STOKES'
+            hdr_arr[count]['BUNIT'] = 'I_cont'
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
@@ -867,6 +871,10 @@ def phihrt_pipe(input_json_file):
         else:
             mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[rows,cols,np.newaxis]
             
+        if avg_stokes_before_rte:
+            data = np.mean(data, axis = (-1))
+            data_shape = (data_size[0], data_size[1], 1)
+
         if p_milos:
 
             try:
@@ -881,6 +889,7 @@ def phihrt_pipe(input_json_file):
 
                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
+
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:
