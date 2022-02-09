@@ -214,7 +214,6 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
                 for j in range(y):
                     for k in range(l):
                         f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
-        del sdata
 
         printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
 
@@ -261,9 +260,11 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         Minimum chisqr value
         """
 
-        noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],...]) #ellipsis in case data has 4 dimensions
-        low_values_flags = np.max(np.abs(data[:,:,3,...]),axis=-1) < noise_in_V  # Where values are low
+        noise_in_V =  np.mean(sdata[:,:,3,cpos_arr[0]]) #ellipsis in case data has 4 dimensions
+        low_values_flags = np.max(np.abs(sdata[:,:,3,:]),axis=-1) < noise_in_V  # Where values are low
         
+        del sdata
+
         rte_invs[2,low_values_flags] = 0
         rte_invs[3,low_values_flags] = 0
         rte_invs[4,low_values_flags] = 0
@@ -342,7 +343,13 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         print("Wave axis is: ", (wave_axis - wavelength)*1000.)
         print('Saving data into dummy_in.txt for RTE input')
 
-        sdata = data[:,:,:,:,scan]
+        if data.ndim == 5:
+            sdata = data[:,:,:,:,scan]
+        elif data.ndim > 5 or data.ndim < 4:
+            print("Incorrect dimensions of 'data' array")
+            exit()
+        elif data.ndim == 4:
+            sdata = data
         y,x,p,l = sdata.shape
 
         #create hdr with wavelength positions
@@ -366,8 +373,6 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         #write out to temp fits
         hdul_tmp = fits.HDUList([hdu1, hdu2])
         hdul_tmp.writeto(out_dir+'temp_cmilos_io.fits', overwrite=True)
-        
-        del sdata
 
         printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
 
@@ -422,14 +427,14 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         inv->S0   = malloc(npix*sizeof(double));
         inv->S1   = malloc(npix*sizeof(double));
         inv->nchisqrf = malloc(npix*sizeof(double));
-        
-        noise_in_V =  np.mean(data[:,:,3,cpos_arr[0],:])
-        low_values_flags = np.max(np.abs(data[:,:,3,:,scan]),axis=-1) < noise_in_V  # Where values are low
+        """
+        noise_in_V =  np.mean(sdata[:,:,3,cpos_arr[0]])
+        low_values_flags = np.max(np.abs(sdata[:,:,3,:]),axis=-1) < noise_in_V  # Where values are low
         
         rte_out[2,low_values_flags] = 0 #not sure about 2,3,4 indexing here
         rte_out[3,low_values_flags] = 0
         rte_out[4,low_values_flags] = 0
-        """
+        
        
         rte_data_products = np.zeros((6,rte_out.shape[1],rte_out.shape[2]))
 
@@ -510,13 +515,21 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
 
         print(wave_axis)
 
+        if data.ndim == 5:
+            sdata = data[:,:,:,:,scan]
+        elif data.ndim > 5 or data.ndim < 4:
+            print("Incorrect dimensions of 'data' array")
+            exit()
+        elif data.ndim == 4:
+            sdata = data
+
         hdr = fits.Header()
 
         primary_hdu = fits.PrimaryHDU(wave_input, header = hdr)
         hdul = fits.HDUList([primary_hdu])
         hdul.writeto(f'./p-milos/run/wavelength_tmp.fits', overwrite=True)
 
-        sdata = data[:,:,:,:,scan].T
+        sdata = sdata.T
         sdata = sdata.astype(np.float32)
         #create input fits file for pmilos
         hdr = fits.Header() 
