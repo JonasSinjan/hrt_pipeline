@@ -227,6 +227,36 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     
     return data, demod
 
+def demod_full_FOV_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
+    '''
+    Use full demodulation matrices to demodulate input data
+    '''
+    if pmp_temp == '50':
+        demod_data,_ = load_fits('../demod_matrices/demod_fitted_for_upload_HRT50degC.fits')
+        
+    elif pmp_temp == '40':
+        demod_data,_ = load_fits('../demod_matrices/demod_fitted_for_upload_HRT40degC.fits')
+    
+    else:
+        printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
+    if verbose:
+        printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
+    
+    demod = demod_data.reshape((2048,2048,4,4))
+    
+    if data.ndim == 5:
+        #if data array has more than one scan
+        data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
+
+        data = np.matmul(demod,data)
+        data = np.moveaxis(data,0,-1) #move scans back to the end
+    
+    elif data.ndim == 4:
+        #for if data has just one scan
+        data = np.matmul(demod,data)
+    
+    return data, demod
+
 
 def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end=4,verbose=True):
     """

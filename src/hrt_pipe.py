@@ -565,16 +565,16 @@ def phihrt_pipe(input_json_file):
     if demod:
 
         print(" ")
-        printc('-->>>>>>> Demodulating data',color=bcolors.OKGREEN)
+        printc('-->>>>>>> Demodulating data FULL FOV',color=bcolors.OKGREEN)
 
         start_time = time.perf_counter()
 
-        data,_ = demod_hrt(data, pmp_temp)
+        data,_ = demod_full_FOV_hrt(data, pmp_temp)
 
         for hdr in hdr_arr:
             hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
-
+        print(data.shape)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -865,8 +865,6 @@ def phihrt_pipe(input_json_file):
             print("Desired Output directory missing / character, will be added")
             out_dir = out_dir + "/"
 
-
-        
         if limb is not None:
             mask = limb_mask*field_stop[rows,cols,np.newaxis]
         else:
@@ -887,10 +885,8 @@ def phihrt_pipe(input_json_file):
 
         else:
             if cmilos_fits_opt:
-
                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:
