@@ -574,7 +574,6 @@ def phihrt_pipe(input_json_file):
         for hdr in hdr_arr:
             hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
-
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -797,7 +796,9 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_f.split('/')[-1]}. Flat: {flat_f.split('/')[-1]}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
             hdr_arr[count]['LEVEL'] = 'L2'
             hdr_arr[count]['BTYPE'] = 'STOKES'
-            hdr_arr[count]['BUNIT'] = 'I_cont'
+            hdr_arr[count]['BUNIT'] = 'I_CONT'
+            hdr_arr[count]['DATAMIN'] = int(np.min(data[:,:,:,:,count]))
+            hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
@@ -865,8 +866,6 @@ def phihrt_pipe(input_json_file):
             print("Desired Output directory missing / character, will be added")
             out_dir = out_dir + "/"
 
-
-        
         if limb is not None:
             mask = limb_mask*field_stop[rows,cols,np.newaxis]
         else:
@@ -887,10 +886,8 @@ def phihrt_pipe(input_json_file):
 
         else:
             if cmilos_fits_opt:
-
                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:
