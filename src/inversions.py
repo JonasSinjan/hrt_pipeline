@@ -1,6 +1,7 @@
 import numpy as np
 from astropy.io import fits
 from utils import *
+from processes import data_hdr_kw
 import os
 import time
 import subprocess
@@ -92,6 +93,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan['BUNIT'] = 'Gauss'
         hdr_scan['DATAMIN'] = int(np.min(rte_data_products[5,:,:]))
         hdr_scan['DATAMAX'] = int(np.max(rte_data_products[5,:,:]))
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[5,:,:])
+
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[5,:,:]
         hdu_list.writeto(out_dir+blos_file, overwrite=True)
@@ -105,6 +108,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan['BUNIT'] = 'Degrees'
         hdr_scan['DATAMIN'] = int(0)
         hdr_scan['DATAMAX'] = int(180)
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[3,:,:])
+
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[3,:,:]
         hdu_list.writeto(out_dir+bazi_file, overwrite=True)
@@ -118,6 +123,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan['BUNIT'] = 'Degrees'
         hdr_scan['DATAMIN'] = int(0)
         hdr_scan['DATAMAX'] = int(180)
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[2,:,:])
+
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[2,:,:]
         hdu_list.writeto(out_dir+binc_file, overwrite=True)
@@ -131,6 +138,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan['BUNIT'] = 'Gauss'
         hdr_scan['DATAMIN'] = int(0)
         hdr_scan['DATAMAX'] = round(np.max(rte_data_products[1,:,:]),3)
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[1,:,:])
+
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[1,:,:]
         hdu_list.writeto(out_dir+bmag_file, overwrite=True)
@@ -144,6 +153,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan['BUNIT'] = 'km/s'
         hdr_scan['DATAMIN'] = round(np.min(rte_data_products[4,:,:]),6)
         hdr_scan['DATAMAX'] = round(np.max(rte_data_products[4,:,:]),6)
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[4,:,:])
+
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[4,:,:]
         hdu_list.writeto(out_dir+vlos_file, overwrite=True)
@@ -157,6 +168,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan['BUNIT'] = 'Normalised Intensity'
         hdr_scan['DATAMIN'] = 0
         hdr_scan['DATAMAX'] = round(np.max(rte_data_products[0,:,:]),6)
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[0,:,:])
+
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[0,:,:]
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
