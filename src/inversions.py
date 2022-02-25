@@ -233,7 +233,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         y,x,p,l = sdata.shape
         #print(y,x,p,l)
 
-        filename = 'dummy_in.txt'
+        filename = out_dir + 'dummy_in.txt'
         with open(filename,"w") as f:
             for i in range(x):
                 for j in range(y):
@@ -246,16 +246,16 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         cmd = fix_path(cmd)
 
         if rte == 'RTE':
-            rte_on = subprocess.call(cmd+" 6 15 0 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            rte_on = subprocess.call(cmd+f" 6 15 0 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
         if rte == 'CE':
-            rte_on = subprocess.call(cmd+" 6 15 2 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            rte_on = subprocess.call(cmd+f" 6 15 2 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
         if rte == 'CE+RTE':
-            rte_on = subprocess.call(cmd+" 6 15 1 0 dummy_in.txt  >  dummy_out.txt",shell=True)
+            rte_on = subprocess.call(cmd+f" 6 15 1 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
 
         printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-        del_dummy = subprocess.call("rm dummy_in.txt",shell=True)
+        del_dummy = subprocess.call(f"rm {out_dir + 'dummy_in.txt'}",shell=True)
 
-        res = np.loadtxt('dummy_out.txt')
+        res = np.loadtxt(out_dir+'dummy_out.txt')
         npixels = res.shape[0]/12.
         #print(npixels)
         #print(npixels/x)
@@ -296,7 +296,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
 
         #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
         
-        _ = subprocess.call("rm dummy_out.txt",shell=True)
+        _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
 
         rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
 
