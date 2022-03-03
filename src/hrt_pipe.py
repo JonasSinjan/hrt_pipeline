@@ -608,31 +608,23 @@ def phihrt_pipe(input_json_file):
 
         Ic_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]),dtype=bool)
         I_c = np.ones(data_shape[-1])
-        if limb is not None:
-            limb_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]))
+        limb_mask = np.ones((data_size[0],data_size[1],data_shape[-1]))
+        limb = False
         
         for scan in range(data_shape[-1]):
-            
-            #limb_copy = np.copy(data)
-            
             #from Daniele Calchetti
             
-            if limb is not None:
-                if limb == 'N':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True)
-                if limb == 'S':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = False)
-                if limb == 'W':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True)
-                if limb == 'E':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False)
+            try:
+                limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 
                 limb_temp = np.where(limb_temp>0,1,0)
                 Ic_temp = np.where(Ic_temp>0,1,0)
                 
                 data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
                 limb_mask[...,scan] = limb_temp
-            else:
+                limb = True
+                
+            except:
                 Ic_temp = np.zeros(data_size)
                 Ic_temp[ceny,cenx] = 1
                 Ic_temp = np.where(Ic_temp>0,1,0)
