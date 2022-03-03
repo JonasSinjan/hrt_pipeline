@@ -442,7 +442,7 @@ def limb_fitting(img, hdr, mar=200):
     
     if side == '':
         print('Limb is not in the FoV according to WCS keywords')
-        return
+        return None, None
     
     if 'W' in side or 'E' in side:
         mode = 'rows'
