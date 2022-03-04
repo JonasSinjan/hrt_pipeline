@@ -356,6 +356,8 @@ def phihrt_pipe(input_json_file):
             flat[:,:,1,2] = filling_data(flat_copy[:,:,1,2], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
             del flat_copy
+
+        flat_copy = flat.copy()
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -443,7 +445,6 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
-    flat_copy = flat.copy()
 
     if clean_f and flat_c:
         print(" ")
