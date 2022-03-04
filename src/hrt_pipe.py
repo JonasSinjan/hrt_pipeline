@@ -176,6 +176,10 @@ def phihrt_pipe(input_json_file):
             if len(vrs) != 2:
                 print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
                 raise KeyError
+
+        #behaviour if clean mode is set to None (null in json)
+        if clean_mode is None:
+            clean_mode = "V" 
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
