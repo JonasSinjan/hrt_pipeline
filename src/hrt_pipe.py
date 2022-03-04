@@ -176,6 +176,10 @@ def phihrt_pipe(input_json_file):
             if len(vrs) != 2:
                 print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
                 raise KeyError
+
+        #behaviour if clean mode is set to None (null in json)
+        if clean_mode is None:
+            clean_mode = "V" 
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
@@ -352,6 +356,8 @@ def phihrt_pipe(input_json_file):
             flat[:,:,1,2] = filling_data(flat_copy[:,:,1,2], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
             del flat_copy
+
+        flat_copy = flat.copy()
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -439,7 +445,6 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
-    flat_copy = flat.copy()
 
     if clean_f and flat_c:
         print(" ")
@@ -574,7 +579,6 @@ def phihrt_pipe(input_json_file):
         for hdr in hdr_arr:
             hdr['CAL_IPOL'] = 'HRT'+pmp_temp
         
-
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Demodulation time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -609,31 +613,29 @@ def phihrt_pipe(input_json_file):
 
         Ic_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]),dtype=bool)
         I_c = np.ones(data_shape[-1])
-        if limb is not None:
-            limb_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]))
+        limb_mask = np.ones((data_size[0],data_size[1],data_shape[-1]))
+        limb = False
         
         for scan in range(data_shape[-1]):
+            #from Daniele Calchetti (modifed JS)
             
-            #limb_copy = np.copy(data)
-            
-            #from Daniele Calchetti
-            
-            if limb is not None:
-                if limb == 'N':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = True)
-                if limb == 'S':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'columns', switch = False)
-                if limb == 'W':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = True)
-                if limb == 'E':
-                    limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], mode = 'rows', switch = False)
+            try:
+                limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 
-                limb_temp = np.where(limb_temp>0,1,0)
-                Ic_temp = np.where(Ic_temp>0,1,0)
-                
-                data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
-                limb_mask[...,scan] = limb_temp
-            else:
+                if limb_temp is not None and Ic_temp is not None: 
+                    limb_temp = np.where(limb_temp>0,1,0)
+                    Ic_temp = np.where(Ic_temp>0,1,0)
+                    
+                    data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
+                    limb_mask[...,scan] = limb_temp
+                    limb = True
+
+                else:
+                    Ic_temp = np.zeros(data_size)
+                    Ic_temp[ceny,cenx] = 1
+                    Ic_temp = np.where(Ic_temp>0,1,0)
+
+            except:
                 Ic_temp = np.zeros(data_size)
                 Ic_temp[ceny,cenx] = 1
                 Ic_temp = np.where(Ic_temp>0,1,0)
@@ -797,7 +799,11 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_f.split('/')[-1]}. Flat: {flat_f.split('/')[-1]}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
             hdr_arr[count]['LEVEL'] = 'L2'
             hdr_arr[count]['BTYPE'] = 'STOKES'
-            hdr_arr[count]['BUNIT'] = 'I_cont'
+            hdr_arr[count]['BUNIT'] = 'I_CONT'
+            hdr_arr[count]['DATAMIN'] = int(np.min(data[:,:,:,:,count]))
+            hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
+
+            hdr_arr[count] = data_hdr_kw(hdr_arr[count], data[:,:,:,:,count])#add datamedn, datamean etc
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
@@ -865,8 +871,6 @@ def phihrt_pipe(input_json_file):
             print("Desired Output directory missing / character, will be added")
             out_dir = out_dir + "/"
 
-
-        
         if limb is not None:
             mask = limb_mask*field_stop[rows,cols,np.newaxis]
         else:
@@ -887,10 +891,8 @@ def phihrt_pipe(input_json_file):
 
         else:
             if cmilos_fits_opt:
-
                 cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-
                 cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
 
     else:

@@ -38,6 +38,16 @@ def setup_header(hdr_arr):
                     h.set(k[i], v[i], c[i], after=k[i-1])
     return hdr_arr
 
+def data_hdr_kw(hdr, data):
+    """
+    add data descriptive header keywords
+    """
+    hdr['DATAMEDN'] = float(f"{np.median(data):.8g}")
+    hdr['DATAMEAN'] = float(f"{np.mean(data):.8g}")
+    #DATARMS
+    #DATASKEW
+    #DATAKURT
+    return hdr
 
 def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
     """
