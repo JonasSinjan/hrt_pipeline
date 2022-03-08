@@ -38,6 +38,16 @@ def setup_header(hdr_arr):
                     h.set(k[i], v[i], c[i], after=k[i-1])
     return hdr_arr
 
+def data_hdr_kw(hdr, data):
+    """
+    add data descriptive header keywords
+    """
+    hdr['DATAMEDN'] = float(f"{np.median(data):.8g}")
+    hdr['DATAMEAN'] = float(f"{np.mean(data):.8g}")
+    #DATARMS
+    #DATASKEW
+    #DATAKURT
+    return hdr
 
 def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
     """
@@ -46,7 +56,7 @@ def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_
     print(" ")
     printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
 
-    start_time = time.time()
+    start_time = time.perf_counter()
     
     # flat from IP-5
     if '0024151020000' in flat_f or '0024150020000' in flat_f:
@@ -99,7 +109,7 @@ def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_
         del flat_copy
         
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------ Load flats time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     return flat
@@ -112,7 +122,7 @@ def load_dark(dark_f) -> np.ndarray:
     print(" ")
     printc('-->>>>>>> Reading Darks',color=bcolors.OKGREEN)
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     try:
         dark,_ = get_data(dark_f)
@@ -138,7 +148,7 @@ def load_dark(dark_f) -> np.ndarray:
                 raise ValueError
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------ Load darks time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc(f"------------ Load darks time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         return dark
@@ -154,13 +164,13 @@ def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
     print(" ")
     print("-->>>>>>> Subtracting dark field")
     
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     data -= dark[rows,cols, np.newaxis, np.newaxis, np.newaxis] 
-    #flat -= dark[..., np.newaxis, np.newaxis] - # all processed flat fields should already be dark corrected
+    #flat -= dark[..., np.newaxis, np.newaxis] #- # all processed flat fields should already be dark corrected
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------- Dark Field correction time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc(f"------------- Dark Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     return data, flat
@@ -173,14 +183,14 @@ def normalise_flat(flat, flat_f, ceny, cenx) -> np.ndarray:
     print(" ")
     printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     try:
         norm_fac = np.mean(flat[ceny,cenx, :, :], axis = (0,1))[np.newaxis, np.newaxis, ...]  #mean of the central 1k x 1k
         flat /= norm_fac
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Normalising flat time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+        printc(f"------------- Normalising flat time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
         return flat
@@ -294,7 +304,7 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
     print(" ")
     printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     try: 
         if flat_states == 6:
@@ -325,7 +335,7 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------- Flat Field correction time: {np.round(time.time() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc(f"------------- Flat Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
         return data
@@ -345,6 +355,8 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
         return  v1, index1
     
     data_shape = data.shape
+    # cop = np.copy(data)
+    # new_data = np.zeros(data_shape)
     
     for scan in range(data_shape[-1]):
 
@@ -379,7 +391,7 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
     print(" ")
     printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     field_stop_loc = os.path.realpath(__file__)
 
@@ -396,7 +408,7 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
 
     data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------- Field stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc(f"------------- Field stop time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     return data, field_stop
@@ -409,7 +421,7 @@ def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
     print(" ")
     printc("-->>>>>>> Loading ghost field stop",color=bcolors.OKGREEN)
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     field_stop_loc = os.path.realpath(__file__)
     field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
@@ -422,7 +434,7 @@ def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
             field_stop_ghost = field_stop_ghost[:,::-1]
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
-    printc(f"------------- Load Ghost Field Stop time: {np.round(time.time() - start_time,3)} seconds",bcolors.OKGREEN)
+    printc(f"------------- Load Ghost Field Stop time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     return field_stop_ghost
 
@@ -566,3 +578,13 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
             data[:,:,3,i,:] = before_ctalk_data[:,:,3,i,:] - before_ctalk_data[:,:,0,i,:]*v_slope - v_int*stokes_i_wv_avg
     
     return data
+
+
+def hot_pixel_mask(data, rows, cols):
+    """
+    Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
+    """
+    file_loc = os.path.realpath(__file__)
+    field_stop_fol = file_loc.split('src/')[0] + 'field_stop/'
+    hot_pix_mask,_ = load_fits(field_stop_fol + 'hot_pixel_mask.fits')
+    return data*hot_pix_mask[rows,cols,np.newaxis, np.newaxis, np.newaxis]

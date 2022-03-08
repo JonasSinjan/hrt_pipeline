@@ -63,10 +63,13 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
             printc(f"Dividing by number of accumulations: {accu}",color=bcolors.OKGREEN)
 
         if scale_data: #not for commissioning data
-                
-            maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
+
+            try:    
+                maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
             
-            data *= maxRange[0]/maxRange[-1] 
+                data *= maxRange[0]/maxRange[-1]
+            except IndexError:
+                data *= 81920/128
                 
         return data, header
 
@@ -243,7 +246,7 @@ def check_IMGDIRX(hdr_arr):
     else:
         header_imgdirx_exists = False
         print("Not all the scan(s) contain the 'IMGDIRX' keyword! Assuming all not flipped - Proceed with caution")
-        return header_imgdirx_exists, None
+        return header_imgdirx_exists, False
 
 
 def compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped):
@@ -348,14 +351,8 @@ def filling_data(arr, thresh, mode, axis = -1):
     return a0
     
 
-def limb_fitting(img, mode = 'columns', switch = False):
-    def _residuals(p,x,y):
-        xc,yc,R = p
-        return R**2 - (x-xc)**2 - (y-yc)**2
-    
-    def _is_outlier(points, thresh=3.5):
-        """
-        Returns a boolean array with True if points are outliers and False 
+    """
+    Returns a boolean array with True if points are outliers and False 
         otherwise.
         Parameters:
         -----------
@@ -372,6 +369,13 @@ def limb_fitting(img, mode = 'columns', switch = False):
             Handle Outliers", The ASQC Basic References in Quality Control:
             Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
         """
+
+def limb_fitting(img, hdr, mar=200):
+    def _residuals(p,x,y):
+        xc,yc,R = p
+        return R**2 - (x-xc)**2 - (y-yc)**2
+    
+    def _is_outlier(points, thresh=3):
         if len(points.shape) == 1:
             points = points[:,None]
         median = np.median(points, axis=0)
@@ -398,24 +402,78 @@ def limb_fitting(img, mode = 'columns', switch = False):
 
         mask = dist_from_center <= radius
         return mask
+    
+    def _image_derivative(d):
+        import numpy as np
+        from scipy.signal import convolve
+        kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
+        ky = np.asarray([[1,1,1], [0,0,0], [-1,-1,-1]])
+
+        kx=kx/3.
+        ky=ky/3.
+
+        SX = convolve(d, kx,mode='same')
+        SY = convolve(d, ky,mode='same')
+
+        A=SX+SY
+
+        return A
 
     from scipy import optimize
     
-    if switch:
+    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
+    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
+    wcs_grad = _image_derivative(wcs_mask)
+    
+    x_p = img.shape[1] - (center[0]+Rpix)
+    y_p = img.shape[0] - (center[1]+Rpix)
+    x_n = center[0]-Rpix
+    y_n = center[1]-Rpix
+    
+    side = ''
+    if x_p > 0: 
+        side += 'W'
+    elif x_n > 0:
+        side += 'E'
+    if y_p > 0:
+        side += 'N'
+    if y_n > 0:
+        side += 'S'
+    
+    if side == '':
+        print('Limb is not in the FoV according to WCS keywords')
+        return None, None
+    
+    if 'W' in side or 'E' in side:
+        mode = 'rows'
+    else:
+        mode = 'columns'
+    
+    if 'W' in side or 'N' in side:
         norm = -1
     else:
         norm = 1
-        
+    
+    print('Limb:',side)
+    
     if mode == 'columns':
         xi = np.arange(100,2000,50)
         yi = []
         m = 10
         for c in xi:
-            col = img[:,c]
+            wcs_col = wcs_grad[1:,c]*norm
+            mm = wcs_col.mean(); ss = wcs_col.std()
+            try:
+                y_start = np.where(wcs_col>mm+5*ss)[0][0]+1
+            except:
+                y_start = wcs_col.argmax()+1
+            
+            col = img[y_start-mar:y_start+mar,c]
             g = np.gradient(col*norm)
             gi = _interp(g,m)
             
-            yi += [gi.argmax()/m]
+            yi += [gi.argmax()/m+y_start-mar]
         yi = np.asarray(yi)
         xi = xi[~_is_outlier(yi)]
         yi = yi[~_is_outlier(yi)]
@@ -425,24 +483,26 @@ def limb_fitting(img, mode = 'columns', switch = False):
         xi = []
         m = 10
         for r in yi:
-            row = img[r,:]
+            wcs_row = wcs_grad[r,1:]*norm
+            mm = wcs_row.mean(); ss = wcs_row.std()
+            try:
+                x_start = np.where(wcs_row>mm+5*ss)[0][0]+1
+            except:
+                x_start = wcs_row.argmax()+1
+                
+            row = img[r,x_start-mar:x_start+mar]
             g = np.gradient(row*norm)
             gi = _interp(g,m)
             
-            xi += [gi.argmax()/m]
+            xi += [gi.argmax()/m+x_start-mar]
         xi = np.asarray(xi)
         out_one = _is_outlier(xi)
         out_two = ~out_one
-        #print(out_two)
-        #print(out_one)
-        #xi = xi[out_two]; yi = yi[out_two] # '~' is the bitwise inversion - ie ~1 (0001) becomes (1110) = -2 (if using 4 bit signed representation) - in this case _is_outlier just provides a bool
-        #~True = -2
-        #~False = -1
         yi = yi[~_is_outlier(xi)]
         xi = xi[~_is_outlier(xi)]
 
 
-    p = optimize.least_squares(_residuals,x0 = [1024,1024,3000], args=(xi,yi))
+    p = optimize.least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi))
         
     mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
     return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80
