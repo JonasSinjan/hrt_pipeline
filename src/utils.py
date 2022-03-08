@@ -351,6 +351,25 @@ def filling_data(arr, thresh, mode, axis = -1):
     return a0
     
 
+    """
+    Returns a boolean array with True if points are outliers and False 
+        otherwise.
+        Parameters:
+        -----------
+            points : An numobservations by numdimensions array of observations
+            thresh : The modified z-score to use as a threshold. Observations with
+                a modified z-score (based on the median absolute deviation) greater
+                than this value will be classified as outliers.
+        Returns:
+        --------
+            mask : A numobservations-length boolean array.
+        References:
+        ----------
+            Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+            Handle Outliers", The ASQC Basic References in Quality Control:
+            Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
+        """
+
 def limb_fitting(img, hdr, mar=200):
     def _residuals(p,x,y):
         xc,yc,R = p
@@ -424,7 +443,8 @@ def limb_fitting(img, hdr, mar=200):
     
     if side == '':
         print('Limb is not in the FoV according to WCS keywords')
-        return
+
+        return None, None
     
     if 'W' in side or 'E' in side:
         mode = 'rows'

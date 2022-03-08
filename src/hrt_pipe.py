@@ -622,21 +622,25 @@ def phihrt_pipe(input_json_file):
         limb = False
         
         for scan in range(data_shape[-1]):
+            #from Daniele Calchetti (modifed JS)
             
-            #limb_copy = np.copy(data)
-            
-            #from Daniele Calchetti
-            
+
             try:
-        
                 limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 
-                limb_temp = np.where(limb_temp>0,1,0)
-                Ic_temp = np.where(Ic_temp>0,1,0)
-                
-                data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
-                limb_mask[...,scan] = limb_temp
-                limb = True
+                if limb_temp is not None and Ic_temp is not None: 
+                    limb_temp = np.where(limb_temp>0,1,0)
+                    Ic_temp = np.where(Ic_temp>0,1,0)
+                    
+                    data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
+                    limb_mask[...,scan] = limb_temp
+                    limb = True
+
+                else:
+                    Ic_temp = np.zeros(data_size)
+                    Ic_temp[ceny,cenx] = 1
+                    Ic_temp = np.where(Ic_temp>0,1,0)
+
             except:
                 Ic_temp = np.zeros(data_size)
                 Ic_temp[ceny,cenx] = 1
