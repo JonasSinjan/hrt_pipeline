@@ -8,6 +8,7 @@ from operator import itemgetter
 import json
 import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
+from scipy.ndimage import binary_dilation, generate_binary_structure
 
 from utils import *
 from processes import *
@@ -75,8 +76,8 @@ def phihrt_pipe(input_json_file):
         apply HRT field stop
     ghost_c: bool, DEFAULT True
         apply HRT field stop and avoid ghost region in CrossTalk parameters computation
-    limb: str, DEFAULT None
-        specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
+    iss_off: bool, DEFAULT False
+        if True, registration between frames and V to Q,U correction is applied
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
     norm_stokes: bool, DEFAULT: True
@@ -89,6 +90,8 @@ def phihrt_pipe(input_json_file):
         if None, takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     ItoQUV: bool, DEFAULT: False 
         apply I -> Q,U,V correction
+    VtoQU: bool, DEFAULT: False 
+        apply V -> Q,U correction
     ctalk_params: numpy arr, DEFAULT: None 
         cross talk parameters for ItoQUV, (2,3) numpy array required: first axis: Slope, Offset (Normalised to I_c) - second axis:  Q,U,V
     rte: str, DEFAULT: False 
@@ -145,13 +148,15 @@ def phihrt_pipe(input_json_file):
         prefilter_f = input_dict['prefilter_f']
         fs_c = input_dict['fs_c']
         ghost_c = input_dict['ghost_c']  # DC 20211116
-        limb = input_dict['limb']
         demod = input_dict['demod']
         norm_stokes = input_dict['norm_stokes']
         ItoQUV = input_dict['ItoQUV']
+        VtoQU = input_dict['VtoQU']
 #         ctalk_params = input_dict['ctalk_params']
         out_intermediate = input_dict['out_intermediate']  # DC 20211116
-
+        
+        iss_off = input_dict['iss_off']  # DC
+        
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
         cmilos_fits_opt = input_dict['cmilos_fits']
@@ -441,9 +446,10 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
-    flat_copy = flat.copy()
 
     if clean_f and flat_c:
+        flat_copy = flat.copy()
+    
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
@@ -569,6 +575,81 @@ def phihrt_pipe(input_json_file):
 
 
     #-----------------
+    # HOT PIXEL MASK 
+    #-----------------
+    
+    # DC moved and changed this procedure. Hot pixels make problem for the interpolation
+    # Procedure is masking the hot pixel with a dilated mask
+    # New values are the median of the contour of each pixel
+    
+    if hot_px_mask:
+        data = hot_pixel_mask(data, rows, cols)
+        print(" ")
+        printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
+
+    else:
+        printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
+
+
+
+    #-----------------
+    # NO-ISS POLARIMETRIC REGISTRATION
+    #-----------------
+    
+    # new procedure to improve calibration when the ISS is off
+    
+    if iss_off:
+        print(" ")
+        printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
+        
+        start_time = time.perf_counter()
+        if fs_c:
+            field_stop = ~binary_dilation(field_stop==0,generate_binary_structure(2,2), iterations=6)
+            field_stop = np.where(field_stop > 0,1,0)
+            if ghost_c:
+                field_stop_ghost = ~binary_dilation(field_stop_ghost==0,generate_binary_structure(2,2), iterations=6)
+                field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
+        
+        ds = 256
+        if data_size[0] > 2*ds:
+            sly = slice(data_size[0]//2 - ds, data_size[0]//2 + ds)
+        else:
+            sly = slice(0,data_size[0])
+        if data_size[1] > 2*ds:
+            slx = slice(data_size[1]//2 - ds, data_size[1]//2 + ds)
+        else:
+            slx = slice(0,data_size[1])
+        
+        pn = 4 # data_shape[2]
+        wln = 6 # data_shape[3]
+        
+        old_data = data.copy()
+        for scan in range(data_shape[-1]):
+            shift_raw = np.zeros((2,pn*wln))
+            for j in range(shift_raw.shape[1]):
+                if j%pn == 0:
+                    pass
+                else:
+                    ref = old_data[sly,slx,0,j//pn,scan]
+                    temp = old_data[sly,slx,j%pn,j//pn,scan]
+                    
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                    shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
+                    print('shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
+                    data[:,:,j%pn,j//pn,scan] = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])
+        
+        del old_data
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No frame registration (--> ISS ON)',color=bcolors.WARNING)
+
+
+    #-----------------
     # APPLY DEMODULATION 
     #-----------------
 
@@ -591,18 +672,6 @@ def phihrt_pipe(input_json_file):
     else:
         print(" ")
         printc('-->>>>>>> No demod mode',color=bcolors.WARNING)
-
-
-    #-----------------
-    # HOT PIXEL MASK 
-    #-----------------
-
-    if hot_px_mask:
-        data = hot_pixel_mask(data, rows, cols)
-        printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
-
-    else:
-        printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
 
 
     #-----------------
@@ -743,6 +812,120 @@ def phihrt_pipe(input_json_file):
     else:
         print(" ")
         printc('-->>>>>>> No ItoQUV mode',color=bcolors.WARNING)
+
+
+    if VtoQU:
+        
+        print(" ")
+        printc('-->>>>>>> Cross-talk correction V to Q,U ',color=bcolors.OKGREEN)
+
+        start_time = time.perf_counter()
+
+        slope, offset = 0, 1
+        q, u = 0, 1
+        CTparams = np.zeros((2,2,number_of_scans))
+        
+        for scan, scan_hdr in enumerate(hdr_arr):
+            printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
+            if ghost_c: # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool),nlevel=0) # DC 20211116
+            else: # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=Ic_mask[...,scan],nlevel=0) # DC 20211116
+            
+            CTparams[...,scan] = ctalk_params
+            
+            scan_hdr['CAL_CRT6'] = round(ctalk_params[slope,q],4) #V-Q slope
+            scan_hdr['CAL_CRT7'] = round(ctalk_params[slope,u],4) #V-U slope
+            scan_hdr['CAL_CRT8'] = round(ctalk_params[offset,q],4) #V-Q offset
+            scan_hdr['CAL_CRT9'] = round(ctalk_params[offset,u],4) #V-U offset
+                
+        data = CT_VtoQU(data, CTparams)
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        
+        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        # DC change 20211019 only for limb
+        if limb:
+            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No VtoQU mode',color=bcolors.WARNING)
+
+
+
+
+    #-----------------
+    # NO-ISS WAVELENGTH REGISTRATION
+    #-----------------
+    
+    # new procedure to improve calibration when the ISS is off
+    
+    if iss_off:
+        print(" ")
+        printc('-->>>>>>> Wavelength Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
+        
+        start_time = time.perf_counter()
+        
+        ds = 256
+        sly = slice(1024-ds,1024+ds)
+        if data_size[0] > 2*ds:
+            sly = slice(data_size[0]//2 - ds, data_size[0]//2 + ds)
+        else:
+            sly = slice(0,data_size[0])
+        if data_size[1] > 2*ds:
+            slx = slice(data_size[1]//2 - ds, data_size[1]//2 + ds)
+        else:
+            slx = slice(0,data_size[1])
+        pn = 4
+        wln = 6
+        shift_stk = np.zeros((2,wln-1))
+        
+        if cpos_arr[0] == 5:
+            s_i = [0,3,3,3,3] # stokes param
+            l_i = [5,1,2,3,4] # shift wl
+            ref_i = [0,0,1,1,1] #reference wl
+            cwl = 2
+        else:
+            s_i = [0,3,3,3,3] # stokes param
+            l_i = [0,2,3,4,5] # shift wl
+            ref_i = [1,1,2,2,2] #reference wl
+            cwl = 3
+        
+        count = 0
+        old_data = data.copy()
+        for scan in range(data_shape[-1]):
+            for i,j,k in zip(s_i,l_i,ref_i):
+                ref = old_data[sly,slx,i,k,scan]
+                if j > cwl and i == 3:
+                    temp = -old_data[sly,slx,i,j,scan]
+                else:
+                    temp = old_data[sly,slx,i,j,scan]
+                
+                sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                
+                if count == 1:
+                    for cc in range(wln-2):
+                        shift_stk[:,count+cc] = [shift_stk[0,count+cc]+s[0],shift_stk[1,count+cc]+s[1]]
+                else:
+                    shift_stk[:,count] = [shift_stk[0,count]+s[0],shift_stk[1,count]+s[1]]
+                
+                print('shift (x,y):',round(shift_stk[1,count],3),round(shift_stk[0,count],3))
+                
+                for ss in range(pn):
+                    data[:,:,ss,k,scan] = fft_shift(old_data[:,:,ss,k,scan], shift_stk[:,count])
+        
+        del old_data
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No frame registration (--> ISS ON)',color=bcolors.WARNING)
 
 
     #-----------------

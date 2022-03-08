@@ -36,10 +36,12 @@ input_dict = {
     'flat_states' : 24, #options 4 (one each pol state), 6 (one each wavelength), 24
     'prefilter_f': None,
     'fs_c' : True, 
+    'iss_off': False,
     'limb' : None, # for limb images - must know what limb in FOV: 'N','E','W','S'
     'demod' : True, 
     'norm_stokes' : True, 
     'ItoQUV' : False, #missing VtoQU - not developed yet
+    'VtoQU' : False,
     'ghost_c' : True,
     'ctalk_params' : None, #VtoQU parameters will be required in this argument once ready
     'rte' : False, #options: ''RTE', 'CE', 'CE+RTE'
