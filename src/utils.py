@@ -534,7 +534,7 @@ def fft_shift(img,shift):
     try:
         import pyfftw.interfaces.numpy_fft as fft
     except:
-        import np.fft as fft
+        import numpy.fft as fft
     sz = img.shape
     ky = fft.ifftshift(np.linspace(-np.fix(sz[0]/2),np.ceil(sz[0]/2)-1,sz[0]))
     kx = fft.ifftshift(np.linspace(-np.fix(sz[1]/2),np.ceil(sz[1]/2)-1,sz[1]))
