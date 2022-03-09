@@ -92,8 +92,6 @@ def phihrt_pipe(input_json_file):
         apply I -> Q,U,V correction
     VtoQU: bool, DEFAULT: False 
         apply V -> Q,U correction
-    ctalk_params: numpy arr, DEFAULT: None 
-        cross talk parameters for ItoQUV, (2,3) numpy array required: first axis: Slope, Offset (Normalised to I_c) - second axis:  Q,U,V
     rte: str, DEFAULT: False 
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     out_rte_filename: str, DEFAULT = ''
@@ -152,7 +150,6 @@ def phihrt_pipe(input_json_file):
         norm_stokes = input_dict['norm_stokes']
         ItoQUV = input_dict['ItoQUV']
         VtoQU = input_dict['VtoQU']
-#         ctalk_params = input_dict['ctalk_params']
         out_intermediate = input_dict['out_intermediate']  # DC 20211116
         
         iss_off = input_dict['iss_off']  # DC
