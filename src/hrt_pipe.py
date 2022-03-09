@@ -536,14 +536,14 @@ def phihrt_pipe(input_json_file):
                             1711.67,1777.14,1842.61]
 
         prefilter, _ = load_fits(prefilter_f)
-
+        if imgdirx_flipped == 'YES':
+            print('Flipping prefilter on the Y axis')
+            prefilter = prefilter[:,::-1]
+        prefilter = prefilter[rows,cols]
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
         data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
         
-        for hdr in hdr_arr:
-            hdr['CAL_PRE'] = prefilter_f
-
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
 
@@ -828,9 +828,9 @@ def phihrt_pipe(input_json_file):
         for scan, scan_hdr in enumerate(hdr_arr):
             printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
             if ghost_c: # DC 20211116
-                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool),nlevel=0) # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool),nlevel=0.3) # DC 20211116
             else: # DC 20211116
-                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=Ic_mask[...,scan],nlevel=0) # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=Ic_mask[...,scan],nlevel=0.3) # DC 20211116
             
             CTparams[...,scan] = ctalk_params
             
@@ -894,28 +894,31 @@ def phihrt_pipe(input_json_file):
             ref_i = [1,1,2,2,2] #reference wl
             cwl = 3
         
-        count = 0
         old_data = data.copy()
         for scan in range(data_shape[-1]):
+            count = 0
             for i,j,k in zip(s_i,l_i,ref_i):
-                ref = old_data[sly,slx,i,k,scan]
-                if j > cwl and i == 3:
-                    temp = -old_data[sly,slx,i,j,scan]
-                else:
-                    temp = old_data[sly,slx,i,j,scan]
-                
-                sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
-                
-                if count == 1:
-                    for cc in range(wln-2):
-                        shift_stk[:,count+cc] = [shift_stk[0,count+cc]+s[0],shift_stk[1,count+cc]+s[1]]
-                else:
-                    shift_stk[:,count] = [shift_stk[0,count]+s[0],shift_stk[1,count]+s[1]]
+                ref = np.abs(old_data[sly,slx,i,k,scan])
+                temp = np.abs(old_data[sly,slx,i,j,scan])
+#                 if j > cwl and i == 3:
+#                     temp = -old_data[sly,slx,i,j,scan]
+#                 else:
+#                     temp = old_data[sly,slx,i,j,scan]
+                for iterations in range(2):
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                    temp = np.abs(fft_shift(old_data[:,:,i,j,scan], s)[sly,slx])
+                    if count == 1:
+                        for cc in range(wln-2):
+                            shift_stk[:,count+cc] = [shift_stk[0,count+cc]+s[0],shift_stk[1,count+cc]+s[1]]
+                    else:
+                        shift_stk[:,count] = [shift_stk[0,count]+s[0],shift_stk[1,count]+s[1]]
                 
                 print('shift (x,y):',round(shift_stk[1,count],3),round(shift_stk[0,count],3))
                 
                 for ss in range(pn):
-                    data[:,:,ss,k,scan] = fft_shift(old_data[:,:,ss,k,scan], shift_stk[:,count])
+                    data[:,:,ss,j,scan] = fft_shift(old_data[:,:,ss,j,scan], shift_stk[:,count])
+                    
+                count += 1
         
         del old_data
         
