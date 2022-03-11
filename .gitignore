@@ -42,4 +42,9 @@ src/create_input_json.py
 input_jsons/sep_2021_L1_west.json
 input_jsons/sep_2021_L1_south_noflat.json
 .ipynb_checkpoints/hrt_pipeline_notebook-checkpoint.ipynb
+.ipynb_checkpoints/
+.pat
+src/hrt_pipe_PF.py
+test.ipynb
+src/__pycache__/
 

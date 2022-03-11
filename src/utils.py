@@ -351,24 +351,46 @@ def filling_data(arr, thresh, mode, axis = -1):
     return a0
     
 
-    """
-    Returns a boolean array with True if points are outliers and False 
-        otherwise.
-        Parameters:
-        -----------
-            points : An numobservations by numdimensions array of observations
-            thresh : The modified z-score to use as a threshold. Observations with
-                a modified z-score (based on the median absolute deviation) greater
-                than this value will be classified as outliers.
-        Returns:
-        --------
-            mask : A numobservations-length boolean array.
-        References:
-        ----------
-            Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
-            Handle Outliers", The ASQC Basic References in Quality Control:
-            Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
-        """
+def auto_norm(file_name):
+    d = fits.open(file_name)
+    try:
+        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
+        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
+        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
+        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    except:
+        norm = 1/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
+    return norm
+
+# new functions by DC ######################################
+def limb_side_finder(img, hdr):
+    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
+    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    
+    x_p = img.shape[1] - (center[0]+Rpix)
+    y_p = img.shape[0] - (center[1]+Rpix)
+    x_n = center[0]-Rpix
+    y_n = center[1]-Rpix
+    
+    side = ''
+    if x_p > 0: 
+        side += 'W'
+    elif x_n > 0:
+        side += 'E'
+    if y_p > 0:
+        side += 'N'
+    if y_n > 0:
+        side += 'S'
+    
+    if side == '':
+        print('Limb is not in the FoV according to WCS keywords')
+    else:
+        print('Limb side:',side)
+
+    return side, center, Rpix
 
 def limb_fitting(img, hdr, mar=200):
     def _residuals(p,x,y):
@@ -421,26 +443,11 @@ def limb_fitting(img, hdr, mar=200):
 
     from scipy import optimize
     
-    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
-    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    side, center, Rpix = limb_side_finder(img,hdr)
+    
     wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
     wcs_grad = _image_derivative(wcs_mask)
-    
-    x_p = img.shape[1] - (center[0]+Rpix)
-    y_p = img.shape[0] - (center[1]+Rpix)
-    x_n = center[0]-Rpix
-    y_n = center[1]-Rpix
-    
-    side = ''
-    if x_p > 0: 
-        side += 'W'
-    elif x_n > 0:
-        side += 'E'
-    if y_p > 0:
-        side += 'N'
-    if y_n > 0:
-        side += 'S'
-    
+        
     if side == '':
         print('Limb is not in the FoV according to WCS keywords')
 
@@ -455,8 +462,6 @@ def limb_fitting(img, hdr, mar=200):
         norm = -1
     else:
         norm = 1
-    
-    print('Limb:',side)
     
     if mode == 'columns':
         xi = np.arange(100,2000,50)
@@ -506,24 +511,7 @@ def limb_fitting(img, hdr, mar=200):
     p = optimize.least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi))
         
     mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
-    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80
-
-
-def auto_norm(file_name):
-    d = fits.open(file_name)
-    try:
-        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
-        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
-        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
-        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
-        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
-    except:
-        norm = 1/256/ \
-        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
-    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
-    return norm
-
-# new functions by DC ######################################
+    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80, side
 
 def fft_shift(img,shift):
     """

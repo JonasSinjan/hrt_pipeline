@@ -23,7 +23,7 @@ text_split = get_file_list(text)
 #                 TARGET DIRECTORY
 #######################################################
 
-target_directory = '/data/slam/home/calchetti/fits_files/cross-calib/'
+target_directory = '/data/slam/home/calchetti/fits_files/march2022/'
 
 os.chdir(target_directory)
 

@@ -598,6 +598,7 @@ def phihrt_pipe(input_json_file):
     if iss_off:
         print(" ")
         printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
+        limb_side, _, _ = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
         
         start_time = time.perf_counter()
         if fs_c:
@@ -608,17 +609,28 @@ def phihrt_pipe(input_json_file):
                 field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
         
         ds = 256
+        dx = 0; dy = 0
+        if 'N' in limb_side and data_size[0]//2 - ds > 512:
+            dy = -512
+        if 'S' in limb_side and data_size[0]//2 - ds > 512:
+            dy = 512
+        if 'W' in limb_side and data_size[1]//2 - ds > 512:
+            dx = -512
+        if 'E' in limb_side and data_size[1]//2 - ds > 512:
+            dx = 512
+        
         if data_size[0] > 2*ds:
-            sly = slice(data_size[0]//2 - ds, data_size[0]//2 + ds)
+            sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
         else:
             sly = slice(0,data_size[0])
         if data_size[1] > 2*ds:
-            slx = slice(data_size[1]//2 - ds, data_size[1]//2 + ds)
+            slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
         else:
             slx = slice(0,data_size[1])
         
-        pn = 4 # data_shape[2]
-        wln = 6 # data_shape[3]
+        pn = 4 
+        wln = 6 
+        iterations = 3
         
         old_data = data.copy()
         for scan in range(data_shape[-1]):
@@ -630,8 +642,12 @@ def phihrt_pipe(input_json_file):
                     ref = old_data[sly,slx,0,j//pn,scan]
                     temp = old_data[sly,slx,j%pn,j//pn,scan]
                     
-                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
-                    shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
+                    for it in range(iterations):
+                        sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                        shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
+                        
+                        temp = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])[sly,slx]
+                    
                     print('shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
                     data[:,:,j%pn,j//pn,scan] = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])
         
@@ -692,13 +708,13 @@ def phihrt_pipe(input_json_file):
             
 
             try:
-                limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+                limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 
                 if limb_temp is not None and Ic_temp is not None: 
                     limb_temp = np.where(limb_temp>0,1,0)
                     Ic_temp = np.where(Ic_temp>0,1,0)
                     
-                    data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
+                    data[:,:,:,:,scan] = data[:,:,:,:,scan]# * limb_temp[:,:,np.newaxis,np.newaxis]
                     limb_mask[...,scan] = limb_temp
                     limb = True
 
@@ -801,10 +817,11 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-        # DC change 20211019 only for limb
-        if limb:
-            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+        if ~iss_off:
+            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            # DC change 20211019 only for limb
+            if limb:
+                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -842,10 +859,11 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-        # DC change 20211019 only for limb
-        if limb:
-            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+        if ~iss_off:
+            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            # DC change 20211019 only for limb
+            if limb:
+                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -866,59 +884,43 @@ def phihrt_pipe(input_json_file):
         
         start_time = time.perf_counter()
         
-        ds = 256
-        sly = slice(1024-ds,1024+ds)
-        if data_size[0] > 2*ds:
-            sly = slice(data_size[0]//2 - ds, data_size[0]//2 + ds)
-        else:
-            sly = slice(0,data_size[0])
-        if data_size[1] > 2*ds:
-            slx = slice(data_size[1]//2 - ds, data_size[1]//2 + ds)
-        else:
-            slx = slice(0,data_size[1])
         pn = 4
         wln = 6
-        shift_stk = np.zeros((2,wln-1))
+        iterations = 3
         
         if cpos_arr[0] == 5:
-            s_i = [0,3,3,3,3] # stokes param
-            l_i = [5,1,2,3,4] # shift wl
-            ref_i = [0,0,1,1,1] #reference wl
+            l_i = [0,1,2,3,4] # shift wl
             cwl = 2
         else:
-            s_i = [0,3,3,3,3] # stokes param
-            l_i = [0,2,3,4,5] # shift wl
-            ref_i = [1,1,2,2,2] #reference wl
+            l_i = [1,2,3,4,5] # shift wl
             cwl = 3
         
         old_data = data.copy()
+
         for scan in range(data_shape[-1]):
             count = 0
-            for i,j,k in zip(s_i,l_i,ref_i):
-                ref = np.abs(old_data[sly,slx,i,k,scan])
-                temp = np.abs(old_data[sly,slx,i,j,scan])
-#                 if j > cwl and i == 3:
-#                     temp = -old_data[sly,slx,i,j,scan]
-#                 else:
-#                     temp = old_data[sly,slx,i,j,scan]
-                for iterations in range(2):
-                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
-                    temp = np.abs(fft_shift(old_data[:,:,i,j,scan], s)[sly,slx])
-                    if count == 1:
-                        for cc in range(wln-2):
-                            shift_stk[:,count+cc] = [shift_stk[0,count+cc]+s[0],shift_stk[1,count+cc]+s[1]]
-                    else:
-                        shift_stk[:,count] = [shift_stk[0,count]+s[0],shift_stk[1,count]+s[1]]
+            shift_stk = np.zeros((2,wln-1))
+            ref = old_data[sly,slx,0,cpos_arr[0],scan]
+            
+            for i,l in enumerate(l_i):
+                temp = old_data[sly,slx,0,l,scan]
                 
-                print('shift (x,y):',round(shift_stk[1,count],3),round(shift_stk[0,count],3))
+                for it in range(iterations):
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                    shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
+                        
+                    temp = fft_shift(old_data[:,:,0,l,scan], shift_stk[:,i])[sly,slx]
+                    
+                print('shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
                 
                 for ss in range(pn):
-                    data[:,:,ss,j,scan] = fft_shift(old_data[:,:,ss,j,scan], shift_stk[:,count])
-                    
-                count += 1
-        
+                    data[:,:,ss,l,scan] = fft_shift(old_data[:,:,ss,l,scan], shift_stk[:,i])
+                            
         del old_data
         
+        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        if limb:
+            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
