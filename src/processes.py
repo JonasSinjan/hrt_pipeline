@@ -30,7 +30,8 @@ def setup_header(hdr_arr):
     for h in hdr_arr:
         for i in range(len(k)):
             if k[i] in h:  # Check for existence
-                h[k[i]] = v[i]
+                pass # changed to avoid change of parameters after partial processing
+                # h[k[i]] = v[i]
             else:
                 if i==0:
                     h.set(k[i], v[i], c[i], after='CAL_DARK')
@@ -397,7 +398,7 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
 
     field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
 
-    field_stop,_ = load_fits(field_stop_loc + 'HRT_field_stop.fits')
+    field_stop,_ = load_fits(field_stop_loc + 'HRT_field_stop_new.fits')
 
     field_stop = np.where(field_stop > 0,1,0)
 
@@ -426,7 +427,7 @@ def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
     field_stop_loc = os.path.realpath(__file__)
     field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
 
-    field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost.fits')
+    field_stop_ghost,_ = load_fits(field_stop_loc + 'HRT_field_stop_ghost_new.fits')
     field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
 
     if header_imgdirx_exists:
@@ -580,11 +581,140 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
     return data
 
 
-def hot_pixel_mask(data, rows, cols):
+def hot_pixel_mask(data, rows, cols,mode='median'):
     """
     Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
     """
     file_loc = os.path.realpath(__file__)
     field_stop_fol = file_loc.split('src/')[0] + 'field_stop/'
-    hot_pix_mask,_ = load_fits(field_stop_fol + 'hot_pixel_mask.fits')
-    return data*hot_pix_mask[rows,cols,np.newaxis, np.newaxis, np.newaxis]
+    hot_pix_mask,_ = load_fits(field_stop_fol + 'bad_pixels.fits')
+    hot_pix_cont,_ = load_fits(field_stop_fol + 'bad_pixels_contour.fits')
+    
+    s = data.shape # [y,x,p,l,s]
+    
+    if mode == 'median':
+        func = lambda a: np.median(a,axis=0)
+    elif mode == 'mean':
+        func = lambda a: np.mean(a,axis=0)
+    else:
+        print('mode not found, input dataset not corrected')
+        return new
+    
+    l = int(np.max(hot_pix_mask))
+    
+    for i in range(1,l+1):
+        bad = (hot_pix_mask[rows,cols] == i)
+        med = (hot_pix_cont[rows,cols] == i)
+        data[bad] = func(data[med])
+    
+    return data
+
+    
+def crosstalk_auto_VtoQU(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,nlevel=0.3):
+    import random, statistics
+    from scipy.optimize import curve_fit
+    def linear(x,a,b):
+        return a*x + b
+    my = []
+    sy = []
+    
+    x = data_demod[roi>0,3,cpos].flatten()
+    lx = data_demod[roi>0,0,cpos].flatten()
+    lv = np.abs(data_demod[roi>0,3,cpos]).flatten()
+    
+    ids = (lv > nlevel/100.)
+    x = x[ids].flatten()
+
+    N = x.size
+    idx = random.sample(range(N),npoints)
+    mx = x[idx].mean() 
+    sx = x[idx].std() 
+    xp = np.linspace(x.min(), x.max(), 100)
+
+    A = np.vstack([x, np.ones(len(x))]).T
+
+    # V to Q
+    yQ = data_demod[roi>0,1,wl].flatten()
+    yQ = yQ[ids].flatten()
+    my.append(yQ[idx].mean())
+    sy.append(yQ[idx].std())
+    cQ = curve_fit(linear,x,yQ,p0=[0,0])[0]
+    pQ = np.poly1d(cQ)
+
+    # V to U
+    yU = data_demod[roi>0,2,wl].flatten()
+    yU = yU[ids].flatten()
+    my.append(yU[idx].mean())
+    sy.append(yU[idx].std())
+    cU = curve_fit(linear,x,yU,p0=[0,0])[0]
+    pU = np.poly1d(cU)
+
+    if verbose:
+        
+        PLT_RNG = 2
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.scatter(x[idx],yQ[idx],color='red',alpha=0.6,s=10)
+        ax.plot(xp, pQ(xp), color='red', linestyle='dashed',linewidth=3.0)
+
+        ax.scatter(x[idx],yU[idx],color='blue',alpha=0.6,s=10)
+        ax.plot(xp, pU(xp), color='blue', linestyle='dashed',linewidth=3.0)
+
+        ax.set_xlim([mx - PLT_RNG * sx,mx + PLT_RNG * sx])
+        ax.set_ylim([min(my) - 1.8*PLT_RNG * statistics.mean(sy),max(my) + PLT_RNG * statistics.mean(sy)])
+        ax.set_xlabel('Stokes V')
+        ax.set_ylabel('Stokes Q/U')
+        ax.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.4*PLT_RNG * statistics.mean(sy), 'Cross-talk from V to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4), style='italic',bbox={'facecolor': 'red', 'alpha': 0.1, 'pad': 1}, fontsize=15)
+        ax.text(mx - 0.9*PLT_RNG * sx, min(my) - 1.55*PLT_RNG * statistics.mean(sy), 'Cross-talk from V to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4), style='italic',bbox={'facecolor': 'blue', 'alpha': 0.1, 'pad': 1}, fontsize=15)
+#         fig.show()
+
+        print('Cross-talk from V to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4))
+        print('Cross-talk from V to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4))
+    
+#         return cQ,cU,cV, (idx,x,xp,yQ,yU,yV,pQ,pU,pV,mx,sx,my,sy)
+    else:
+        printc('Cross-talk from V to Q: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cQ[0],cQ[1],width=8,prec=4),color=bcolors.OKGREEN)
+        printc('Cross-talk from V to U: slope = {: {width}.{prec}f} ; off-set = {: {width}.{prec}f} '.format(cU[0],cU[1],width=8,prec=4),color=bcolors.OKGREEN)
+
+    ct = np.asarray((cQ,cU)).T
+    return ct
+
+
+def CT_VtoQU(data, ctalk_params):
+    """
+    performs cross talk correction for I -> Q,U,V
+    """
+    before_ctalk_data = np.copy(data)
+    data_shape = data.shape
+    
+#     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
+#     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
+    
+    for i in range(6):
+                
+
+        tmp_param = ctalk_params#*stokes_i_wv_avg/cont_stokes
+
+        q_slope = tmp_param[0,0]
+        u_slope = tmp_param[0,1]
+        
+        q_int = tmp_param[1,0]
+        u_int = tmp_param[1,1]
+        
+        data[:,:,1,i,:] = before_ctalk_data[:,:,1,i,:] - before_ctalk_data[:,:,3,i,:]*q_slope - q_int
+
+        data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,3,i,:]*u_slope - u_int
+
+    
+    return data
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
