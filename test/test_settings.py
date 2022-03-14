@@ -37,11 +37,11 @@ def test_flat_as_dark():
  with pytest.raises(ValueError):
     phihrt_pipe(f"./test_jsons/test_5.json")
 
-def test_missing_limb_keyword():
+def test_missing_vtoqu_keyword():
   #test with missing limb keyword
   with pytest.raises(KeyError) as e:
     phihrt_pipe(f"./test_jsons/test_8.json")
-    assert 'limb' in e
+    assert 'VtoQU' in e
 
 def test_nonstr_input_for_data():
   #test with a non string input given for data_f, flat_f or dark_f
