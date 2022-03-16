@@ -79,7 +79,7 @@ python -m ipykernel install --user --name hrt_pipeline_env
 Now start the notebook <br>
 ##############################################################
 
-5. Download files - see **DOWNLOAD INPUT FILES** Section
+5. Download files - see **DOWNLOAD INPUT FILES** Section \*\*(DEPRECATED)\*\*
 
 5. Generate json files with the science, dark and flat you desire to reduce, ensure that all keywords from in the example are used (for limb images you must know the limb in the FOV - can only reduce multiple limb files at the same runtime if all the same limb in FOV)
 
@@ -97,7 +97,9 @@ Any and all steps can be turned on or off as you wish using the keywords in the 
 
 See `/input_jsons/create_input_json.py` for example to create json file
 
-## **DOWNLOAD INPUT FILES**
+## **DOWNLOAD INPUT FILES** \*\*(DEPRECATED)\*\*
+
+\*\* In input.json file, cant insert directly .fits.gz files from the PHI database \*\*
 
 This needs the 'dataproc' environment - see **SETUP**
 
@@ -132,11 +134,43 @@ OR : use `download_files.py` to download images from the attic repository: https
 ## **OUTPUT**
 
 #### **Stokes File**
-Filename: `_reduced.fits `
+Filename: `solo_L2_phi-hrt-stokes.....fits `
 
 Shape: [Y,X,POL,WAVE]
-
 #### **RTE products**
+
+- File: `solo_L2_phi-hrt-bmag.....fits `
+
+  Shape: [Y,X] <br>
+  |B| (Gauss) </p>
+
+- File: `solo_L2_phi-hrt-binc.....fits `
+
+  Shape: [Y,X] <br>
+  Inclination (Degrees) </p>
+
+- File: `solo_L2_phi-hrt-bazi.....fits `
+
+  Shape: [Y,X] <br>
+  Aimuth (Degrees) </p>
+
+- File: `solo_L2_phi-hrt-blos.....fits `
+
+  Shape: [Y,X] <br>
+  Blos (Gauss) </p>
+
+- File: `solo_L2_phi-hrt-vlos.....fits `
+
+  Shape: [Y,X] <br>
+  Vlos (km/s) </p>
+
+- File: `solo_L2_phi-hrt-icnt.....fits `
+
+  Shape: [Y,X] <br>
+  Continuum Intensity
+
+#### **Intermediate/Auxilliary Files**
+
 - File: `_rte_data_products.fits`
 
   Shape: [6,Y,X] <br>
@@ -147,43 +181,6 @@ Shape: [Y,X,POL,WAVE]
   - 3: Azimuth (degrees)
   - 4: Vlos (km/s)
   - 5: Blos (Gauss) </p>
-
-- File: `_bmag_rte.fits`
-
-  Shape: [1,Y,X] <br>
-  First Index: <br>
-  - 0: |B| (Gauss) </p>
-
-- File: `_binc_rte.fits`
-
-  Shape: [1,Y,X] <br>
-  First Index: <br>
-  - 0: Inclination (Degrees) </p>
-
-- File: `_bazi_rte.fits`
-
-  Shape: [1,Y,X] <br>
-  First Index: <br>
-  - 0: Aimuth (Degrees) </p>
-
-- File: `_blos_rte.fits`
-
-  Shape: [1,Y,X] <br>
-  First Index: <br>
-  - 0: Blos (Gauss) </p>
-
-- File: `_vlos_rte.fits`
-
-  Shape: [1,Y,X] <br>
-  First Index: <br>
-  - 0: Vlos (km/s) </p>
-
-- File: `_Icont_rte.fits`
-
-  Shape: [1,Y,X] <br>
-  First Index:
-  - 0: Continuum Intensity
-
 
 ***
 
