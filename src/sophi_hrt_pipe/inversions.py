@@ -575,17 +575,17 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         hdul.writeto(f'./p-milos/run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
-            cmd = "mpiexec -n 64 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
+            cmd = "mpiexec -n 64 ../../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
         
         if rte == 'CE':
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos_ce.minit"
+            cmd = "mpiexec -np 16 ../../pmilos.x pmilos_ce.minit"
 
         if rte == 'CE+RTE':
             print("CE+RTE not possible on PMILOS, performing RTE instead")
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
+            cmd = "mpiexec -np 16 ../../pmilos.x pmilos.minit"
 
         if rte == 'RTE_seq':
-            cmd = '../milos.x pmilos.mtrol'
+            cmd = '../../milos.x pmilos.mtrol'
 
         del sdata
         #need to change settings for CE or CE+RTE in the pmilos.minit file here

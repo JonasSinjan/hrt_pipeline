@@ -1002,7 +1002,6 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['BUNIT'] = 'I_CONT'
             hdr_arr[count]['DATAMIN'] = int(np.min(data[:,:,:,:,count]))
             hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
-
             hdr_arr[count] = data_hdr_kw(hdr_arr[count], data[:,:,:,:,count])#add datamedn, datamean etc
 
             with fits.open(scan) as hdu_list:
