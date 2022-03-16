@@ -987,7 +987,11 @@ def phihrt_pipe(input_json_file):
         
         for count, scan in enumerate(data_f):
 
-            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
+            if ".gz" in scan:
+                gzip = True
+            else:
+                gzip = False
+            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs, gzip = gzip)[0]
 
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
@@ -1010,19 +1014,20 @@ def phihrt_pipe(input_json_file):
             # DC change 20211014
             
             if out_intermediate: # DC 20211116
+
                 if dark_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits.gz")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits")
                         hdu_list[0].data = data_darkc[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits.gz', overwrite=True)
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
 
                 if flat_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_flat_corrected.fits.gz")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_flat_corrected.fits")
                         hdu_list[0].data = data_flatc[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits.gz', overwrite=True)
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
 
                     # with fits.open(flat_f) as hdu_list:
                     #     print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
@@ -1031,24 +1036,24 @@ def phihrt_pipe(input_json_file):
                     #     hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
 
                     with fits.open(flat_f) as hdu_list:
-                        print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}.gz")
+                        print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
                         hdu_list[0].data = flat_copy.astype(np.float32)
                         #update the calibration keywords
-                        hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}"+".gz", overwrite=True)
+                        hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}", overwrite=True)
                 
                 if prefilter_f is not None: # DC 20211116
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits.gz")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits")
                         hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits.gz', overwrite=True)
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
                 
                 if demod: # DC 20211116          
                     with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits.gz")
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
                         hdu_list[0].data = data_demod_normed[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits.gz', overwrite=True)
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
 
     else:
         print(" ")

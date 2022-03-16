@@ -134,37 +134,37 @@ OR : use `download_files.py` to download images from the attic repository: https
 ## **OUTPUT**
 
 #### **Stokes File**
-Filename: `solo_L2_phi-hrt-stokes.....fits `
+Filename: `solo_L2_phi-hrt-stokes.....fits.gz`
 
 Shape: [Y,X,POL,WAVE]
 #### **RTE products**
 
-- File: `solo_L2_phi-hrt-bmag.....fits `
+- File: `solo_L2_phi-hrt-bmag.....fits.gz`
 
   Shape: [Y,X] <br>
   |B| (Gauss) </p>
 
-- File: `solo_L2_phi-hrt-binc.....fits `
+- File: `solo_L2_phi-hrt-binc.....fits.gz`
 
   Shape: [Y,X] <br>
   Inclination (Degrees) </p>
 
-- File: `solo_L2_phi-hrt-bazi.....fits `
+- File: `solo_L2_phi-hrt-bazi.....fits.gz`
 
   Shape: [Y,X] <br>
   Aimuth (Degrees) </p>
 
-- File: `solo_L2_phi-hrt-blos.....fits `
+- File: `solo_L2_phi-hrt-blos.....fits.gz`
 
   Shape: [Y,X] <br>
   Blos (Gauss) </p>
 
-- File: `solo_L2_phi-hrt-vlos.....fits `
+- File: `solo_L2_phi-hrt-vlos.....fits.gz`
 
   Shape: [Y,X] <br>
   Vlos (km/s) </p>
 
-- File: `solo_L2_phi-hrt-icnt.....fits `
+- File: `solo_L2_phi-hrt-icnt.....fits.gz`
 
   Shape: [Y,X] <br>
   Continuum Intensity
@@ -182,27 +182,27 @@ First Index:
 
 #### **Intermediate/Auxilliary Files**
 
-- File: `_dark_corrected.fits `
+- File: `_dark_corrected.fits.gz`
 
   Shape: [Y,X] <br>
   Dark corrected science data
 
-- File: `_flat_corrected.fits `
+- File: `_flat_corrected.fits.gz`
 
   Shape: [Y,X] <br>
   Flat corrected science data
 
-- File: `copy_{flat_field_name}.fits `
+- File: `copy_{flat_field_name}.fits.gz`
 
   Shape: [Y,X] <br>
   Flat field before US
 
-- File: `_prefilter_corrected.fits `
+- File: `_prefilter_corrected.fits.gz`
 
   Shape: [Y,X] <br>
   Prefilter corrected science data
 
-- File: `_demodulated.fits `
+- File: `_demodulated.fits.gz`
 
   Shape: [Y,X] <br>
   Demodulated science data

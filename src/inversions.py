@@ -7,7 +7,7 @@ import time
 import subprocess
 import datetime
 
-def create_output_filenames(filename, DID, version = '01'):
+def create_output_filenames(filename, DID, version = '01',gzip = False):
     """
     creating the L2 output filenames from the input, assuming L1
     """
@@ -15,7 +15,9 @@ def create_output_filenames(filename, DID, version = '01'):
         file_start = filename.split('solo_')[1]
         file_start = 'solo_' + file_start
         L2_str = file_start.replace('L1', 'L2')
-        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits.gz'
+        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+        if gzip:
+            versioned = versioned + '.gz'
         stokes_file = versioned.replace('ilam', 'stokes')
         icnt_file = versioned.replace('ilam', 'icnt')
         bmag_file = versioned.replace('ilam', 'bmag')
@@ -44,7 +46,11 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
-            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
+            if ".gz" in file_path:
+                gzip = True
+            else:
+                gzip = False
+            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers, gzip = gzip)
 
     else:
         if isinstance(out_rte_filename, list):
