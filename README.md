@@ -38,7 +38,7 @@ Operating System: Linux
 ##############################################################
 
 If running on bob MPS server (and you have access)
-### Run bash script: `setup.sh` to skip the first 4 steps
+### Run bash script: `setup.sh` to skip the first 5 steps
 ##############################################################
 
 
@@ -75,6 +75,11 @@ conda env create -f environment.yml
 ```bash
 source activate hrt_pipeline_env
 ```
+
+5. Install sophi_hrt_pipe package
+```bash
+pip install -e .
+```
 ##############################################################
 ### OPTIONAL - load Jupyter Notebook `hrt_pipeline_notebook.ipynb` which contains all the following steps
 
@@ -89,13 +94,13 @@ Then start the notebook <br>
 
 ##############################################################
 
-5. Download files - see **Download Input Files** Section \*\***(DEPRECATED)**\*\*
+\*\***(DEPRECATED)**\*\* 5. Download files - see **Download Input Files** Section 
 
-5. Generate json files with the science, dark and flat you desire to reduce, ensure that all keywords from in the example are used (for limb images you must know the limb in the FOV - can only reduce multiple limb files at the same runtime if all the same limb in FOV)
+6. Generate json files with the science, dark and flat you desire to reduce, ensure that all keywords from in the example are used (for limb images you must know the limb in the FOV - can only reduce multiple limb files at the same runtime if all the same limb in FOV)
 
-6. Make sure the correct input.json file is given to `hrt_pipe` in ```run.py```
+7. Make sure the correct input.json file is given to `hrt_pipe` in ```run.py```
 
-7. Execute ```run.py```
+8. Execute ```run.py```
 
 ```bash
 python run.py

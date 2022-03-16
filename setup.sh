@@ -33,3 +33,5 @@ conda env create -f environment.yml
 
 source activate hrt_pipeline_env
 
+pip install -e .
+

@@ -1,7 +1,7 @@
 import numpy as np
 from astropy.io import fits
-from utils import *
-from processes import data_hdr_kw
+from sophi_hrt_pipe.utils import *
+from sophi_hrt_pipe.processes import data_hdr_kw
 import os
 import time
 import subprocess

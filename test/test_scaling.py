@@ -8,7 +8,7 @@ import sys
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.append('../')
 
-from src.utils import get_data
+from sophi_hrt_pipe.utils import get_data
 
 def load_fits(path):
     hdul = fits.open(path)

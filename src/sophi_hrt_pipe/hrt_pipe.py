@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 from scipy.ndimage import binary_dilation, generate_binary_structure
 
-from utils import *
-from processes import *
-from inversions import *
+from sophi_hrt_pipe.utils import *
+from sophi_hrt_pipe.processes import *
+from sophi_hrt_pipe.inversions import *
 
 def phihrt_pipe(input_json_file):
 

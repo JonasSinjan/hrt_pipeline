@@ -8,10 +8,10 @@ import sys
 sys.path.append('../')
 sys.path.append('../src/')
 
-from src.hrt_pipe import phihrt_pipe
-from src.utils import *
-from src.inversions import *
-from src.processes import *
+from sophi_hrt_pipe.hrt_pipe import phihrt_pipe
+from sophi_hrt_pipe.utils import *
+from sophi_hrt_pipe.inversions import *
+from sophi_hrt_pipe.processes import *
 
 def test_one():
   #test with almost everything off after reading in all files
