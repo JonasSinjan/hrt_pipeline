@@ -1,12 +1,22 @@
 # **SO/PHI-HRT PIPELINE**
 
 Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
+
+![](https://img.shields.io/badge/License-MIT-green) 
+![](https://img.shields.io/badge/Version-V1.3%20March%2016th%202022-brightgreen)
+![](https://img.shields.io/badge/OS-Linux-yellow)
+![](https://img.shields.io/github/last-commit/JonasSinjan/hrt_pipeline)
+![](https://img.shields.io/github/contributors/JonasSinjan/hrt_pipeline)
+
+<img src="figs/SolarOrbiter_patch.png" width="100" height="100" /> <img src="figs/philogo-1.png" width="100" height="100" /> <br>
+
+
 ## **PHI-HRT data reduction**
-1. read in science data (+scaling) open path option + open for several scans at once
-2. read in flat field (+scaling)- accepts only one flat field fits file
+1. read in science data (+scaling) (one or multiple files)
+2. read in flat field (+scaling) - accepts only one flat field fits file
 3. read in dark field (+scaling)
 4. apply dark field (to only science - assumes flat is dark fielded)
-5. option to clean flat field with unsharp masking (Stokes QUV, UV or V)
+5. clean flat field with unsharp masking (Stokes QUV, UV or V)
 6. normalise flat field
 7. apply flat field
 8. prefilter correction
@@ -15,25 +25,24 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
         a) option to output demod to fits file <br>
 11. normalise to quiet sun
 12. calibration <br>
-        a) cross talk correction <br>
+        a) ItoQUV cross talk correction <br>
+        b) VtoQU cross talk correction <br>
 13. rte inversion with cmilos <br>
         a) output rte data products to fits files <br>
 
 
+## **Setup**
 
-
-## **SETUP**
-
-Operating System Required: Linux
+Operating System: Linux
 
 ##############################################################
 
-If running on bob MPS server and you have access
-### RUN bash script - setup.sh - to skip the first 4 steps
+If running on bob MPS server (and you have access)
+### Run bash script: `setup.sh` to skip the first 4 steps
 ##############################################################
 
 
-OTHERWISE:
+Otherwise:
 
 1. Compile milos in both cmilos-fits folder and cmilos folder (cmilos-fits):
 
@@ -42,7 +51,7 @@ make clear
 make
 ```
 
-2. P-MILOS - multiple steps required - ASSUMING RUNNING ON **BOB** SERVER
+2. P-MILOS - multiple steps required - assumes running on **BOB** server
 - module load openmpi_gcc
 - module load fftw
 - load cfitsio (or export through .bashrc)
@@ -67,7 +76,7 @@ conda env create -f environment.yml
 source activate hrt_pipeline_env
 ```
 ##############################################################
-### OPTIONAL - LOAD JUPYTER NOTEBOOK `hrt_pipeline_notebook.ipynb` WHICH HAS ALL THE FOLLOWING STEPS
+### OPTIONAL - load Jupyter Notebook `hrt_pipeline_notebook.ipynb` which contains all the following steps
 
 (once environment loaded and activated - need the environment to start and use all the steps in the notebook)
 
@@ -76,10 +85,11 @@ First let jupyter notebook know the environment exists:
 ```
 python -m ipykernel install --user --name hrt_pipeline_env
 ```
-Now start the notebook <br>
+Then start the notebook <br>
+
 ##############################################################
 
-5. Download files - see **DOWNLOAD INPUT FILES** Section \*\*(DEPRECATED)\*\*
+5. Download files - see **Download Input Files** Section \*\***(DEPRECATED)**\*\*
 
 5. Generate json files with the science, dark and flat you desire to reduce, ensure that all keywords from in the example are used (for limb images you must know the limb in the FOV - can only reduce multiple limb files at the same runtime if all the same limb in FOV)
 
@@ -91,22 +101,22 @@ Now start the notebook <br>
 python run.py
 ```
 
-## **CONFIGURATION**
+## **Configuration**
 
 Any and all steps can be turned on or off as you wish using the keywords in the input json file passed to the `phihrt_pipe` function
 
 See `/input_jsons/create_input_json.py` for example to create json file
 
-## **DOWNLOAD INPUT FILES** \*\*(DEPRECATED)\*\*
+## **Download Input Files** \*\***(DEPRECATED)**\*\*
 
 \*\* In input.json file, cant insert directly .fits.gz files from the PHI database \*\*
 
-This needs the 'dataproc' environment - see **SETUP**
+This needs the 'dataproc' environment - see **Setup**
 
 EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg.de/services/proton/phi/imgdb/
 
 Suggested filters for HRT science data: 
-- **KEYWORD DETECTOR = 'HRT'** <br >
+- **Keyword Detector = 'HRT'** <br >
 - **Filename\* like \*L1_phi-hrt-ilam_date\***
         
 To download via the command line (eg: if you want to save the files on a server and not locally)
@@ -131,7 +141,7 @@ Instructions:
   6. Run the file (will require dotenv python module to be installed - included in `hrt_pipeline_env`) 
 
 OR : use `download_files.py` to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
-## **OUTPUT**
+## **Output**
 
 #### **Stokes File**
 Filename: `solo_L2_phi-hrt-stokes.....fits.gz`
