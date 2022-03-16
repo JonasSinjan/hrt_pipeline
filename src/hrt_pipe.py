@@ -8,6 +8,7 @@ from operator import itemgetter
 import json
 import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
+from scipy.ndimage import binary_dilation, generate_binary_structure
 
 from utils import *
 from processes import *
@@ -75,8 +76,8 @@ def phihrt_pipe(input_json_file):
         apply HRT field stop
     ghost_c: bool, DEFAULT True
         apply HRT field stop and avoid ghost region in CrossTalk parameters computation
-    limb: str, DEFAULT None
-        specify if it is a limb observation, options are 'N', 'S', 'W', 'E'
+    iss_off: bool, DEFAULT False
+        if True, registration between frames and V to Q,U correction is applied
     demod: bool, DEFAULT: True
         apply demodulate to the stokes
     norm_stokes: bool, DEFAULT: True
@@ -89,8 +90,8 @@ def phihrt_pipe(input_json_file):
         if None, takes last 10 characters of input scan filename (assumes its a DID), change if want other name
     ItoQUV: bool, DEFAULT: False 
         apply I -> Q,U,V correction
-    ctalk_params: numpy arr, DEFAULT: None 
-        cross talk parameters for ItoQUV, (2,3) numpy array required: first axis: Slope, Offset (Normalised to I_c) - second axis:  Q,U,V
+    VtoQU: bool, DEFAULT: False 
+        apply V -> Q,U correction
     rte: str, DEFAULT: False 
         invert using cmilos, options: 'RTE' for Milne Eddington Inversion, 'CE' for Classical Estimates, 'CE+RTE' for combined
     out_rte_filename: str, DEFAULT = ''
@@ -145,13 +146,14 @@ def phihrt_pipe(input_json_file):
         prefilter_f = input_dict['prefilter_f']
         fs_c = input_dict['fs_c']
         ghost_c = input_dict['ghost_c']  # DC 20211116
-        limb = input_dict['limb']
         demod = input_dict['demod']
         norm_stokes = input_dict['norm_stokes']
         ItoQUV = input_dict['ItoQUV']
-#         ctalk_params = input_dict['ctalk_params']
+        VtoQU = input_dict['VtoQU']
         out_intermediate = input_dict['out_intermediate']  # DC 20211116
-
+        
+        iss_off = input_dict['iss_off']  # DC
+        
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
         cmilos_fits_opt = input_dict['cmilos_fits']
@@ -287,6 +289,8 @@ def phihrt_pipe(input_json_file):
     ceny = slice(data_size[0]//2 - data_size[0]//4, data_size[0]//2 + data_size[0]//4)
     cenx = slice(data_size[1]//2 - data_size[1]//4, data_size[1]//2 + data_size[1]//4)
 
+    hdr_arr = setup_header(hdr_arr)
+    
     hdr_arr = setup_header(hdr_arr)
     
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -447,6 +451,8 @@ def phihrt_pipe(input_json_file):
 
 
     if clean_f and flat_c:
+        flat_copy = flat.copy()
+    
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
@@ -488,6 +494,11 @@ def phihrt_pipe(input_json_file):
         try:
             data = flat_correction(data,flat,flat_states,rows,cols)
             
+            DID_flat = header_flat['PHIDATID']
+            
+            for hdr in hdr_arr:
+                hdr['CAL_FLAT'] = DID_flat
+            
             if out_intermediate:
                 data_flatc = data.copy()
             
@@ -528,11 +539,14 @@ def phihrt_pipe(input_json_file):
                             1711.67,1777.14,1842.61]
 
         prefilter, _ = load_fits(prefilter_f)
-
+        if imgdirx_flipped == 'YES':
+            print('Flipping prefilter on the Y axis')
+            prefilter = prefilter[:,::-1]
+        prefilter = prefilter[rows,cols]
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
         data = prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages)
-
+        
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
 
@@ -564,6 +578,97 @@ def phihrt_pipe(input_json_file):
 
 
     #-----------------
+    # HOT PIXEL MASK 
+    #-----------------
+    
+    # DC moved and changed this procedure. Hot pixels make problem for the interpolation
+    # Procedure is masking the hot pixel with a dilated mask
+    # New values are the median of the contour of each pixel
+    
+    if hot_px_mask:
+        data = hot_pixel_mask(data, rows, cols)
+        print(" ")
+        printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
+
+    else:
+        printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
+
+
+
+    #-----------------
+    # NO-ISS POLARIMETRIC REGISTRATION
+    #-----------------
+    
+    # new procedure to improve calibration when the ISS is off
+    
+    if iss_off:
+        print(" ")
+        printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
+        limb_side, _, _ = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+        
+        start_time = time.perf_counter()
+        if fs_c:
+            field_stop = ~binary_dilation(field_stop==0,generate_binary_structure(2,2), iterations=6)
+            field_stop = np.where(field_stop > 0,1,0)
+            if ghost_c:
+                field_stop_ghost = ~binary_dilation(field_stop_ghost==0,generate_binary_structure(2,2), iterations=6)
+                field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
+        
+        ds = 256
+        dx = 0; dy = 0
+        if 'N' in limb_side and data_size[0]//2 - ds > 512:
+            dy = -512
+        if 'S' in limb_side and data_size[0]//2 - ds > 512:
+            dy = 512
+        if 'W' in limb_side and data_size[1]//2 - ds > 512:
+            dx = -512
+        if 'E' in limb_side and data_size[1]//2 - ds > 512:
+            dx = 512
+        
+        if data_size[0] > 2*ds:
+            sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
+        else:
+            sly = slice(0,data_size[0])
+        if data_size[1] > 2*ds:
+            slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
+        else:
+            slx = slice(0,data_size[1])
+        
+        pn = 4 
+        wln = 6 
+        iterations = 3
+        
+        old_data = data.copy()
+        for scan in range(data_shape[-1]):
+            shift_raw = np.zeros((2,pn*wln))
+            for j in range(shift_raw.shape[1]):
+                if j%pn == 0:
+                    pass
+                else:
+                    ref = old_data[sly,slx,0,j//pn,scan]
+                    temp = old_data[sly,slx,j%pn,j//pn,scan]
+                    
+                    for it in range(iterations):
+                        sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                        shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
+                        
+                        temp = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])[sly,slx]
+                    
+                    print('shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
+                    data[:,:,j%pn,j//pn,scan] = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])
+        
+        del old_data
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No frame registration (--> ISS ON)',color=bcolors.WARNING)
+
+
+    #-----------------
     # APPLY DEMODULATION 
     #-----------------
 
@@ -589,18 +694,6 @@ def phihrt_pipe(input_json_file):
 
 
     #-----------------
-    # HOT PIXEL MASK 
-    #-----------------
-
-    if hot_px_mask:
-        data = hot_pixel_mask(data, rows, cols)
-        printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
-
-    else:
-        printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
-
-
-    #-----------------
     # APPLY NORMALIZATION 
     #-----------------
 
@@ -619,14 +712,15 @@ def phihrt_pipe(input_json_file):
         for scan in range(data_shape[-1]):
             #from Daniele Calchetti (modifed JS)
             
+
             try:
-                limb_temp, Ic_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+                limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 
                 if limb_temp is not None and Ic_temp is not None: 
                     limb_temp = np.where(limb_temp>0,1,0)
                     Ic_temp = np.where(Ic_temp>0,1,0)
                     
-                    data[:,:,:,:,scan] = data[:,:,:,:,scan] * limb_temp[:,:,np.newaxis,np.newaxis]
+                    data[:,:,:,:,scan] = data[:,:,:,:,scan]# * limb_temp[:,:,np.newaxis,np.newaxis]
                     limb_mask[...,scan] = limb_temp
                     limb = True
 
@@ -639,6 +733,7 @@ def phihrt_pipe(input_json_file):
                 Ic_temp = np.zeros(data_size)
                 Ic_temp[ceny,cenx] = 1
                 Ic_temp = np.where(Ic_temp>0,1,0)
+             
              
             if fs_c:
                 Ic_temp *= field_stop[rows,cols]
@@ -685,19 +780,17 @@ def phihrt_pipe(input_json_file):
             
             CTparams[...,scan] = ctalk_params
             
-            if 'CAL_CRT0' in scan_hdr: #check to make sure the keywords exist
+            scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
+            scan_hdr['CAL_CRT2'] = round(ctalk_params[slope,u],4) #I-U slope
+            scan_hdr['CAL_CRT4'] = round(ctalk_params[slope,v],4) #I-V slope
+            scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
+            scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
+            scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
             
-                scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
-                scan_hdr['CAL_CRT2'] = round(ctalk_params[slope,u],4) #I-U slope
-                scan_hdr['CAL_CRT4'] = round(ctalk_params[slope,v],4) #I-V slope
-                scan_hdr['CAL_CRT1'] = round(ctalk_params[offset,q],4) #I-Q offset
-                scan_hdr['CAL_CRT3'] = round(ctalk_params[offset,u],4) #I-U offset
-                scan_hdr['CAL_CRT5'] = round(ctalk_params[offset,v],4) #I-V offset
-
-                scan_hdr['CAL_CRT6'] = 0 #V-Q slope
-                scan_hdr['CAL_CRT8'] = 0 #V-U slope
-                scan_hdr['CAL_CRT7'] = 0 #V-Q offset
-                scan_hdr['CAL_CRT9'] = 0 #V-U offset
+            scan_hdr['CAL_CRT6'] = 0 #V-Q slope
+            scan_hdr['CAL_CRT8'] = 0 #V-U slope
+            scan_hdr['CAL_CRT7'] = 0 #V-Q offset
+            scan_hdr['CAL_CRT9'] = 0 #V-U offset
                 
         try:    
             data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask)
@@ -730,14 +823,117 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-        # DC change 20211019 only for limb
-        if limb is not None:
-            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+        if ~iss_off:
+            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            # DC change 20211019 only for limb
+            if limb:
+                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
 
     else:
         print(" ")
         printc('-->>>>>>> No ItoQUV mode',color=bcolors.WARNING)
+
+
+    if VtoQU:
+        
+        print(" ")
+        printc('-->>>>>>> Cross-talk correction V to Q,U ',color=bcolors.OKGREEN)
+
+        start_time = time.perf_counter()
+
+        slope, offset = 0, 1
+        q, u = 0, 1
+        CTparams = np.zeros((2,2,number_of_scans))
+        
+        for scan, scan_hdr in enumerate(hdr_arr):
+            printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
+            if ghost_c: # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool),nlevel=0.3) # DC 20211116
+            else: # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=Ic_mask[...,scan],nlevel=0.3) # DC 20211116
+            
+            CTparams[...,scan] = ctalk_params
+            
+            scan_hdr['CAL_CRT6'] = round(ctalk_params[slope,q],4) #V-Q slope
+            scan_hdr['CAL_CRT7'] = round(ctalk_params[slope,u],4) #V-U slope
+            scan_hdr['CAL_CRT8'] = round(ctalk_params[offset,q],4) #V-Q offset
+            scan_hdr['CAL_CRT9'] = round(ctalk_params[offset,u],4) #V-U offset
+                
+        data = CT_VtoQU(data, CTparams)
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        
+        if ~iss_off:
+            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            # DC change 20211019 only for limb
+            if limb:
+                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No VtoQU mode',color=bcolors.WARNING)
+
+
+
+
+    #-----------------
+    # NO-ISS WAVELENGTH REGISTRATION
+    #-----------------
+    
+    # new procedure to improve calibration when the ISS is off
+    
+    if iss_off:
+        print(" ")
+        printc('-->>>>>>> Wavelength Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
+        
+        start_time = time.perf_counter()
+        
+        pn = 4
+        wln = 6
+        iterations = 3
+        
+        if cpos_arr[0] == 5:
+            l_i = [0,1,2,3,4] # shift wl
+            cwl = 2
+        else:
+            l_i = [1,2,3,4,5] # shift wl
+            cwl = 3
+        
+        old_data = data.copy()
+
+        for scan in range(data_shape[-1]):
+            count = 0
+            shift_stk = np.zeros((2,wln-1))
+            ref = old_data[sly,slx,0,cpos_arr[0],scan]
+            
+            for i,l in enumerate(l_i):
+                temp = old_data[sly,slx,0,l,scan]
+                
+                for it in range(iterations):
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                    shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
+                        
+                    temp = fft_shift(old_data[:,:,0,l,scan], shift_stk[:,i])[sly,slx]
+                    
+                print('shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
+                
+                for ss in range(pn):
+                    data[:,:,ss,l,scan] = fft_shift(old_data[:,:,ss,l,scan], shift_stk[:,i])
+                            
+        del old_data
+        
+        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        if limb:
+            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No frame registration (--> ISS ON)',color=bcolors.WARNING)
 
 
     #-----------------
@@ -791,7 +987,11 @@ def phihrt_pipe(input_json_file):
         
         for count, scan in enumerate(data_f):
 
-            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
+            if ".gz" in scan:
+                gzip = True
+            else:
+                gzip = False
+            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs, gzip = gzip)[0]
 
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
@@ -807,50 +1007,51 @@ def phihrt_pipe(input_json_file):
 
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
-                hdu_list[0].data = data[:,:,:,:,count]
+                hdu_list[0].data = data[:,:,:,:,count].astype(np.float32)
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                 hdu_list.writeto(out_dir + stokes_file, overwrite=True)
             
             # DC change 20211014
             
             if out_intermediate: # DC 20211116
+
                 if dark_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits")
-                        hdu_list[0].data = data_darkc[:,:,:,:,count]
+                        hdu_list[0].data = data_darkc[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
 
                 if flat_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_flat_corrected.fits")
-                        hdu_list[0].data = data_flatc[:,:,:,:,count]
+                        hdu_list[0].data = data_flatc[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
 
-                    with fits.open(flat_f) as hdu_list:
-                        print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
-                        hdu_list[0].data = flat
-                        #update the calibration keywords
-                        hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
+                    # with fits.open(flat_f) as hdu_list:
+                    #     print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
+                    #     hdu_list[0].data = flat
+                    #     #update the calibration keywords
+                    #     hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
 
                     with fits.open(flat_f) as hdu_list:
                         print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
-                        hdu_list[0].data = flat_copy
+                        hdu_list[0].data = flat_copy.astype(np.float32)
                         #update the calibration keywords
                         hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}", overwrite=True)
                 
                 if prefilter_f is not None: # DC 20211116
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits")
-                        hdu_list[0].data = data_PFc[:,:,:,:,count]
+                        hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
                 
                 if demod: # DC 20211116          
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
-                        hdu_list[0].data = data_demod_normed[:,:,:,:,count]
+                        hdu_list[0].data = data_demod_normed[:,:,:,:,count].astype(np.float32)
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
 
@@ -871,7 +1072,7 @@ def phihrt_pipe(input_json_file):
             print("Desired Output directory missing / character, will be added")
             out_dir = out_dir + "/"
 
-        if limb is not None:
+        if limb:
             mask = limb_mask*field_stop[rows,cols,np.newaxis]
         else:
             mask = np.ones((data_size[0],data_size[1],data_shape[-1]))*field_stop[rows,cols,np.newaxis]
@@ -921,3 +1122,4 @@ def phihrt_pipe(input_json_file):
 
    
     return data
+

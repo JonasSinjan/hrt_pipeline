@@ -349,25 +349,48 @@ def filling_data(arr, thresh, mode, axis = -1):
                 else:
                     a0[:,i] = a1
     return a0
+    
 
-    """
-    Returns a boolean array with True if points are outliers and False 
-        otherwise.
-        Parameters:
-        -----------
-            points : An numobservations by numdimensions array of observations
-            thresh : The modified z-score to use as a threshold. Observations with
-                a modified z-score (based on the median absolute deviation) greater
-                than this value will be classified as outliers.
-        Returns:
-        --------
-            mask : A numobservations-length boolean array.
-        References:
-        ----------
-            Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
-            Handle Outliers", The ASQC Basic References in Quality Control:
-            Statistical Techniques, Edward F. Mykytka, Ph.D., Editor. 
-        """
+def auto_norm(file_name):
+    d = fits.open(file_name)
+    try:
+        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
+        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
+        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
+        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    except:
+        norm = 1/256/ \
+        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
+    return norm
+
+# new functions by DC ######################################
+def limb_side_finder(img, hdr):
+    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
+    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    
+    x_p = img.shape[1] - (center[0]+Rpix)
+    y_p = img.shape[0] - (center[1]+Rpix)
+    x_n = center[0]-Rpix
+    y_n = center[1]-Rpix
+    
+    side = ''
+    if x_p > 0: 
+        side += 'W'
+    elif x_n > 0:
+        side += 'E'
+    if y_p > 0:
+        side += 'N'
+    if y_n > 0:
+        side += 'S'
+    
+    if side == '':
+        print('Limb is not in the FoV according to WCS keywords')
+    else:
+        print('Limb side:',side)
+
+    return side, center, Rpix
 
 def limb_fitting(img, hdr, mar=200):
     def _residuals(p,x,y):
@@ -420,28 +443,14 @@ def limb_fitting(img, hdr, mar=200):
 
     from scipy import optimize
     
-    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
-    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    side, center, Rpix = limb_side_finder(img,hdr)
+    
     wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
     wcs_grad = _image_derivative(wcs_mask)
-    
-    x_p = img.shape[1] - (center[0]+Rpix)
-    y_p = img.shape[0] - (center[1]+Rpix)
-    x_n = center[0]-Rpix
-    y_n = center[1]-Rpix
-    
-    side = ''
-    if x_p > 0: 
-        side += 'W'
-    elif x_n > 0:
-        side += 'E'
-    if y_p > 0:
-        side += 'N'
-    if y_n > 0:
-        side += 'S'
-    
+        
     if side == '':
         print('Limb is not in the FoV according to WCS keywords')
+
         return None, None
     
     if 'W' in side or 'E' in side:
@@ -453,8 +462,6 @@ def limb_fitting(img, hdr, mar=200):
         norm = -1
     else:
         norm = 1
-    
-    print('Limb:',side)
     
     if mode == 'columns':
         xi = np.arange(100,2000,50)
@@ -504,19 +511,198 @@ def limb_fitting(img, hdr, mar=200):
     p = optimize.least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi))
         
     mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
-    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80
+    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80, side
 
-
-def auto_norm(file_name):
-    d = fits.open(file_name)
+def fft_shift(img,shift):
+    """
+    im: 2D-image to be shifted
+    shift = [dy,dx] shift in pixel
+    """
+    
     try:
-        print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])
-        print('PHI_IMG_maxRange -1:',d[9].data['PHI_IMG_maxRange'][-1])
-        norm = d[9].data['PHI_IMG_maxRange'][0]/ \
-        d[9].data['PHI_IMG_maxRange'][-1]/256/ \
-        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
+        import pyfftw.interfaces.numpy_fft as fft
     except:
-        norm = 1/256/ \
-        (d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM'])
-    print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
-    return norm
+        import numpy.fft as fft
+    sz = img.shape
+    ky = fft.ifftshift(np.linspace(-np.fix(sz[0]/2),np.ceil(sz[0]/2)-1,sz[0]))
+    kx = fft.ifftshift(np.linspace(-np.fix(sz[1]/2),np.ceil(sz[1]/2)-1,sz[1]))
+
+    img_fft = fft.fft2(img)
+    shf = np.exp(-2j*np.pi*(ky[:,np.newaxis]*shift[0]/sz[0]+kx[np.newaxis]*shift[1]/sz[1]))
+    
+    img_fft *= shf
+    img_shf = fft.ifft2(img_fft).real
+    
+    return img_shf
+    
+def SPG_shifts_FFT(data,norma=True,prec=100,coarse_prec = 1.5,sequential = False):
+
+    """
+    From SPGPylibs. Same function used for FDT pipeline, adapted by DC
+    At least two images should be provided!
+    s_y, s_x, simage = PHI_shifts_FFT(image_cropped,prec=500,verbose=True,norma=False)
+    (row_shift, column_shift) deficed as  center = center + (y,x) 
+    """
+    
+    def sampling(N):
+        """
+        From SPGPylibs. Same function used for FDT pipeline.
+        This function creates a grid of points with NxN dimensions for calling the
+        Zernike polinomials.
+        Output:
+            X,Y: X and Y meshgrid of the detector
+        """
+        if N%2 != 0:
+            print('Number of pixels must be an even integer!')
+            return
+        x=np.linspace(-N/2,N/2,N)
+        y=np.copy(x)
+        X,Y=np.meshgrid(x,y)
+        return X,Y 
+
+    def aperture(X,Y,N,R):
+        """
+        From SPGPylibs. Same function used for FDT pipeline.
+        This function calculates a simple aperture function that is 1 within
+        a circle of radius R, takes and intermediate value between 0
+        and 1 in the edge and 0 otherwise. The values in the edges are calculated
+        according to the percentage of area corresponding to the intersection of the
+        physical aperture and the edge pixels.
+        http://photutils.readthedocs.io/en/stable/aperture.html
+        Input:
+            X,Y: meshgrid with the coordinates of the detector ('sampling.py')
+            R: radius (in pixel units) of the mask
+        Output:
+            A: 2D array with 0s and 1s
+        """
+        from photutils import CircularAperture
+        A=CircularAperture((N/2,N/2),r=R) #Circular mask (1s in and 0s out)
+        A=A.to_mask(method='exact') #Mask with exact value in edge pixels
+        A=A.to_image(shape=(N,N)) #Conversion from mask to image
+        return A
+        
+    def dft_fjbm(F,G,kappa,dftshift,nr,nc,Nr,Nc,kernr,kernc):
+        """
+        From SPGPylibs. Same function used for FDT pipeline.
+        Calculates the shift between a couple of images 'f' and 'g' with subpixel
+        accuracy by calculating the IFT with the matrix multiplication tecnique.
+        Shifts between images must be kept below 1.5 'dftshift' for the algorithm
+        to work.
+        Input: 
+            F,G: ffts of images 'f' and 'g' without applying any fftshift
+            kappa: inverse of subpixel precision (kappa=20 > 0.005 pixel precision)
+        Output:
+        """
+        #DFT by matrix multiplication
+        M=F*np.conj(G) #Cross-correlation
+        CC=kernr @ M @ kernc
+        CCabs=np.abs(CC)
+        ind = np.unravel_index(np.argmax(CCabs, axis=None), CCabs.shape)
+        CCmax=CC[ind]
+        rloc,cloc=ind-dftshift
+        row_shift=-rloc/kappa
+        col_shift=-cloc/kappa
+        rg00=np.sum(np.abs(F)**2)
+        rf00=np.sum(np.abs(G)**2)
+        error=np.sqrt(1-np.abs(CCmax)**2/(rg00*rf00))
+        Nc,Nr=np.meshgrid(Nc,Nr)
+
+        Gshift=G*np.exp(1j*2*np.pi*(-row_shift*Nr/nr-col_shift*Nc/nc)) 
+        return error,row_shift,col_shift,Gshift
+
+
+    #Normalization for each image
+    sz,sy,sx = data.shape
+    f=np.copy(data)
+    if norma == True:
+        norm=np.zeros(sz)
+        for i in range(sz):
+            norm[i]=np.mean(data[i,:,:])
+            f[i,:,:]=data[i,:,:]/norm[i]
+
+    #Frequency cut
+    wvl=617.3e-9
+    D = 0.14  #HRT
+    foc = 4.125 #HRT
+    fnum = foc / D
+    nuc=1/(wvl*fnum) #Critical frequency (1/m)
+    N=sx #Number of pixels per row/column (max. 2048)
+    deltax = 10e-6 #Pixel size
+    deltanu=1/(N*deltax)
+    R=(1/2)*nuc/deltanu
+    nuc=2*R#Max. frequency [pix]
+
+    #Mask
+    X,Y = sampling(N)
+    mask = aperture(X,Y,N,R)
+
+    #Fourier transform
+    f0=f[0,:,:]
+    #pf.movie(f0-f,'test.mp4',resol=1028,axis=0,fps=5,cbar='yes',cmap='seismic')
+    F=np.fft.fft2(f0)
+
+    #Masking
+    F=np.fft.fftshift(F)
+    F*=mask
+    F=np.fft.ifftshift(F)
+
+    #FJBM algorithm
+    kappa=prec
+    n_out=np.ceil(coarse_prec*2.*kappa)
+    dftshift=np.fix(n_out/2)
+    nr,nc=f0.shape
+    Nr=np.fft.ifftshift(np.arange(-np.fix(nr/2),np.ceil(nr/2)))
+    Nc=np.fft.ifftshift(np.arange(-np.fix(nc/2),np.ceil(nc/2)))
+    kernc=np.exp((-1j*2*np.pi/(nc*kappa))*np.outer(\
+    np.fft.ifftshift(np.arange(0,nc).T-np.floor(nc/2)),np.arange(0,n_out)-dftshift))
+    kernr=np.exp((-1j*2*np.pi/(nr*kappa))*np.outer(\
+    np.arange(0,n_out)-dftshift,np.fft.ifftshift(np.arange(0,nr).T-np.floor(nr/2))))
+
+    row_shift=np.zeros(sz)
+    col_shift=np.zeros(sz)
+    shifted_image = np.zeros_like(data)
+
+    if sequential == False:
+        for i in np.arange(1,sz):
+            g=f[i,:,:]
+            G=np.fft.fft2(g)
+            #Masking
+            G=np.fft.fftshift(G)
+            G*=mask
+            G=np.fft.ifftshift(G)
+
+            error,row_shift[i],col_shift[i],Gshift=dft_fjbm(F,G,kappa,dftshift,nr,\
+            nr,Nr,Nc,kernr,kernc)
+            shifted_image[i,:,:] = np.real(np.fft.ifft2(Gshift)) 
+    if sequential == True:
+        print('No fastidies')
+        for i in np.arange(1,sz):
+            g=f[i,:,:]
+            G=np.fft.fft2(g)
+            #Masking
+            G=np.fft.fftshift(G)
+            G*=mask
+            G=np.fft.ifftshift(G)
+
+            error,row_shift[i],col_shift[i],Gshift=dft_fjbm(F,G,kappa,dftshift,nr,\
+            nr,Nr,Nc,kernr,kernc)
+            shifted_image[i,:,:] = np.real(np.fft.ifft2(Gshift)) 
+            F = np.copy(G) #Sequencial
+            row_shift[i] = row_shift[i] + row_shift[i-1]
+            col_shift[i] = col_shift[i] + col_shift[i-1]
+ 
+    return row_shift,col_shift,shifted_image
+
+
+
+
+
+
+
+
+
+
+
+
+
+
