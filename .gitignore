@@ -47,4 +47,4 @@ input_jsons/sep_2021_L1_south_noflat.json
 src/hrt_pipe_PF.py
 test.ipynb
 src/__pycache__/
-
+src/sophi_hrt_pipe.egg-info/
