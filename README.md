@@ -169,19 +169,44 @@ Shape: [Y,X,POL,WAVE]
   Shape: [Y,X] <br>
   Continuum Intensity
 
-#### **Intermediate/Auxilliary Files**
-
 - File: `_rte_data_products.fits`
 
-  Shape: [6,Y,X] <br>
-  First Index:
-  - 0: Continuum Intensity
-  - 1: Magnetic Field Strength |B| (Gauss)
-  - 2: Inclination (degrees)
-  - 3: Azimuth (degrees)
-  - 4: Vlos (km/s)
-  - 5: Blos (Gauss) </p>
+Shape: [6,Y,X] <br>
+First Index:
+- 0: Continuum Intensity
+- 1: Magnetic Field Strength |B| (Gauss)
+- 2: Inclination (degrees)
+- 3: Azimuth (degrees)
+- 4: Vlos (km/s)
+- 5: Blos (Gauss) </p>
 
+#### **Intermediate/Auxilliary Files**
+
+- File: `_dark_corrected.fits `
+
+  Shape: [Y,X] <br>
+  Dark corrected science data
+
+- File: `_flat_corrected.fits `
+
+  Shape: [Y,X] <br>
+  Flat corrected science data
+
+- File: `copy_{flat_field_name}.fits `
+
+  Shape: [Y,X] <br>
+  Flat field before US
+
+- File: `_prefilter_corrected.fits `
+
+  Shape: [Y,X] <br>
+  Prefilter corrected science data
+
+- File: `_demodulated.fits `
+
+  Shape: [Y,X] <br>
+  Demodulated science data
+ 
 ***
 
 

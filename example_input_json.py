@@ -3,7 +3,7 @@ import json
 
 #Nov 17 2020 L1 Exmaple
 
-science_fits_filenames = ['solo_L1_phi-hrt-ilam_20201117T170209_V202108301639C_0051170001.fits']
+science_fits_filenames = ['solo_L1_phi-hrt-ilam_20201117T170209_V202108301639C_0051170001.fits.gz'] #note .gz here
 flatfield_fits_filename = '/data/slam/home/sinjan/fits_files/april_avgd_2020_flat.fits'
 
 darkfield_fits_filename = '../fits_files/solo_L0_phi-fdt-ilam_20200228T155100_V202002281636_0022210004_000.fits'
@@ -39,7 +39,7 @@ input_dict = {
     'iss_off': True,
     'demod' : True, 
     'norm_stokes' : True, 
-    'ItoQUV' : True, #missing VtoQU - not developed yet
+    'ItoQUV' : True,
     'VtoQU' : True,
     'ghost_c' : True,
     'rte' : False, #options: ''RTE', 'CE', 'CE+RTE'
