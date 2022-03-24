@@ -48,3 +48,6 @@ src/hrt_pipe_PF.py
 test.ipynb
 src/__pycache__/
 src/sophi_hrt_pipe.egg-info/
+src/__pycache__
+src/__pycache__/*
+

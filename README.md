@@ -8,7 +8,7 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 ![](https://img.shields.io/github/last-commit/JonasSinjan/hrt_pipeline)
 ![](https://img.shields.io/github/contributors/JonasSinjan/hrt_pipeline)
 
-<img src="figs/SolarOrbiter_patch.png" width="100" height="100" /> <img src="figs/philogo-1.png" width="100" height="100" /> <br>
+<img src="figs/SolarOrbiter_patch.png" width="100" height="100" /> <img src="figs/philogo-1.png" width="90" height="90" /> <br>
 
 
 ## **PHI-HRT data reduction**
