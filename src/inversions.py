@@ -15,7 +15,7 @@ def create_output_filenames(filename, DID, version = '01'):
         file_start = filename.split('solo_')[1]
         file_start = 'solo_' + file_start
         L2_str = file_start.replace('L1', 'L2')
-        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits.gz'
         stokes_file = versioned.replace('ilam', 'stokes')
         icnt_file = versioned.replace('ilam', 'icnt')
         bmag_file = versioned.replace('ilam', 'bmag')
@@ -81,8 +81,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
     with fits.open(file_path) as hdu_list:
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products
-        hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+        hdu_list[0].data = rte_data_products.astype(np.float32)
+        hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits.gz', overwrite=True)
 
     #blos
     with fits.open(file_path) as hdu_list:
@@ -111,7 +111,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[3,:,:])
 
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products[3,:,:]
+        hdu_list[0].data = rte_data_products[3,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+bazi_file, overwrite=True)
 
     #binc
@@ -126,7 +126,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[2,:,:])
 
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products[2,:,:]
+        hdu_list[0].data = rte_data_products[2,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+binc_file, overwrite=True)
 
     #bmag
@@ -141,7 +141,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[1,:,:])
 
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products[1,:,:]
+        hdu_list[0].data = rte_data_products[1,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+bmag_file, overwrite=True)
 
     #vlos
@@ -156,7 +156,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[4,:,:])
 
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products[4,:,:]
+        hdu_list[0].data = rte_data_products[4,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+vlos_file, overwrite=True)
 
     #Icnt
@@ -171,7 +171,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[0,:,:])
 
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products[0,:,:]
+        hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
 

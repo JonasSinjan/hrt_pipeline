@@ -46,5 +46,6 @@ input_jsons/sep_2021_L1_south_noflat.json
 .pat
 src/hrt_pipe_PF.py
 test.ipynb
-src/__pycache__/
+src/__pycache__
+src/__pycache__/*
 

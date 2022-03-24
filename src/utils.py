@@ -52,8 +52,11 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
         data, header = load_fits(path)
 
         if bit_convert_scale: #conversion from 24.8bit to 32bit
-            data /=  256.
-
+            IMGformat = fits.open(path)[9].data['PHI_IMG_format'][-1]
+            if IMGformat != 'IMGFMT_24_8':
+                data /=  256.
+            else:
+                print("Dataset downloaded as raw: no bit convert scaling needed")
         if scaling:
             
             accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
