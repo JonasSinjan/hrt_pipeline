@@ -87,8 +87,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
     with fits.open(file_path) as hdu_list:
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products
-        hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits', overwrite=True)
+        hdu_list[0].data = rte_data_products.astype(np.float32)
+        hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits.gz', overwrite=True)
 
     #blos
     with fits.open(file_path) as hdu_list:

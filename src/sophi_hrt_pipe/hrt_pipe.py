@@ -636,10 +636,11 @@ def phihrt_pipe(input_json_file):
         
         pn = 4 
         wln = 6 
-        iterations = 3
+        # iterations = 3
         
         old_data = data.copy()
         for scan in range(data_shape[-1]):
+            
             shift_raw = np.zeros((2,pn*wln))
             for j in range(shift_raw.shape[1]):
                 if j%pn == 0:
@@ -647,14 +648,19 @@ def phihrt_pipe(input_json_file):
                 else:
                     ref = old_data[sly,slx,0,j//pn,scan]
                     temp = old_data[sly,slx,j%pn,j//pn,scan]
+                    it = 0
+                    s = [1,1]
                     
-                    for it in range(iterations):
+                    while np.any(np.abs(s)>1e-3):#for it in range(iterations):
                         sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
                         shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
                         
                         temp = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])[sly,slx]
+                        it += 1
+                        if it ==10:
+                            break
                     
-                    print('shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
+                    print(it,'iterations shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
                     data[:,:,j%pn,j//pn,scan] = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])
         
         del old_data
@@ -892,7 +898,7 @@ def phihrt_pipe(input_json_file):
         
         pn = 4
         wln = 6
-        iterations = 3
+        # iterations = 3
         
         if cpos_arr[0] == 5:
             l_i = [0,1,2,3,4] # shift wl
@@ -910,17 +916,31 @@ def phihrt_pipe(input_json_file):
             
             for i,l in enumerate(l_i):
                 temp = old_data[sly,slx,0,l,scan]
+                it = 0
+                s = [1,1]
+                if l == cwl:
+                    temp = np.abs(old_data[sly,slx,0,l,scan])
+                    ref = np.abs(data[sly,slx,0,l-1,scan].copy())
                 
-                for it in range(iterations):
+                while np.any(np.abs(s)>1e-3):#for it in range(iterations):
                     sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
                     shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
-                        
-                    temp = fft_shift(old_data[:,:,0,l,scan], shift_stk[:,i])[sly,slx]
                     
-                print('shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
+                    if l != cwl:    
+                        temp = fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i])[sly,slx]
+                    else:
+                        temp = np.abs(fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i])[sly,slx])
+                    it += 1
+                    if it == 10:
+                        break
+                print(it,'iterations shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
                 
                 for ss in range(pn):
                     data[:,:,ss,l,scan] = fft_shift(old_data[:,:,ss,l,scan], shift_stk[:,i])
+                
+                # ref = data[sly,slx,0,l,scan]
+                if l == cwl:
+                    ref = old_data[sly,slx,0,cpos_arr[0],scan]
                             
         del old_data
         
@@ -1033,6 +1053,7 @@ def phihrt_pipe(input_json_file):
                     #     hdu_list[0].data = flat
                     #     #update the calibration keywords
                     #     hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
+
 
                     with fits.open(flat_f) as hdu_list:
                         print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
