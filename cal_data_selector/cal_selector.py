@@ -63,6 +63,6 @@ def return_cal_data(master_path, input_ilam_filename):
   return dark_fol + dark, flat_fol + flat, prefilter_fol + prefilter, us_sig, us_mode
 
 #test
-return_cal_data("./", "solo_L1_phi-hrt-ilam_20210914T034515_V202110211713C_0149140201.fits")
-
+out = return_cal_data("./", "solo_L1_phi-hrt-ilam_20210914T034515_V202110211713C_0149140201.fits")
+print(out)
 

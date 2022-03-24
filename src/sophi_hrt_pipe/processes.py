@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from operator import itemgetter
-from utils import *
+from sophi_hrt_pipe.utils import *
 import os
 import time
 

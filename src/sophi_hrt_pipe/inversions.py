@@ -1,13 +1,13 @@
 import numpy as np
 from astropy.io import fits
-from utils import *
-from processes import data_hdr_kw
+from sophi_hrt_pipe.utils import *
+from sophi_hrt_pipe.processes import data_hdr_kw
 import os
 import time
 import subprocess
 import datetime
 
-def create_output_filenames(filename, DID, version = '01'):
+def create_output_filenames(filename, DID, version = '01',gzip = False):
     """
     creating the L2 output filenames from the input, assuming L1
     """
@@ -15,7 +15,9 @@ def create_output_filenames(filename, DID, version = '01'):
         file_start = filename.split('solo_')[1]
         file_start = 'solo_' + file_start
         L2_str = file_start.replace('L1', 'L2')
-        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits.gz'
+        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+        if gzip:
+            versioned = versioned + '.gz'
         stokes_file = versioned.replace('ilam', 'stokes')
         icnt_file = versioned.replace('ilam', 'icnt')
         bmag_file = versioned.replace('ilam', 'bmag')
@@ -44,7 +46,11 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
-            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers)
+            if ".gz" in file_path:
+                gzip = True
+            else:
+                gzip = False
+            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers, gzip = gzip)
 
     else:
         if isinstance(out_rte_filename, list):
@@ -87,7 +93,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #blos
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = blos_file
-        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
         hdr_scan['LEVEL'] = 'L2'
         hdr_scan['BTYPE'] = 'BLOS'
         hdr_scan['BUNIT'] = 'Gauss'
@@ -96,13 +102,13 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[5,:,:])
 
         hdu_list[0].header = hdr_scan
-        hdu_list[0].data = rte_data_products[5,:,:]
+        hdu_list[0].data = rte_data_products[5,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+blos_file, overwrite=True)
 
     #bazi
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = bazi_file
-        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
         hdr_scan['LEVEL'] = 'L2'
         hdr_scan['BTYPE'] = 'BAZI'
         hdr_scan['BUNIT'] = 'Degrees'
@@ -117,7 +123,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #binc
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = binc_file
-        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
         hdr_scan['LEVEL'] = 'L2'
         hdr_scan['BTYPE'] = 'BINC'
         hdr_scan['BUNIT'] = 'Degrees'
@@ -132,7 +138,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #bmag
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = bmag_file
-        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
         hdr_scan['LEVEL'] = 'L2'
         hdr_scan['BTYPE'] = 'BMAG'
         hdr_scan['BUNIT'] = 'Gauss'
@@ -147,7 +153,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #vlos
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = vlos_file
-        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
         hdr_scan['LEVEL'] = 'L2'
         hdr_scan['BTYPE'] = 'VLOS'
         hdr_scan['BUNIT'] = 'km/s'
@@ -162,7 +168,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     #Icnt
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = icnt_file
-        hdr_scan['HISTORY'] = f"Version: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
         hdr_scan['LEVEL'] = 'L2'
         hdr_scan['BTYPE'] = 'ICNT'
         hdr_scan['BUNIT'] = 'Normalised Intensity'
@@ -306,6 +312,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
         rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
+        rte_data_products[6,:,:] = rte_invs_noth[11,:,:] #chisq
 
         rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
@@ -469,6 +476,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_data_products[3,:,:] = rte_out[3,:,:] #azimuth
         rte_data_products[4,:,:] = rte_out[7,:,:] #vlos
         rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
+        rte_data_products[6,:,:] = rte_out[11,:,:] #chisq
 
         rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
@@ -569,17 +577,17 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         hdul.writeto(f'./p-milos/run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
-            cmd = "mpiexec -n 64 ../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
+            cmd = "mpiexec -n 64 ../../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
         
         if rte == 'CE':
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos_ce.minit"
+            cmd = "mpiexec -np 16 ../../pmilos.x pmilos_ce.minit"
 
         if rte == 'CE+RTE':
             print("CE+RTE not possible on PMILOS, performing RTE instead")
-            cmd = "mpiexec -np 16 ../pmilos.x pmilos.minit"
+            cmd = "mpiexec -np 16 ../../pmilos.x pmilos.minit"
 
         if rte == 'RTE_seq':
-            cmd = '../milos.x pmilos.mtrol'
+            cmd = '../../milos.x pmilos.mtrol'
 
         del sdata
         #need to change settings for CE or CE+RTE in the pmilos.minit file here
@@ -632,6 +640,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[3,:,:] = result[:,:,6] #azimuth
         rte_data_products[4,:,:] = result[:,:,2] #vlos
         rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
+        rte_data_products[5,:,:] = result[:,:,12] #chisq
 
         rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 

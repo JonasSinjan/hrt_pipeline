@@ -14,7 +14,7 @@ def get_file_list(text):
   print(text_split)
   return text_split
 
-file = open('../file_names.txt')
+file = open('./file_names.txt')
 text = file.read()
 
 text_split = get_file_list(text)
@@ -23,7 +23,7 @@ text_split = get_file_list(text)
 #                 TARGET DIRECTORY
 #######################################################
 
-target_directory = '/data/slam/home/calchetti/fits_files/march2022/'
+target_directory = '/data/slam/home/sinjan/fits_files/'
 
 os.chdir(target_directory)
 

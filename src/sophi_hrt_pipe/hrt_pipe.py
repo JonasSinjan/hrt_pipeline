@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
 from scipy.ndimage import binary_dilation, generate_binary_structure
 
-from utils import *
-from processes import *
-from inversions import *
+from sophi_hrt_pipe.utils import *
+from sophi_hrt_pipe.processes import *
+from sophi_hrt_pipe.inversions import *
 
 def phihrt_pipe(input_json_file):
 
@@ -112,7 +112,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.2 February 8th 2022'
+    version = 'V1.3 March 16th 2022'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -178,6 +178,10 @@ def phihrt_pipe(input_json_file):
             if len(vrs) != 2:
                 print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
                 raise KeyError
+
+        #behaviour if clean mode is set to None (null in json)
+        if clean_mode is None:
+            clean_mode = "V" 
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
@@ -356,6 +360,8 @@ def phihrt_pipe(input_json_file):
             flat[:,:,1,2] = filling_data(flat_copy[:,:,1,2], 0, mode = {'exact rows':[1345,1346]}, axis=1)
 
             del flat_copy
+
+        flat_copy = flat.copy()
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -1001,7 +1007,11 @@ def phihrt_pipe(input_json_file):
         
         for count, scan in enumerate(data_f):
 
-            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs)[0]
+            if ".gz" in scan:
+                gzip = True
+            else:
+                gzip = False
+            stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs, gzip = gzip)[0]
 
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
@@ -1012,7 +1022,6 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['BUNIT'] = 'I_CONT'
             hdr_arr[count]['DATAMIN'] = int(np.min(data[:,:,:,:,count]))
             hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
-
             hdr_arr[count] = data_hdr_kw(hdr_arr[count], data[:,:,:,:,count])#add datamedn, datamean etc
 
             with fits.open(scan) as hdu_list:
@@ -1024,6 +1033,7 @@ def phihrt_pipe(input_json_file):
             # DC change 20211014
             
             if out_intermediate: # DC 20211116
+
                 if dark_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits")
@@ -1038,11 +1048,12 @@ def phihrt_pipe(input_json_file):
                         hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
 
-                    with fits.open(flat_f) as hdu_list:
-                        print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
-                        hdu_list[0].data = flat.astype(np.float32)
-                        #update the calibration keywords
-                        hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
+                    # with fits.open(flat_f) as hdu_list:
+                    #     print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
+                    #     hdu_list[0].data = flat
+                    #     #update the calibration keywords
+                    #     hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
+
 
                     with fits.open(flat_f) as hdu_list:
                         print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")

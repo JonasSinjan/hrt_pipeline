@@ -50,9 +50,12 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
     """
     try:
         data, header = load_fits(path)
-
         if bit_convert_scale: #conversion from 24.8bit to 32bit
-            IMGformat = fits.open(path)[9].data['PHI_IMG_format'][-1]
+            try:
+                IMGformat = fits.open(path)[9].data['PHI_IMG_format'][-1]
+            except:
+                print("Most likely file does not have 9th Image extension")
+                IMGformat = 'IMGFMT_16'
             if IMGformat != 'IMGFMT_24_8':
                 data /=  256.
             else:
@@ -298,9 +301,9 @@ def fix_path(path,dir='forward',verbose=False):
     """
     path = repr(path)
     if dir == 'forward':
-        path = path.replace(")", "\)")
-        path = path.replace("(", "\(")
-        path = path.replace(" ", "\ ")
+        path = path.replace(")", r"\)")
+        path = path.replace("(", r"\(")
+        path = path.replace(" ", r"\ ")
         path = os.path.abspath(path).split("'")[1]
         if verbose == True:
             print('forward')

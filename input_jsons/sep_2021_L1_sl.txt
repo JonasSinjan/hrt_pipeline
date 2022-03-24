@@ -1,0 +1,1 @@
+{"data_f": ["/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210914T053015_V202110150939C_0149140301.fits"], "flat_f": "/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210911T120504_V202110200555C_0169110100.fits", "dark_f": "/data/slam/home/sinjan/fits_files/solo_L1_phi-hrt-ilam_20210428T130238_V202109240900C_0164281001.fits"}
