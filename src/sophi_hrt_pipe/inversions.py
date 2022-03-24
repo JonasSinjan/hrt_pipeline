@@ -312,6 +312,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
         rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
+        rte_data_products[6,:,:] = rte_invs_noth[11,:,:] #chisq
 
         rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
@@ -475,6 +476,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_data_products[3,:,:] = rte_out[3,:,:] #azimuth
         rte_data_products[4,:,:] = rte_out[7,:,:] #vlos
         rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
+        rte_data_products[6,:,:] = rte_out[11,:,:] #chisq
 
         rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
@@ -638,6 +640,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[3,:,:] = result[:,:,6] #azimuth
         rte_data_products[4,:,:] = result[:,:,2] #vlos
         rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
+        rte_data_products[5,:,:] = result[:,:,12] #chisq
 
         rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
 
