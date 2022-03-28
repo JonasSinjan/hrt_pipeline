@@ -882,8 +882,6 @@ def phihrt_pipe(input_json_file):
         printc('-->>>>>>> No VtoQU mode',color=bcolors.WARNING)
 
 
-
-
     #-----------------
     # NO-ISS WAVELENGTH REGISTRATION
     #-----------------
@@ -1080,6 +1078,7 @@ def phihrt_pipe(input_json_file):
         #check if already defined by input, otherwise generate
         scan_name_list = check_filenames(data_f)
         printc('-->>>>>>> No output demod file mode',color=bcolors.WARNING)
+
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS
