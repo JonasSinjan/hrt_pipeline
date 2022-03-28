@@ -304,7 +304,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         
         _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
 
-        rte_data_products = np.zeros((6,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
+        rte_data_products = np.zeros((7,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
 
         rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
         rte_data_products[1,:,:] = rte_invs_noth[2,:,:] #b mag strength
@@ -468,7 +468,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_out[4,low_values_flags] = 0
         
        
-        rte_data_products = np.zeros((6,rte_out.shape[1],rte_out.shape[2]))
+        rte_data_products = np.zeros((7,rte_out.shape[1],rte_out.shape[2]))
 
         rte_data_products[0,:,:] = rte_out[9,:,:] + rte_out[10,:,:] #continuum
         rte_data_products[1,:,:] = rte_out[1,:,:] #b mag strength
@@ -632,7 +632,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         12. Chisqr value
         """
 
-        rte_data_products = np.zeros((6,result.shape[0],result.shape[1]))
+        rte_data_products = np.zeros((7,result.shape[0],result.shape[1]))
 
         rte_data_products[0,:,:] = result[:,:,7] + result[:,:,8] #continuum
         rte_data_products[1,:,:] = result[:,:,1] #b mag strength
