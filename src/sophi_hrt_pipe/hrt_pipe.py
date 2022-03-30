@@ -172,12 +172,14 @@ def phihrt_pipe(input_json_file):
             config = input_dict['config']
 
         if 'vers' not in input_dict:
-            vrs = '01'
+            # vrs = '01'
+            vrs = time.strftime('%Y%m%d%H%M')
         else:
             vrs = input_dict['vers']
             if len(vrs) != 2:
-                print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
-                raise KeyError
+                printc("WARNING: Version string is larger than 2 digits",color=colors.WARNING)
+                # print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
+                # raise KeyError
 
         #behaviour if clean mode is set to None (null in json)
         if clean_mode is None:
@@ -277,9 +279,12 @@ def phihrt_pipe(input_json_file):
     diff = 2048-data_size[0] #handling 0/2 errors
     
     if np.abs(diff) > 0:
-    
-        start_row = int((2048-data_size[0])/2)
-        start_col = int((2048-data_size[1])/2)
+        
+        printc("WARNING: Dataset is cropped. Cropping will be considered the same for all the data", color=bcolors.WARNING)
+        start_row = int(hdr_arr[0]['PXBEG2']-1)
+        start_col = int(hdr_arr[0]['PXBEG1']-1)
+#         start_row = int((2048-data_size[0])/2)
+#         start_col = int((2048-data_size[1])/2)
         
     else:
         start_row, start_col = 0, 0
@@ -780,7 +785,7 @@ def phihrt_pipe(input_json_file):
         for scan, scan_hdr in enumerate(hdr_arr):
             printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
             if ghost_c: # DC 20211116
-                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool)) # DC 20211116
+                ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost[rows,cols],dtype=bool)) # DC 20211116
             else: # DC 20211116
                 ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=Ic_mask[...,scan]) # DC 20211116
             
@@ -814,7 +819,7 @@ def phihrt_pipe(input_json_file):
                             Ic_mask[ceny,cenx] = 1
                             Ic_mask = np.where(Ic_mask>0,1,0)
                             Ic_mask = np.array(Ic_mask, dtype = bool)
-                            data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask)
+                            data = CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask[rows,cols])
                         except Exception:
                             print("The issue could not be overcome\n Please check the input config file\n Aborting")
                             exit()
@@ -854,7 +859,7 @@ def phihrt_pipe(input_json_file):
         for scan, scan_hdr in enumerate(hdr_arr):
             printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
             if ghost_c: # DC 20211116
-                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost,dtype=bool),nlevel=0.3) # DC 20211116
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost[rows,cols],dtype=bool),nlevel=0.3) # DC 20211116
             else: # DC 20211116
                 ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=Ic_mask[...,scan],nlevel=0.3) # DC 20211116
             
