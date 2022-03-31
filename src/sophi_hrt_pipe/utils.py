@@ -470,7 +470,7 @@ def limb_fitting(img, hdr, mar=200):
         norm = 1
     
     if mode == 'columns':
-        xi = np.arange(100,2000,50)
+        xi = np.arange(100,img.shape[1]-50,50)
         yi = []
         m = 10
         for c in xi:
@@ -491,7 +491,7 @@ def limb_fitting(img, hdr, mar=200):
         yi = yi[~_is_outlier(yi)]
     
     elif mode == 'rows':
-        yi = np.arange(100,2000,50)
+        yi = np.arange(100,img.shape[0]-50,50)
         xi = []
         m = 10
         for r in yi:

@@ -938,57 +938,37 @@ int CalculaNfree(PRECISION *spectro,int nspectro){
 */
 void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISION *spectro,Init_Model *initModel){
 
-	// Modified by Daniele Calchetti (DC) calchetti@mps.mpg.de in March 2022 
-
-
 	PRECISION x,y,aux,LM_lambda_plus,LM_lambda_minus,Blos,beta_B,Ic,Vlos;
 	PRECISION *spectroI,*spectroQ,*spectroU,*spectroV;
 	PRECISION L,m,gamma, gamma_rad,tan_gamma,maxV,minV,C,maxWh,minWh;
 	int i,j;
-
-	// added by DC for continuum position
-	PRECISION d1, d2;
-	int cont_pos, i0, ii;
-	// end DC
+    // added by DC fro continuum position
+    PRECISION d1, d2;
+    int cont_pos, i0, i1;
+    // end DC
 
 
 	//Es necesario crear un lambda en FLOAT para probar como se hace en la FPGA
 	PRECISION *lambda_aux;
 	lambda_aux= (PRECISION*) calloc(nlambda,sizeof(PRECISION));
+	PRECISION lambda0,lambda1,lambda2,lambda3,lambda4;
 
-	// commented on March 2022 DOS (FPGA HERITAGE)
-	// PRECISION lambda0,lambda1,lambda2,lambda3,lambda4;
-	// lambda0 = 6.1732012e+3 + 0; // RTE_WL_0
-	// lambda1 = lambda0 + 0.070000000; //RTE_WL_STEP
-	// lambda2 = lambda1 + 0.070000000;
-	// lambda3 = lambda2 + 0.070000000;
-	// lambda4 = lambda3 + 0.070000000;
+	lambda0 = 6.1732012e+3 + 0; // RTE_WL_0
+	lambda1 = lambda0 + 0.070000000; //RTE_WL_STEP
+	lambda2 = lambda1 + 0.070000000;
+	lambda3 = lambda2 + 0.070000000;
+	lambda4 = lambda3 + 0.070000000;
 
-	// commented on March 2022 DOS (FPGA HERITAGE)
-	// lambda_aux[0]=lambda0;
-	// lambda_aux[1]=lambda1;
-	// lambda_aux[2]=lambda2;
-	// lambda_aux[3]=lambda3;
-	// lambda_aux[4]=lambda4;
+	lambda_aux[0]=lambda0;
+	lambda_aux[1]=lambda1;
+	lambda_aux[2]=lambda2;
+	lambda_aux[3]=lambda3;
+	lambda_aux[4]=lambda4;
 
-	// Ic= spectro[nlambda-1]; // Continuo ultimo valor de I
-	// Ic= spectro[0]; // Continuo primer valor de I
-
-	// added by DC for continuum position
-	d1 = (PRECISION)lambda[0] - (PRECISION)lambda[1];
-	d2 = (PRECISION)lambda[nlambda-2] - (PRECISION)lambda[nlambda-1];
-	if (fabs(d1)>fabs(d2)){
-			cont_pos = 0;
-			i0 = 0;
-			ii = 1;
+	//Sino queremos usar el lambda de la FPGA
+	for(i=0;i<nlambda-1;i++){
+		lambda_aux[i] = (PRECISION)lambda[i];
 	}
-	else{
-			cont_pos = nlambda -1;
-			i0 = 1;
-			ii = 0;
-	}
-	Ic = spectro[cont_pos]; // Continuo
-	// end DC
 
 
 	spectroI=spectro;
@@ -996,17 +976,31 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	spectroU=spectro+nlambda*2;
 	spectroV=spectro+nlambda*3;
 
-	//Sino queremos usar el lambda de la FPGA
-	for(i=0;i<nlambda-1;i++){
-		lambda_aux[i] = (PRECISION)lambda[i+ii];// added by DC for continuum position
-	}
+    // added by DC for continuum position
+    d1 = (PRECISION)lambda[0] - (PRECISION)lambda[1];
+    d2 = (PRECISION)lambda[nlambda-2] - (PRECISION)lambda[nlambda-1];
+    if (fabs(d1)>fabs(d2)){
+        cont_pos = 0;
+        i0 = 1;
+        i1 = nlambda;
+    }
+    else{
+        cont_pos = nlambda -1;
+        i0 = 0;
+        i1 = nlambda-1;
+    }
+    Ic= spectro[cont_pos]; // Continuo ultimo valor de I
+    // end DC
+
+// 	Ic= spectro[nlambda-1]; // Continuo ultimo valor de I
+// 	Ic= spectro[0]; // Continuo ultimo valor de I
 
 
 	x=0;
 	y=0;
 	for(i=0;i<nlambda-1;i++){
-		aux = ( Ic - (spectroI[i+ii]+ spectroV[i+ii])); // added by DC for continuum position
-		x = x +  aux * (lambda_aux[i]-lambda_0);
+		aux = ( Ic - (spectroI[i]+ spectroV[i]));
+		x= x +  aux * (lambda_aux[i]-lambda_0);
 		y = y + aux;
 	}
 
@@ -1020,7 +1014,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	x=0;
 	y=0;
 	for(i=0;i<nlambda-1;i++){
-		aux = ( Ic - (spectroI[i+ii] - spectroV[i+ii]));// added by DC for continuum position
+		aux = ( Ic - (spectroI[i] - spectroV[i]));
 		x= x +  aux * (lambda_aux[i]-lambda_0);
 		y = y + aux;
 	}
@@ -1205,11 +1199,11 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	x = 0;
 	y = 0;
 	for(i=0;i<nlambda-1;i++){
-		L = fabs( sqrtf( spectroQ[i+ii]*spectroQ[i+ii] + spectroU[i+ii]*spectroU[i+ii] )); // added by DC for continuum position
+		L = fabs( sqrtf( spectroQ[i]*spectroQ[i] + spectroU[i]*spectroU[i] ));
 		m = fabs( (4 * (lambda_aux[i]-lambda_0) * L ));// / (3*C*Blos) ); //2*3*C*Blos mod abril 2016 (en test!)
 
-		x = x + fabs(spectroV[i+ii]) * m; // added by DC for continuum position
-		y = y + fabs(spectroV[i+ii]) * fabs(spectroV[i+ii]); // added by DC for continuum position
+		x = x + fabs(spectroV[i]) * m;
+		y = y + fabs(spectroV[i]) * fabs(spectroV[i]);
 
 //		printf("L %f \n",L);
 //		printf("m : %f \n",m);
@@ -1254,7 +1248,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	int muestra;
 
 	if(nlambda==6)
-		muestra = CLASSICAL_ESTIMATES_SAMPLE_REF - i0; // added by DC for continuum position
+		muestra = CLASSICAL_ESTIMATES_SAMPLE_REF;
 	else
 		muestra = nlambda*0.75;
 
@@ -1700,19 +1694,19 @@ void spectral_synthesis_convolution(){
 			if(NLAMBDA == 6){
 
 				//convolucion de I
-				Ic=spectra[nlambda-1]; // CHANGE  HERE!!!!!!
+				Ic=spectra[nlambda-1];
 
-				for(i=0;i<nlambda-1;i++) //CHANGE ITERABLE DEPENDENT ON IC
+				for(i=0;i<nlambda-1;i++)
 					spectra[i]=Ic-spectra[i];
 
 				PRECISION *spectra_aux;
 				spectra_aux =  (PRECISION*) calloc(nlambda*2-2,sizeof(PRECISION));
 
 				int j=0;
-				for(i=0,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+				for(i=0,j=0;i<nlambda*2-2;i=i+2,j++)
 					spectra_aux[i]=spectra[j];
 
-				for(i=1,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+				for(i=1,j=0;i<nlambda*2-2;i=i+2,j++)
 					spectra_aux[i]=(spectra[j]+spectra[j+1])/2;
 
 
@@ -1724,7 +1718,7 @@ void spectral_synthesis_convolution(){
 				// }
 				// printf("];\n");
 
-				direct_convolution(spectra_aux,nlambda*2-2-1,G,NMUESTRAS_G,1);  //no convolucionamos el ultimo valor Ic //AGAIN CHANGE HERE
+				direct_convolution(spectra_aux,nlambda*2-2-1,G,NMUESTRAS_G,1);  //no convolucionamos el ultimo valor Ic
 
 				// printf("spectraI_aux_conv=[");
 				// for(i=0;i<nlambda*2-2;i++){
@@ -1735,10 +1729,10 @@ void spectral_synthesis_convolution(){
 				// printf("];\n");
 
 
-				for(i=0,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
-					spectra[j]=spectra_aux[i]; //AGAIN CHANGE HERE
+				for(i=0,j=0;i<nlambda*2-2;i=i+2,j++)
+					spectra[j]=spectra_aux[i];
 
-				for(i=0;i<nlambda-1;i++) //AGAIN CHANGE HERE
+				for(i=0;i<nlambda-1;i++)
 					spectra[i]=Ic-spectra[i];
 
 				free(spectra_aux);
@@ -1748,18 +1742,18 @@ void spectral_synthesis_convolution(){
 				for(k=1;k<NPARMS;k++){
 
 					PRECISION *spectra_aux;
-					spectra_aux =  (PRECISION*) calloc(nlambda*2-2,sizeof(PRECISION)); 
+					spectra_aux =  (PRECISION*) calloc(nlambda*2-2,sizeof(PRECISION));
 
 					int j=0;
-					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++)
 						spectra_aux[i]=spectra[j+nlambda*k];
 
-					for(i=1,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+					for(i=1,j=0;i<nlambda*2-2;i=i+2,j++)
 						spectra_aux[i]=(spectra[j+nlambda*k]+spectra[j+1+nlambda*k])/2;
 
-					direct_convolution(spectra_aux,nlambda*2-2-1,G,NMUESTRAS_G,1);  //no convolucionamos el ultimo valor Ic //AGAIN CHANGE HERE
+					direct_convolution(spectra_aux,nlambda*2-2-1,G,NMUESTRAS_G,1);  //no convolucionamos el ultimo valor Ic
 
-					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++)
 						spectra[j+nlambda*k]=spectra_aux[i];
 
 					free(spectra_aux);
@@ -1800,16 +1794,16 @@ void response_functions_convolution(){
 					spectra_aux =  (PRECISION*) calloc(nlambda*2-2,sizeof(PRECISION));
 
 					int j=0;
-					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++)
 						spectra_aux[i]=d_spectra[j+nlambda*m+nlambda*NTERMS*k];
 
-					for(i=1,j=0;i<nlambda*2-2;i=i+2,j++) //AGAIN CHANGE HERE
+					for(i=1,j=0;i<nlambda*2-2;i=i+2,j++)
 						spectra_aux[i]=(d_spectra[j+nlambda*m+nlambda*NTERMS*k]+d_spectra[j+nlambda*m+nlambda*NTERMS*k])/2;
 
-					direct_convolution(spectra_aux,nlambda*2-2-1,G,NMUESTRAS_G,1);  //no convolucionamos el ultimo valor Ic //AGAIN CHANGE HERE
+					direct_convolution(spectra_aux,nlambda*2-2-1,G,NMUESTRAS_G,1);  //no convolucionamos el ultimo valor Ic
 
 					for(i=0,j=0;i<nlambda*2-2;i=i+2,j++)
-						d_spectra[j+nlambda*m+nlambda*NTERMS*k]=spectra_aux[i]; //AGAIN CHANGE HERE
+						d_spectra[j+nlambda*m+nlambda*NTERMS*k]=spectra_aux[i];
 
 					free(spectra_aux);
 				}

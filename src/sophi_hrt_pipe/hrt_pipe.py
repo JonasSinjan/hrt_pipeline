@@ -177,7 +177,7 @@ def phihrt_pipe(input_json_file):
         else:
             vrs = input_dict['vers']
             if len(vrs) != 2:
-                printc("WARNING: Version string is larger than 2 digits",color=colors.WARNING)
+                printc("WARNING: Version string is larger than 2 digits",color=bcolors.WARNING)
                 # print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
                 # raise KeyError
 
