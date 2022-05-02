@@ -743,7 +743,7 @@ def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
     return p, hi
 
   
-def blos_noise(blos_file):
+def blos_noise(blos_file, fs = None):
     """
     plot blos on left panel, and blos hist + Gaussian fit (w/ iterative option)
     """
@@ -774,6 +774,9 @@ def blos_noise(blos_file):
 
 
     fig, ax = plt.subplots(1,2, figsize = (14,6))
+    if fs is not None:
+        idx = np.where(fs<1)
+        blos[idx] = -300
     im1 = ax[0].imshow(blos, cmap = "gray", origin = "lower", vmin = -200, vmax = 200)
     fig.colorbar(im1, ax = ax[0], fraction=0.046, pad=0.04)
     hi = ax[1].hist(values.flatten(), bins=np.linspace(-2e2,2e2,200))
@@ -799,22 +802,22 @@ def blos_noise(blos_file):
     plt.tight_layout()
     plt.show()
 
-def stokes_noise(stokes_file, iterative = False):
+def stokes_noise(stokes_file):
     """
-    plot blos on left panel, and blos hist + Gaussian fit (w/ iterative option)
+    plot stokes V on left panel, and Stokes V hist + Gaussian fit (w/ iterative option)
     """
 
     stokes = fits.getdata(stokes_file)
     hdr = fits.getheader(stokes_file)
     out = fits_get_sampling(stokes_file)
-    cpos = out[0]
+    cpos = out[3]
     #first get the pixels that we want (central 512x512 and limb handling)
     limb_side, center, Rpix = limb_side_finder(stokes[:,:,3,cpos], hdr)
     if limb_side == '':#not a limb image
         values = stokes[512:1536, 512:1536,3,cpos]
 
     else:
-        data_size = np.shape(blos)
+        data_size = np.shape(stokes[:,:,0,0])
         # ds = 386 #?
         # dx = 0; dy = 0
         # if 'N' in limb_side and data_size[0]//2 - ds > 512:
@@ -832,30 +835,29 @@ def stokes_noise(stokes_file, iterative = False):
 
 
     fig, ax = plt.subplots(1,2, figsize = (14,6))
-    hi = ax[0].hist(values, bins=np.linspace(-2e2,2e2,200))
-    print(hi)
+    im1 = ax[0].imshow(stokes[:,:,3,cpos], cmap = "gist_heat", origin = "lower", vmin = -1e-2, vmax = 1e-2)
+    fig.colorbar(im1, ax = ax[0], fraction=0.046, pad=0.04)
+    hi = ax[1].hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200))
+    #print(hi)
+    tmp = [0,0]
+    tmp[0] = hi[0].astype('float64')
+    tmp[1] = hi[1].astype('float64')
+
 
     #guassian fit + label
-    if iterative == False:
-        iterative_str = ""
-        p = gaussian_fit(hi, show = False)
-        
-    elif iterative:
-        iterative_str = " (Iterative Fit)"
-        p, hi = iter_noise(values,[1.,0.,1.],eps=1e-4)
-
-    else:
-        print("Iterative set to neither True nor False")
-
+    p = gaussian_fit(tmp, show = False)    
+    p_iter, hi_iter = iter_noise(values,eps=1e-6)
     xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e}'
+    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} Ic'
     ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
-    ax[1].set_legend(fontsize=9)
+    ax[1].scatter(0,0, color = 'white', s = 0, label = f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} Ic")
+    ax[1].legend(fontsize=15)
 
-    date = blos_file.split('blos_')[1][:15]
-    dt_str = dt.strptime(date, "%Y%m%dT%H%m%s")
-    fig.suptitle(f"Blos {dt_str}" + iterative_str)
+    date = stokes_file.split('stokes_')[1][:15]
+    dt_str = dt.strptime(date, "%Y%m%dT%H%M%S")
+    fig.suptitle(f"Stokes {dt_str}")
 
+    plt.tight_layout()
     plt.show()
 
 
