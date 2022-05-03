@@ -205,19 +205,28 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     Use constant demodulation matrices to demodulate input data
     '''
     if pmp_temp == '50':
-        demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
-                     [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
-                     [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
-                     [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
+        # 'original (pre May 2022/RSW1 2022 matrices, that don't account for azimuth angle etc in PMP)
+        # demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
+        #              [ 0.40408596,  0.10412157, -0.7225681,   0.20825675],
+        #              [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
+        #              [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
+        #Alberto 30/04/22
+        printc(f'Using Alberto demodulation matrix for temp=50',color = bcolors.OKGREEN)
+        mod_matrix = np.array([[ 1.0014 ,  0.56715  , 0.3234 , -0.74743  ],
+                               [ 1.0007 ,  0.0037942, 0.69968,  0.71423  ],
+                               [ 1.0002 , -0.98937  , 0.04716, -0.20392  ],
+                               [ 0.99769,  0.27904  ,-0.86715,  0.39908  ]])
+        demod_data = np.linalg.inv(mod_matrix)
         
     elif pmp_temp == '40':
-#        demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
-#                     [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
-#                     [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
-#                     [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
-#Alberto 14/04/22
-        printc(f'Using Alberto demodulation matrix ',color = bcolors.OKGREEN)
-        mod_matrix = np.array([[ 0.99816  ,0.61485 , 0.010613 ,-0.77563 ],
+        # 'original (pre May 2022/RSW1 2022 matrices, that don't account for azimuth angle etc in PMP)
+        # demod_data = np.array([[ 0.26450154,  0.2839626,   0.12642948,  0.3216773 ],
+        #              [ 0.59873885,  0.11278069, -0.74991184,  0.03091451],
+        #              [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
+        #              [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
+        #Alberto 14/04/22
+        printc(f'Using Alberto demodulation matrix for temp=40',color = bcolors.OKGREEN)
+        mod_matrix = np.array([[ 0.99816  ,0.61485 , 0.010613 ,-0.77563 ], 
                                [ 0.99192 , 0.08382 , 0.86254 , 0.46818],
                                [ 1.0042 , -0.84437 , 0.12872 ,-0.53972],
                                [ 1.0057 , -0.30576 ,-0.87969 , 0.40134]])
