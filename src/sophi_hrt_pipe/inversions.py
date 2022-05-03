@@ -574,20 +574,20 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
     
         primary_hdu = fits.PrimaryHDU(sdata, header = hdr)
         hdul = fits.HDUList([primary_hdu])
-        hdul.writeto(f'./p-milos/run/data/input_tmp.fits', overwrite=True)
+        hdul.writeto(PMILOS_LOC+f'run/data/input_tmp.fits', overwrite=True)
 
         if rte == 'RTE':
-            cmd = "mpiexec -n 64 ../../pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
+            cmd = "mpiexec -n 64 "+PMILOS_LOC+"pmilos.x pmilos.minit" #../milos.x pmilos.mtrol" ##
         
         if rte == 'CE':
-            cmd = "mpiexec -np 16 ../../pmilos.x pmilos_ce.minit"
+            cmd = "mpiexec -np 16 "+PMILOS_LOC+"pmilos.x pmilos_ce.minit"
 
         if rte == 'CE+RTE':
             print("CE+RTE not possible on PMILOS, performing RTE instead")
-            cmd = "mpiexec -np 16 ../../pmilos.x pmilos.minit"
+            cmd = "mpiexec -np 16 "+PMILOS_LOC+"pmilos.x pmilos.minit"
 
         if rte == 'RTE_seq':
-            cmd = '../../milos.x pmilos.mtrol'
+            cmd = PMILOS_LOC+"milos.x pmilos.mtrol"
 
         del sdata
         #need to change settings for CE or CE+RTE in the pmilos.minit file here
@@ -605,11 +605,11 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         else:
             out_file = 'inv__mod.fits' #only when one datacube and 16 processors
 
-        with fits.open(f'./p-milos/run/results/{out_file}') as hdu_list:
+        with fits.open(PMILOS_LOC+f'run/results/{out_file}') as hdu_list:
             result = hdu_list[0].data
 
         #del_dummy = subprocess.call(f"rm ./p-milos/run/results/{out_file}.fits",shell=True) 
-        del_dummy = subprocess.call(f"rm ./p-milos/run/results/{out_file}",shell=True) #must delete the output file
+        del_dummy = subprocess.call(f"rm "+PMILOS_LOC+"run/results/{out_file}",shell=True) #must delete the output file
       
         #result has dimensions [rows,cols,13]
         result = np.moveaxis(result,0,2)

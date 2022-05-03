@@ -620,6 +620,8 @@ def phihrt_pipe(input_json_file):
                 field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
         
         ds = 256
+        if hdr_arr[0]['DSUN_AU'] < 0.4:
+            ds = 384
         dx = 0; dy = 0
         if 'N' in limb_side and data_size[0]//2 - ds > 512:
             dy = -512
@@ -906,10 +908,10 @@ def phihrt_pipe(input_json_file):
         # iterations = 3
         
         if cpos_arr[0] == 5:
-            l_i = [0,1,2,3,4] # shift wl
+            l_i = [0,1,3,4,2] # shift wl
             cwl = 2
         else:
-            l_i = [1,2,3,4,5] # shift wl
+            l_i = [1,2,4,5,3] # shift wl
             cwl = 3
         
         old_data = data.copy()
@@ -925,7 +927,7 @@ def phihrt_pipe(input_json_file):
                 s = [1,1]
                 if l == cwl:
                     temp = np.abs(old_data[sly,slx,0,l,scan])
-                    ref = np.abs(data[sly,slx,0,l-1,scan].copy())
+                    ref = np.abs((data[sly,slx,0,l-1,scan] + data[sly,slx,0,l+1,scan]) / 2)
                 
                 while np.any(np.abs(s)>1e-3):#for it in range(iterations):
                     sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
