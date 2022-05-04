@@ -2,6 +2,8 @@ from astropy.io import fits
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import scipy.optimize as spo
+from datetime import datetime as dt
 
 class bcolors:
   HEADER = '\033[95m'
@@ -699,9 +701,168 @@ def SPG_shifts_FFT(data,norma=True,prec=100,coarse_prec = 1.5,sequential = False
  
     return row_shift,col_shift,shifted_image
 
+#plotting functions for quick data analysis for communal use
 
 
+def find_nearest(array, value):
+    """
+    return index of nearest value in array to the desired value
+    """
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
 
+def gaus(x,a,x0,sigma):
+    """
+    return Gauss function
+    """
+    return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+def gaussian_fit(a,show=True):
+    """
+    gaussian fit for data 'a' from np.histogram
+    """
+#    a=np.histogram(data.flat,density=True,bins=100)
+    xx=a[1][:-1] + (a[1][1]-a[1][0])/2
+    y=a[0][:]
+    p0=[0.,sum(xx*y)/sum(y),np.sqrt(sum(y * (xx - sum(xx*y)/sum(y))**2) / sum(y))] #weighted avg of bins for avg and sigma inital values
+    p0[0]=y[find_nearest(xx,p0[1])-5:find_nearest(xx,p0[1])+5].mean() #find init guess for ampltiude of gauss func
+    p,cov=spo.curve_fit(gaus,xx,y,p0=p0)
+    if show:
+        lbl = '{:.2e} $\pm$ {:.2e}'.format(p[1],p[2])
+        plt.plot(xx,gaus(xx,*p),'r--', label=lbl)
+        plt.legend(fontsize=9)
+    return p
+
+def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
+    p_old = [1,0,10]; count = 0
+    while np.abs(p[2] - p_old[2])>eps:
+        p_old = p; count += 1
+        hi = np.histogram(temp, bins=np.linspace(p[1] - 3*p[2],p[1] + 3*p[2],200),density=False);
+        p = gaussian_fit(hi, show=False)
+    return p, hi
+
+  
+def blos_noise(blos_file, fs = None):
+    """
+    plot blos on left panel, and blos hist + Gaussian fit (w/ iterative option)
+    """
+
+    blos = fits.getdata(blos_file)
+    hdr = fits.getheader(blos_file)
+    #first get the pixels that we want (central 512x512 and limb handling)
+    limb_side, center, Rpix = limb_side_finder(blos, hdr)
+    if limb_side == '':#not a limb image
+        values = blos[512:1536, 512:1536]
+
+    else:
+        data_size = np.shape(blos)
+        # ds = 386 #?
+        # dx = 0; dy = 0
+        # if 'N' in limb_side and data_size[0]//2 - ds > 512:
+        #     dy = -512
+        # if 'S' in limb_side and data_size[0]//2 - ds > 512:
+        #     dy = 512
+        # if 'W' in limb_side and data_size[1]//2 - ds > 512:
+        #     dx = -512
+        # if 'E' in limb_side and data_size[1]//2 - ds > 512:
+        #     dx = 512
+
+        # sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
+        # slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
+        # values = blos[sly, slx]
+
+
+    fig, ax = plt.subplots(1,2, figsize = (14,6))
+    if fs is not None:
+        idx = np.where(fs<1)
+        blos[idx] = -300
+    im1 = ax[0].imshow(blos, cmap = "gray", origin = "lower", vmin = -200, vmax = 200)
+    fig.colorbar(im1, ax = ax[0], fraction=0.046, pad=0.04)
+    hi = ax[1].hist(values.flatten(), bins=np.linspace(-2e2,2e2,200))
+    #print(hi)
+    tmp = [0,0]
+    tmp[0] = hi[0].astype('float64')
+    tmp[1] = hi[1].astype('float64')
+
+
+    #guassian fit + label
+    p = gaussian_fit(tmp, show = False)    
+    p_iter, hi_iter = iter_noise(values,[1.,0.,1.],eps=1e-4)
+    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} G'
+    ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+    ax[1].scatter(0,0, color = 'white', s = 0, label = f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+    ax[1].legend(fontsize=15)
+
+    date = blos_file.split('blos_')[1][:15]
+    dt_str = dt.strptime(date, "%Y%m%dT%H%M%S")
+    fig.suptitle(f"Blos {dt_str}")
+
+    plt.tight_layout()
+    plt.show()
+
+def stokes_noise(stokes_file):
+    """
+    plot stokes V on left panel, and Stokes V hist + Gaussian fit (w/ iterative option)
+    """
+
+    stokes = fits.getdata(stokes_file)
+    hdr = fits.getheader(stokes_file)
+    out = fits_get_sampling(stokes_file)
+    cpos = out[3]
+    #first get the pixels that we want (central 512x512 and limb handling)
+    limb_side, center, Rpix = limb_side_finder(stokes[:,:,3,cpos], hdr)
+    if limb_side == '':#not a limb image
+        values = stokes[512:1536, 512:1536,3,cpos]
+
+    else:
+        data_size = np.shape(stokes[:,:,0,0])
+        # ds = 386 #?
+        # dx = 0; dy = 0
+        # if 'N' in limb_side and data_size[0]//2 - ds > 512:
+        #     dy = -512
+        # if 'S' in limb_side and data_size[0]//2 - ds > 512:
+        #     dy = 512
+        # if 'W' in limb_side and data_size[1]//2 - ds > 512:
+        #     dx = -512
+        # if 'E' in limb_side and data_size[1]//2 - ds > 512:
+        #     dx = 512
+
+        # sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
+        # slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
+        # values = blos[sly, slx]
+
+
+    fig, ax = plt.subplots(1,2, figsize = (14,6))
+    im1 = ax[0].imshow(stokes[:,:,3,cpos], cmap = "gist_heat", origin = "lower", vmin = -1e-2, vmax = 1e-2)
+    fig.colorbar(im1, ax = ax[0], fraction=0.046, pad=0.04)
+    hi = ax[1].hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200))
+    #print(hi)
+    tmp = [0,0]
+    tmp[0] = hi[0].astype('float64')
+    tmp[1] = hi[1].astype('float64')
+
+
+    #guassian fit + label
+    p = gaussian_fit(tmp, show = False)    
+    p_iter, hi_iter = iter_noise(values,eps=1e-6)
+    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} Ic'
+    ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+    ax[1].scatter(0,0, color = 'white', s = 0, label = f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} Ic")
+    ax[1].legend(fontsize=15)
+
+    date = stokes_file.split('stokes_')[1][:15]
+    dt_str = dt.strptime(date, "%Y%m%dT%H%M%S")
+    fig.suptitle(f"Stokes {dt_str}")
+
+    plt.tight_layout()
+    plt.show()
+
+
+"""vsnr = iter_noise(img[sly,slx,3,5].ravel())[2]
+    print(data_date[i]+': Stokes V SNR (iterative, iss off): {:.2e}'.format(vsnr))"""
 
 
 
