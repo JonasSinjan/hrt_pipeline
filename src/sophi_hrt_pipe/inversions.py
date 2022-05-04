@@ -39,10 +39,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     taking care of the azimuth definition if the image is flipped
     """
 
-    if imgdirx_flipped:
-        print("Input image has been flipped as per convention - converting Azimuth to convention")
-        azi = rte_data_products[3,:,:].copy()
-        rte_data_products[3,:,:] = 180 - azi
+#     if imgdirx_flipped:
+#         print("Input image has been flipped as per convention - converting Azimuth to convention")
+#         azi = rte_data_products[3,:,:].copy()
+#         rte_data_products[3,:,:] = 180 - azi
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
@@ -180,8 +180,8 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
-
-def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
+    
     """
     RTE inversion using CMILOS
     """
@@ -206,29 +206,79 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
 
     wavelength = 6173.3354
 
-    for scan in range(int(data_shape[-1])):
+    start_time = time.perf_counter()
 
+    if cpos == 0:
+        shift_w =  wave_axis[3] - wavelength
+    elif cpos == 5:
+        shift_w =  wave_axis[2] - wavelength
+    # DC TEST
+    wave_axis = wave_axis - shift_w
+
+    print('It is assumed the wavelength array is given by the hdr')
+    #print(wave_axis,color = bcolors.WARNING)
+    print("Wave axis is: ", (wave_axis - wavelength)*1000.)
+    print('Saving data into dummy_in.txt for RTE input')
+
+    if data.ndim == 4:
+        sdata = data
+    elif data.ndim != 4:
+        print("Incorrect dimensions of 'data' array")
+        exit()
+    y,x,p,l = sdata.shape
+    #print(y,x,p,l)
+    out_dir = './'
+    filename = out_dir + 'dummy_in.txt'
+    with open(filename,"w") as f:
+        for i in range(x):
+            for j in range(y):
+                for k in range(l):
+                    f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
+
+    printc(f'  ---- >>>>> Inverting data: .... ',color=bcolors.OKGREEN)
+
+    cmd = CMILOS_LOC+"./milos"
+    cmd = fix_path(cmd)
+
+    if rte == 'RTE':
+        rte_on = subprocess.call(cmd+" "+str(options[0])+" "+str(options[1])+f" 0 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
+    if rte == 'CE':
+        rte_on = subprocess.call(cmd+" "+str(options[0])+" "+str(options[1])+f" 2 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
+    if rte == 'CE+RTE':
+        rte_on = subprocess.call(cmd+" "+str(options[0])+" "+str(options[1])+f" 1 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
+
+    printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
+    del_dummy = subprocess.call(f"rm {out_dir + 'dummy_in.txt'}",shell=True)
+
+    res = np.loadtxt(out_dir+'dummy_out.txt')
+    npixels = res.shape[0]/12.
+    #print(npixels)
+    #print(npixels/x)
+    result = np.zeros((12,y*x)).astype(float)
+    rte_invs = np.zeros((12,y,x)).astype(float)
+    for i in range(y*x):
+        result[:,i] = res[i*12:(i+1)*12]
+    result = result.reshape(12,y,x)
+    result = np.einsum('ijk->ikj', result)
+    _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
+    
+    printc(f"CMILOS RTE Inversion Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+    
+    return result
+
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+
+    wavelength = 6173.3354
+
+    for scan in range(int(data_shape[-1])):
+        printc(f'  ---- >>>>> Data scan number: {scan} .... ',color=bcolors.OKGREEN)
+        
         start_time = time.perf_counter()
 
         file_path = data_f[scan]
         wave_axis = wve_axis_arr[scan]
         hdr_scan = hdr_arr[scan]
-
-        #must invert each scan independently, as cmilos only takes in one dataset at a time
-
-        #get wave_axis from the hdr information of the science scans - hard code first one, as must all have cpos in initial science load case
-        if cpos_arr[0] == 0:
-            shift_w =  wave_axis[3] - wavelength
-        elif cpos_arr[0] == 5:
-            shift_w =  wave_axis[2] - wavelength
-        # DC TEST
-        wave_axis = wave_axis - shift_w
-
-        print('It is assumed the wavelength array is given by the hdr')
-        #print(wave_axis,color = bcolors.WARNING)
-        print("Wave axis is: ", (wave_axis - wavelength)*1000.)
-        print('Saving data into dummy_in.txt for RTE input')
-
+        
         if data.ndim == 5:
             sdata = data[:,:,:,:,scan]
         elif data.ndim > 5 or data.ndim < 4:
@@ -236,43 +286,15 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
             exit()
         elif data.ndim == 4:
             sdata = data
-        y,x,p,l = sdata.shape
-        #print(y,x,p,l)
+        
+        #must invert each scan independently, as cmilos only takes in one dataset at a time
 
-        filename = out_dir + 'dummy_in.txt'
-        with open(filename,"w") as f:
-            for i in range(x):
-                for j in range(y):
-                    for k in range(l):
-                        f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
-
-        printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
-
-        cmd = CMILOS_LOC+"./milos"
-        cmd = fix_path(cmd)
-
-        if rte == 'RTE':
-            rte_on = subprocess.call(cmd+f" 6 15 0 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
-        if rte == 'CE':
-            rte_on = subprocess.call(cmd+f" 6 15 2 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
-        if rte == 'CE+RTE':
-            rte_on = subprocess.call(cmd+f" 6 15 1 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
-
-        printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
-        del_dummy = subprocess.call(f"rm {out_dir + 'dummy_in.txt'}",shell=True)
-
-        res = np.loadtxt(out_dir+'dummy_out.txt')
-        npixels = res.shape[0]/12.
-        #print(npixels)
-        #print(npixels/x)
-        result = np.zeros((12,y*x)).astype(float)
-        rte_invs = np.zeros((12,y,x)).astype(float)
-        for i in range(y*x):
-            result[:,i] = res[i*12:(i+1)*12]
-        result = result.reshape(12,y,x)
-        result = np.einsum('ijk->ikj', result)
-        rte_invs = result
-        del result
+        #get wave_axis from the hdr information of the science scans - hard code first one, as must all have cpos in initial science load case
+        
+        options = [6,15] # # of wavelegths, # of iterations
+        
+        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options)
+        
         rte_invs_noth = np.copy(rte_invs)
 
         """
@@ -302,7 +324,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
 
         #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
         
-        _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
+#         _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
 
         rte_data_products = np.zeros((7,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
 
