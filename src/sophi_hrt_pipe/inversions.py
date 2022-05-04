@@ -39,10 +39,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     taking care of the azimuth definition if the image is flipped
     """
 
-    if imgdirx_flipped:
-        print("Input image has been flipped as per convention - converting Azimuth to convention")
-        azi = rte_data_products[3,:,:].copy()
-        rte_data_products[3,:,:] = 180 - azi
+    # if imgdirx_flipped:
+    #     print("Input image has been flipped as per convention - converting Azimuth to convention")
+    #     azi = rte_data_products[3,:,:].copy()
+    #     rte_data_products[3,:,:] = 180 - azi
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
@@ -243,7 +243,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         with open(filename,"w") as f:
             for i in range(x):
                 for j in range(y):
-                    for k in range(l):
+                    for k in range(1,l):
                         f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
 
         printc(f'  ---- >>>>> Inverting data scan number: {scan} .... ',color=bcolors.OKGREEN)
@@ -252,11 +252,11 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         cmd = fix_path(cmd)
 
         if rte == 'RTE':
-            rte_on = subprocess.call(cmd+f" 6 15 0 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
+            rte_on = subprocess.call(cmd+f" 5 15 0 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
         if rte == 'CE':
-            rte_on = subprocess.call(cmd+f" 6 15 2 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
+            rte_on = subprocess.call(cmd+f" 5 15 2 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
         if rte == 'CE+RTE':
-            rte_on = subprocess.call(cmd+f" 6 15 1 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
+            rte_on = subprocess.call(cmd+f" 5 15 1 0 {out_dir+'dummy_in.txt'}  >  {out_dir+'dummy_out.txt'}",shell=True)
 
         printc('  ---- >>>>> Reading results.... ',color=bcolors.OKGREEN)
         del_dummy = subprocess.call(f"rm {out_dir + 'dummy_in.txt'}",shell=True)
