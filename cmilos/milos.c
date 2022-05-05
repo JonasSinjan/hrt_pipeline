@@ -987,7 +987,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 			i0 = 1;
 			ii = 0;
 	}
-	Ic = spectro[cont_pos]; // Continuo ultimo valor de I
+	Ic = spectro[cont_pos]; // Continuo
 	// end DC
 
 
@@ -998,14 +998,14 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 
 	//Sino queremos usar el lambda de la FPGA
 	for(i=0;i<nlambda-1;i++){
-		lambda_aux[i] = (PRECISION)lambda[i];
+		lambda_aux[i] = (PRECISION)lambda[i+ii];// added by DC for continuum position
 	}
 
 
 	x=0;
 	y=0;
 	for(i=0;i<nlambda-1;i++){
-		aux = ( Ic - (spectroI[i]+ spectroV[i]));
+		aux = ( Ic - (spectroI[i+ii]+ spectroV[i+ii])); // added by DC for continuum position
 		x = x +  aux * (lambda_aux[i]-lambda_0);
 		y = y + aux;
 	}
@@ -1020,7 +1020,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	x=0;
 	y=0;
 	for(i=0;i<nlambda-1;i++){
-		aux = ( Ic - (spectroI[i] - spectroV[i]));
+		aux = ( Ic - (spectroI[i+ii] - spectroV[i+ii]));// added by DC for continuum position
 		x= x +  aux * (lambda_aux[i]-lambda_0);
 		y = y + aux;
 	}
@@ -1205,11 +1205,11 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	x = 0;
 	y = 0;
 	for(i=0;i<nlambda-1;i++){
-		L = fabs( sqrtf( spectroQ[i]*spectroQ[i] + spectroU[i]*spectroU[i] ));
+		L = fabs( sqrtf( spectroQ[i+ii]*spectroQ[i+ii] + spectroU[i+ii]*spectroU[i+ii] )); // added by DC for continuum position
 		m = fabs( (4 * (lambda_aux[i]-lambda_0) * L ));// / (3*C*Blos) ); //2*3*C*Blos mod abril 2016 (en test!)
 
-		x = x + fabs(spectroV[i]) * m;
-		y = y + fabs(spectroV[i]) * fabs(spectroV[i]);
+		x = x + fabs(spectroV[i+ii]) * m; // added by DC for continuum position
+		y = y + fabs(spectroV[i+ii]) * fabs(spectroV[i+ii]); // added by DC for continuum position
 
 //		printf("L %f \n",L);
 //		printf("m : %f \n",m);
@@ -1254,7 +1254,7 @@ void estimacionesClasicas(PRECISION lambda_0,double *lambda,int nlambda,PRECISIO
 	int muestra;
 
 	if(nlambda==6)
-		muestra = CLASSICAL_ESTIMATES_SAMPLE_REF;
+		muestra = CLASSICAL_ESTIMATES_SAMPLE_REF - i0; // added by DC for continuum position
 	else
 		muestra = nlambda*0.75;
 
