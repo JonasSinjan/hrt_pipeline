@@ -44,7 +44,7 @@ input_jsons/sep_2021_L1_south_noflat.json
 .ipynb_checkpoints/hrt_pipeline_notebook-checkpoint.ipynb
 .ipynb_checkpoints/
 .pat
-src/hrt_pipe_PF.py
+src/sophi_hrt_pipe/rt_pipe_PF.py
 test.ipynb
 src/__pycache__/
 src/sophi_hrt_pipe.egg-info/

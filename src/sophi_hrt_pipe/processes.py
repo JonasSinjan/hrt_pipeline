@@ -386,16 +386,28 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
             vdif = [v - pf for pf in prefilter_voltages]
             
             v1, index1 = _get_v1_index1(vdif)
-            
-            if vdif[index1] >= 0:
-                v2 = vdif[index1 + 1]
-                index2 = index1 + 1
+            if v < prefilter_voltages[-1] and v > prefilter_voltages[0]:
                 
-            else:
-                v2 = vdif[index1-1]
+                if vdif[index1] >= 0:
+                    v2 = vdif[index1 + 1]
+                    index2 = index1 + 1
+
+                else:
+                    v2 = vdif[index1-1]
+                    index2 = index1 - 1
+                    
+#                 imprefilter = (prefilter[:,:, index1]*(0-v1) + prefilter[:,:, index2]*(v2-0))/(v2-v1) #interpolation between nearest voltages
+            elif v >= prefilter_voltages[-1]:
                 index2 = index1 - 1
+                v2 = vdif[index2]
                 
-            imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2) #interpolation between nearest voltages
+            elif v <= prefilter_voltages[0]:
+                index2 = index1 + 1
+                v2 = vdif[index2]
+                
+            imprefilter = (prefilter[:,:, index1]*v2 + prefilter[:,:, index2]*(-v1))/(v2-v1) #interpolation between nearest voltages
+                
+#             imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2) #interpolation between nearest voltages
 
             data[:,:,:,wv,scan] /= imprefilter[...,np.newaxis]
             
