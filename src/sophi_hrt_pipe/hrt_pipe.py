@@ -654,7 +654,7 @@ def phihrt_pipe(input_json_file):
                     it = 0
                     s = [1,1]
                     
-                    while np.any(np.abs(s)>1e-3):#for it in range(iterations):
+                    while np.any(np.abs(s)>1e-2):#for it in range(iterations):
                         sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
                         shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
 
@@ -925,7 +925,7 @@ def phihrt_pipe(input_json_file):
                     temp = np.abs(old_data[sly,slx,0,l,scan])
                     ref = np.abs((data[sly,slx,0,l-1,scan] + data[sly,slx,0,l+1,scan]) / 2)
                 
-                while np.any(np.abs(s)>1e-3):#for it in range(iterations):
+                while np.any(np.abs(s)>1e-2):#for it in range(iterations):
                     sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
                     shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
                     

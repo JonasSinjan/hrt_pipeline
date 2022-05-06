@@ -258,7 +258,7 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
     rte_invs = np.zeros((12,y,x)).astype(float)
     for i in range(y*x):
         result[:,i] = res[i*12:(i+1)*12]
-    result = result.reshape(12,y,x)
+    result = result.reshape(12,x,y)
     result = np.einsum('ijk->ikj', result)
     _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
     

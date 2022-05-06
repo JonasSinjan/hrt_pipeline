@@ -51,3 +51,4 @@ src/sophi_hrt_pipe.egg-info/
 src/__pycache__
 src/__pycache__/*
 cmilos/milos
+.vscode
