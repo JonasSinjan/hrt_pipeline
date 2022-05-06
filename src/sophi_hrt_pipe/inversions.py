@@ -39,10 +39,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     taking care of the azimuth definition if the image is flipped
     """
 
-#     if imgdirx_flipped:
-#         print("Input image has been flipped as per convention - converting Azimuth to convention")
-#         azi = rte_data_products[3,:,:].copy()
-#         rte_data_products[3,:,:] = 180 - azi
+    # if imgdirx_flipped:
+    #     print("Input image has been flipped as per convention - converting Azimuth to convention")
+    #     azi = rte_data_products[3,:,:].copy()
+    #     rte_data_products[3,:,:] = 180 - azi
 
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
@@ -285,10 +285,8 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
             print("Incorrect dimensions of 'data' array")
             exit()
         elif data.ndim == 4:
-            sdata = data
-        
+            sdata = data       
         #must invert each scan independently, as cmilos only takes in one dataset at a time
-
         #get wave_axis from the hdr information of the science scans - hard code first one, as must all have cpos in initial science load case
         
         options = [6,15] # # of wavelegths, # of iterations
