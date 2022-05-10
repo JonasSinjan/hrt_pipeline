@@ -3,6 +3,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import scipy.optimize as spo
+import scipy.signal as sps
 from datetime import datetime as dt
 
 class bcolors:
@@ -439,7 +440,29 @@ def limb_side_finder(img, hdr):
     else:
         print('Limb side:',side)
 
-    return side, center, Rpix
+    ds = 256
+    if hdr['DSUN_AU'] < 0.4:
+        ds = 384
+    dx = 0; dy = 0
+    if 'N' in side and img.shape[0]//2 - ds > 512:
+        dy = -512
+    if 'S' in side and img.shape[0]//2 - ds > 512:
+        dy = 512
+    if 'W' in side and img.shape[1]//2 - ds > 512:
+        dx = -512
+    if 'E' in side and img.shape[1]//2 - ds > 512:
+        dx = 512
+
+    if img.shape[0] > 2*ds:
+        sly = slice(img.shape[0]//2 - ds + dy, img.shape[0]//2 + ds + dy)
+    else:
+        sly = slice(0,img.shape[0])
+    if img.shape[1] > 2*ds:
+        slx = slice(img.shape[1]//2 - ds + dx, img.shape[1]//2 + ds + dx)
+    else:
+        slx = slice(0,img.shape[1])
+
+    return side, center, Rpix, sly, slx
 
 def limb_fitting(img, hdr, mar=200):
     def _residuals(p,x,y):
@@ -492,7 +515,7 @@ def limb_fitting(img, hdr, mar=200):
 
     from scipy import optimize
     
-    side, center, Rpix = limb_side_finder(img,hdr)
+    side, center, Rpix, sly, slx = limb_side_finder(img,hdr)
     
     wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
     wcs_grad = _image_derivative(wcs_mask)
@@ -500,7 +523,7 @@ def limb_fitting(img, hdr, mar=200):
     if side == '':
         print('Limb is not in the FoV according to WCS keywords')
 
-        return None, None
+        return None, sly, slx, side
     
     if 'W' in side or 'E' in side:
         mode = 'rows'
@@ -560,7 +583,8 @@ def limb_fitting(img, hdr, mar=200):
     p = optimize.least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi))
         
     mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
-    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80, side
+#     return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80, side
+    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), sly, slx, side
 
 def fft_shift(img,shift):
     """
@@ -792,12 +816,13 @@ def blos_noise(blos_file, fs = None):
     blos = fits.getdata(blos_file)
     hdr = fits.getheader(blos_file)
     #first get the pixels that we want (central 512x512 and limb handling)
-    limb_side, center, Rpix = limb_side_finder(blos, hdr)
-    if limb_side == '':#not a limb image
-        values = blos[512:1536, 512:1536]
+    limb_side, center, Rpix, sly, slx = limb_side_finder(blos, hdr)
+    values = blos[sly,slx]
+#     if limb_side == '':#not a limb image
+#         values = blos[512:1536, 512:1536]
 
-    else:
-        data_size = np.shape(blos)
+#     else:
+#         data_size = np.shape(blos)
         # ds = 386 #?
         # dx = 0; dy = 0
         # if 'N' in limb_side and data_size[0]//2 - ds > 512:
@@ -853,12 +878,13 @@ def stokes_noise(stokes_file):
     out = fits_get_sampling(stokes_file)
     cpos = out[3]
     #first get the pixels that we want (central 512x512 and limb handling)
-    limb_side, center, Rpix = limb_side_finder(stokes[:,:,3,cpos], hdr)
-    if limb_side == '':#not a limb image
-        values = stokes[512:1536, 512:1536,3,cpos]
+    limb_side, center, Rpix, sly, slx = limb_side_finder(stokes[:,:,3,cpos], hdr)
+    values = stokes[sly,slx,3,cpos]
+#     if limb_side == '':#not a limb image
+#         values = stokes[512:1536, 512:1536,3,cpos]
 
-    else:
-        data_size = np.shape(stokes[:,:,0,0])
+#     else:
+#         data_size = np.shape(stokes[:,:,0,0])
         # ds = 386 #?
         # dx = 0; dy = 0
         # if 'N' in limb_side and data_size[0]//2 - ds > 512:
@@ -905,12 +931,16 @@ def stokes_noise(stokes_file):
 """vsnr = iter_noise(img[sly,slx,3,5].ravel())[2]
     print(data_date[i]+': Stokes V SNR (iterative, iss off): {:.2e}'.format(vsnr))"""
 
+def image_derivative(d):
+    kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
+    ky = np.asarray([[1,1,1], [0,0,0], [-1,-1,-1]])
+    kx=kx/3.
+    ky=ky/3.
 
+    SX = sps.convolve(d, kx,mode='same')
+    SY = sps.convolve(d, ky,mode='same')
 
+    A=SX**2+SY**2
 
-
-
-
-
-
+    return A
 

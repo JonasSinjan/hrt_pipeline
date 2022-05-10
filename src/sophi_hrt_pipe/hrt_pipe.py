@@ -570,11 +570,7 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if fs_c:
-        # >>>>>>> DC 4/5/2022 Test for apodization
-        _, field_stop = apply_field_stop(data.copy(), rows, cols, header_imgdirx_exists, imgdirx_flipped)
-        # =======
-#         data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
-        # <<<<<<<
+        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
         if ghost_c:
             field_stop_ghost = load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped)
 
@@ -611,32 +607,10 @@ def phihrt_pipe(input_json_file):
     if iss_off:
         print(" ")
         printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
-        limb_side, _, _ = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+        limb_side, _, _, sly, slx = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
         
         start_time = time.perf_counter()
 
-        ds = 256
-        if hdr_arr[0]['DSUN_AU'] < 0.4:
-            ds = 384
-        dx = 0; dy = 0
-        if 'N' in limb_side and data_size[0]//2 - ds > 512:
-            dy = -512
-        if 'S' in limb_side and data_size[0]//2 - ds > 512:
-            dy = 512
-        if 'W' in limb_side and data_size[1]//2 - ds > 512:
-            dx = -512
-        if 'E' in limb_side and data_size[1]//2 - ds > 512:
-            dx = 512
-        
-        if data_size[0] > 2*ds:
-            sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
-        else:
-            sly = slice(0,data_size[0])
-        if data_size[1] > 2*ds:
-            slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
-        else:
-            slx = slice(0,data_size[1])
-        
         pn = 4 
         wln = 6 
         # iterations = 3
@@ -726,10 +700,13 @@ def phihrt_pipe(input_json_file):
             
 
             try:
-                limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+#                 limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+                limb_temp, sly, slx, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 
-                if limb_temp is not None and Ic_temp is not None: 
+                if limb_temp is not None: # and Ic_temp is not None: 
                     limb_temp = np.where(limb_temp>0,1,0)
+#                     Ic_temp = np.where(Ic_temp>0,1,0)
+                    Ic_temp = np.zeros((data_size[0],data_size[1])); Ic_temp[sly,slx] = 1; Ic_temp *=field_stop
                     Ic_temp = np.where(Ic_temp>0,1,0)
                     
                     data[:,:,:,:,scan] = data[:,:,:,:,scan]# * limb_temp[:,:,np.newaxis,np.newaxis]
@@ -771,7 +748,6 @@ def phihrt_pipe(input_json_file):
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
-
     if ItoQUV:
         
         print(" ")
@@ -835,7 +811,7 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        if ~iss_off:
+        if not iss_off:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
             # DC change 20211019 only for limb
             if limb:
@@ -844,7 +820,6 @@ def phihrt_pipe(input_json_file):
     else:
         print(" ")
         printc('-->>>>>>> No ItoQUV mode',color=bcolors.WARNING)
-
 
     if VtoQU:
         
@@ -877,7 +852,7 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        if ~iss_off:
+        if not iss_off:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
             # DC change 20211019 only for limb
             if limb:
@@ -892,7 +867,6 @@ def phihrt_pipe(input_json_file):
     #-----------------
     
     # new procedure to improve calibration when the ISS is off
-    
     if iss_off:
         print(" ")
         printc('-->>>>>>> Wavelength Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
@@ -915,15 +889,15 @@ def phihrt_pipe(input_json_file):
         for scan in range(data_shape[-1]):
             count = 0
             shift_stk = np.zeros((2,wln-1))
-            ref = old_data[sly,slx,0,cpos_arr[0],scan]
+            ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
             
             for i,l in enumerate(l_i):
-                temp = old_data[sly,slx,0,l,scan]
+                temp = image_derivative(old_data[:,:,0,l,scan])[sly,slx]
                 it = 0
                 s = [1,1]
                 if l == cwl:
-                    temp = np.abs(old_data[sly,slx,0,l,scan])
-                    ref = np.abs((data[sly,slx,0,l-1,scan] + data[sly,slx,0,l+1,scan]) / 2)
+                    temp = image_derivative(np.abs(old_data[:,:,0,l,scan]))[sly,slx]
+                    ref = image_derivative(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
                 
                 while np.any(np.abs(s)>1e-2):#for it in range(iterations):
                     sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
@@ -931,11 +905,11 @@ def phihrt_pipe(input_json_file):
                     
                     if l != cwl:
                         Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
-                        temp  = cv2.warpAffine(old_data[:,:,0,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)[sly,slx]
+                        temp  = image_derivative(cv2.warpAffine(old_data[:,:,0,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4))[sly,slx]
 
                     else:
                         Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
-                        temp  = cv2.warpAffine(old_data[:,:,0,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)[sly,slx]
+                        temp  = image_derivative(cv2.warpAffine(old_data[:,:,0,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4))[sly,slx]
 
                     it += 1
                     if it == 10:
@@ -947,7 +921,7 @@ def phihrt_pipe(input_json_file):
                     data[:,:,ss,l,scan]  = cv2.warpAffine(old_data[:,:,ss,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
                 # ref = data[sly,slx,0,l,scan]
                 if l == cwl:
-                    ref = old_data[sly,slx,0,cpos_arr[0],scan]
+                    ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
                             
         del old_data
         
