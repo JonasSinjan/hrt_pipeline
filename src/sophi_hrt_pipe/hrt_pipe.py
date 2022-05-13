@@ -609,6 +609,14 @@ def phihrt_pipe(input_json_file):
         printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
         limb_side, _, _, sly, slx = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
         
+        if fs_c:
+            field_stop = ~binary_dilation(field_stop==0,generate_binary_structure(2,2), iterations=3)
+            field_stop = np.where(field_stop > 0,1,0)
+            if ghost_c:
+                field_stop_ghost = ~binary_dilation(field_stop_ghost==0,generate_binary_structure(2,2), iterations=3)
+                field_stop_ghost = np.where(field_stop_ghost > 0,1,0)
+                
+        
         start_time = time.perf_counter()
 
         pn = 4 
