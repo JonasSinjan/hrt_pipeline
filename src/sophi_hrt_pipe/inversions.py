@@ -180,7 +180,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
-def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
+def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
     
     """
     RTE inversion using CMILOS
@@ -227,7 +227,7 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
         exit()
     y,x,p,l = sdata.shape
     #print(y,x,p,l)
-    out_dir = './'
+    
     filename = out_dir + 'dummy_in.txt'
     with open(filename,"w") as f:
         for i in range(x):
@@ -291,7 +291,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         
         options = [6,15] # # of wavelegths, # of iterations
         
-        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options)
+        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options,out_dir)
         
         rte_invs_noth = np.copy(rte_invs)
 
