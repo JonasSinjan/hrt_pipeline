@@ -15,19 +15,22 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 1. read in science data (+scaling) (one or multiple files)
 2. read in flat field (+scaling) - accepts only one flat field fits file
 3. read in dark field (+scaling)
-4. apply dark field (to only science - assumes flat is dark fielded)
-5. clean flat field with unsharp masking (Stokes QUV, UV or V)
-6. normalise flat field
-7. apply flat field
-8. prefilter correction
+4. prefilter correction
+5. apply dark field (to only science - assumes flat is dark fielded)
+6. clean flat field with unsharp masking (Stokes QUV, UV or V)
+7. normalise flat field
+8. apply flat field
 9. apply field stop
-10. demodulate with const demod matrix <br>
+10. apply hot pixels mask
+11. polarimetric registration
+12. demodulate with const demod matrix <br>
         a) option to output demod to fits file <br>
-11. normalise to quiet sun
-12. calibration <br>
+13. normalise to quiet sun
+14. calibration <br>
         a) ItoQUV cross talk correction <br>
         b) VtoQU cross talk correction <br>
-13. rte inversion with cmilos <br>
+15. wavelengths registration
+16. rte inversion with cmilos <br>
         a) output rte data products to fits files <br>
 
 
