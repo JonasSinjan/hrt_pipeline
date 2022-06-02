@@ -115,7 +115,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.3 March 16th 2022'
+    version = 'V1.4 June 2nd 2022'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -655,8 +655,12 @@ def phihrt_pipe(input_json_file):
                     print(it,'iterations shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
                     Mtrans = np.float32([[1,0,shift_raw[1,j]],[0,1,shift_raw[0,j]]])
                     data[:,:,j%pn,j//pn,scan]  = cv2.warpAffine(old_data[:,:,j%pn,j//pn,scan].astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
-
+        
+            hdr_arr[scan]['CAL_PREG'] = 'y: '+str([round(shift_raw[0,i],3) for i in range(pn*wln)]) + ', x: '+str([round(shift_raw[1,i],3) for i in range(pn*wln)])
+        
         del old_data
+        
+        
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -937,7 +941,9 @@ def phihrt_pipe(input_json_file):
                 # ref = data[sly,slx,0,l,scan]
                 if l == cwl:
                     ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
-                            
+            
+            hdr_arr[scan]['CAL_WREG'] = 'y: '+str([round(shift_stk[0,i],3) for i in range(wln-1)]) + ', x: '+str([round(shift_stk[1,i],3) for i in range(wln-1)])
+        
         del old_data
         
         data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
