@@ -625,7 +625,11 @@ def phihrt_pipe(input_json_file):
         pn = 4 
         wln = 6 
         # iterations = 3
-        
+        if limb_side == '':
+            func = lambda x: image_derivative(x)
+        else:
+            func = lambda x: image_derivative(x)
+
         old_data = data.copy()
         for scan in range(data_shape[-1]):
             
@@ -634,8 +638,8 @@ def phihrt_pipe(input_json_file):
                 if j%pn == 0:
                     pass
                 else:
-                    ref = old_data[sly,slx,0,j//pn,scan]
-                    temp = old_data[sly,slx,j%pn,j//pn,scan]
+                    ref = func(old_data[:,:,0,j//pn,scan])[sly,slx]
+                    temp = func(old_data[:,:,j%pn,j//pn,scan])[sly,slx]
                     it = 0
                     s = [1,1]
                     
@@ -643,7 +647,7 @@ def phihrt_pipe(input_json_file):
                         sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
                         shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
                         
-                        temp = fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j])[sly,slx]
+                        temp = func(fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j]))[sly,slx]
                         
 #                         Mtrans = np.float32([[1,0,shift_raw[1,j]],[0,1,shift_raw[0,j]]])
 #                         temp  = cv2.warpAffine(old_data[:,:,j%pn,j//pn,scan].astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)[sly,slx]

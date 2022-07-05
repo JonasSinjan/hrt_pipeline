@@ -205,6 +205,15 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     '''
     Use constant demodulation matrices to demodulate input data
     '''
+    def _rotation_matrix(angle_rot):
+        c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
+        return np.array([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
+    def _rotate_m(angle,matrix):
+        rot = _rotation_matrix(angle)
+        return np.matmul(matrix,rot)
+    
+    HRT_MOD_ROTATION_ANGLE=0.2
+    
     if pmp_temp == '50':
         # 'original (pre May 2022/RSW1 2022 matrices, that don't account for azimuth angle etc in PMP)
         # demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
@@ -212,11 +221,12 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
         #              [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
         #              [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
         #Alberto 30/04/22
-        printc(f'Using Alberto demodulation matrix for temp=50',color = bcolors.OKGREEN)
+#         printc(f'Using Alberto demodulation matrix for temp=50',color = bcolors.OKGREEN)
         mod_matrix = np.array([[ 1.0014 ,  0.56715  , 0.3234 , -0.74743  ],
                                [ 1.0007 ,  0.0037942, 0.69968,  0.71423  ],
                                [ 1.0002 , -0.98937  , 0.04716, -0.20392  ],
                                [ 0.99769,  0.27904  ,-0.86715,  0.39908  ]])
+        mod_matrix = _rotate_m(HRT_MOD_ROTATION_ANGLE,mod_matrix)
         demod_data = np.linalg.inv(mod_matrix)
         
     elif pmp_temp == '40':
@@ -226,17 +236,18 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
         #              [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
         #              [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
         #Alberto 14/04/22
-        printc(f'Using Alberto demodulation matrix for temp=40',color = bcolors.OKGREEN)
+#         printc(f'Using Alberto demodulation matrix for temp=40',color = bcolors.OKGREEN)
         mod_matrix = np.array([[ 0.99816  ,0.61485 , 0.010613 ,-0.77563 ], 
                                [ 0.99192 , 0.08382 , 0.86254 , 0.46818],
                                [ 1.0042 , -0.84437 , 0.12872 ,-0.53972],
                                [ 1.0057 , -0.30576 ,-0.87969 , 0.40134]])
+        mod_matrix = _rotate_m(HRT_MOD_ROTATION_ANGLE,mod_matrix)
         demod_data = np.linalg.inv(mod_matrix)
-    
+        
     else:
         printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
     if verbose:
-        printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
+        printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg, rotated by {HRT_MOD_ROTATION_ANGLE} deg',color = bcolors.OKGREEN)
     
     demod_data = demod_data.reshape((4,4))
     shape = data.shape
