@@ -70,6 +70,9 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
     """
     try:
         data, header = load_fits(path)
+        if 'L2' in header['LEVEL']:
+            return data, header
+        
         if bit_convert_scale: #conversion from 24.8bit to 32bit
             try:
                 IMGformat = fits.open(path)[9].data['PHI_IMG_format'][-1]
@@ -197,8 +200,10 @@ def check_filenames(data_f):
     """
     checks if the science scans have the same DID - this would cause an issue for naming the output demod files
     """
-
-    scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
+    try:
+        scan_name_list = [fits.getheader(scan)['PHIDATID'] for scan in data_f]
+    except:
+        scan_name_list = [str(scan.split('.fits')[0][-10:]) for scan in data_f]
 
     seen = set()
     uniq_scan_DIDs = [x for x in scan_name_list if x in seen or seen.add(x)] #creates list of unique DIDs from the list
@@ -347,12 +352,17 @@ def stokes_reshape(data):
     converting science to [y,x,pol,wv,scans]
     """
     data_shape = data.shape
-    if data_shape[2] == 25:
-        data = data[:,:,:24]
+    if data_shape[0] == 25:
+        data = data[:24]
         data_shape = data.shape
-    data = data.reshape(data_shape[0],data_shape[1],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
-    data = np.moveaxis(data, 2,-2)
-    
+    if data.ndim == 4: # [24,y,x,scans]
+        data = np.moveaxis(data,0,2).reshape(data_shape[1],data_shape[2],6,4,data_shape[-1]) #separate 24 images, into 6 wavelengths, with each 4 pol states
+        data = np.moveaxis(data, 2,3)
+    elif data.ndim == 3: # [24,y,x]
+        data = np.moveaxis(data,0,2).reshape(data_shape[1],data_shape[2],6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
+        data = np.moveaxis(data, 2,3)
+    elif data.ndim == 5: # it means that it is already [y,x,pol,wv,scans]
+        pass
     return data
     
 

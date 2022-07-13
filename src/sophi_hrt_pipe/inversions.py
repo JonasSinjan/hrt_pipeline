@@ -11,26 +11,48 @@ def create_output_filenames(filename, DID, version = '01',gzip = False):
     """
     creating the L2 output filenames from the input, assuming L1
     """
+    file_start = 'solo_L2_phi-hrt-ilam_'
+    fmt = "%Y%m%dT%H%M%S"
+    
     try:
-        file_start = filename.split('solo_')[1]
-        file_start = 'solo_' + file_start
-        L2_str = file_start.replace('L1', 'L2')
-        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
-        if gzip:
-            versioned = versioned + '.gz'
-        stokes_file = versioned.replace('ilam', 'stokes')
-        icnt_file = versioned.replace('ilam', 'icnt')
-        bmag_file = versioned.replace('ilam', 'bmag')
-        bazi_file = versioned.replace('ilam', 'bazi')
-        binc_file = versioned.replace('ilam', 'binc')
-        blos_file = versioned.replace('ilam', 'blos')
-        vlos_file = versioned.replace('ilam', 'vlos')
-
-        return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
-
+        temp = datetime.datetime.fromisoformat(fits.getheader(filename)['DATE-BEG']).strftime(fmt)
     except Exception:
-        print("The input file: {file_path} does not contain 'L1'")
-        raise KeyError
+        temp = 'YYYYmmddTHHMMSS'
+        print(f"The input file: {filename} does not contain DATE-BEG keyword: using {temp}")
+    
+    versioned = file_start + temp + '_V' + version + '_' + DID + '.fits'
+    if gzip:
+        versioned = versioned + '.gz'
+    stokes_file = versioned.replace('ilam', 'stokes')
+    icnt_file = versioned.replace('ilam', 'icnt')
+    bmag_file = versioned.replace('ilam', 'bmag')
+    bazi_file = versioned.replace('ilam', 'bazi')
+    binc_file = versioned.replace('ilam', 'binc')
+    blos_file = versioned.replace('ilam', 'blos')
+    vlos_file = versioned.replace('ilam', 'vlos')
+    
+    return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+
+#     try:
+#         file_start = filename.split('solo_')[1]
+#         file_start = 'solo_' + file_start
+#         L2_str = file_start.replace('L1', 'L2')
+#         versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+#         if gzip:
+#             versioned = versioned + '.gz'
+#         stokes_file = versioned.replace('ilam', 'stokes')
+#         icnt_file = versioned.replace('ilam', 'icnt')
+#         bmag_file = versioned.replace('ilam', 'bmag')
+#         bazi_file = versioned.replace('ilam', 'bazi')
+#         binc_file = versioned.replace('ilam', 'binc')
+#         blos_file = versioned.replace('ilam', 'blos')
+#         vlos_file = versioned.replace('ilam', 'vlos')
+# 
+#         return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+# 
+#     except Exception:
+#         print("The input file: {file_path} does not contain 'L1'")
+#         raise KeyError
 
 
 def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers):

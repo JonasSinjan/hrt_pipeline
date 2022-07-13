@@ -252,9 +252,9 @@ def phihrt_pipe(input_json_file):
 
         pmp_temp = check_pmp_temp(hdr_arr)
 
-        #so that data is [y,x,24,scans]
+        #so that data is [24,y,x,scans]
         data = np.stack(data_arr, axis = -1)
-        data = np.moveaxis(data, 0,-2) 
+        # data = np.moveaxis(data, 0,-2) 
 
         print(f"Data shape is {data.shape}")
 
@@ -270,12 +270,12 @@ def phihrt_pipe(input_json_file):
 
     data_shape = data.shape
 
-    data_size = data_shape[:2]
-    
     #converting to [y,x,pol,wv,scans]
 
     data = stokes_reshape(data)
-
+    
+    data_size = data.shape[:2]
+    
     #enabling cropped datasets, so that the correct regions of the dark field and flat field are applied
     print("Data reshaped to: ", data.shape)
 
@@ -460,7 +460,7 @@ def phihrt_pipe(input_json_file):
     if prefilter_f is not None:
         print(" ")
         printc('-->>>>>>> Prefilter Correction',color=bcolors.OKGREEN)
-
+        prefilter_c = True
         start_time = time.perf_counter()
 
         prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
@@ -481,8 +481,9 @@ def phihrt_pipe(input_json_file):
         
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
-
-        data_PFc = data.copy()  # DC 20211116
+        
+        if out_intermediate:
+            data_PFc = data.copy()  # DC 20211116
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Prefilter correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -491,6 +492,7 @@ def phihrt_pipe(input_json_file):
     else:
         print(" ")
         printc('-->>>>>>> No prefilter mode',color=bcolors.WARNING)
+        prefilter_c = False
 
         
     #-----------------
@@ -576,8 +578,7 @@ def phihrt_pipe(input_json_file):
         data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
         if ghost_c:
             field_stop_ghost = load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped)
-
-
+        
     else:
         print(" ")
         printc('-->>>>>>> No field stop mode',color=bcolors.WARNING)
@@ -595,7 +596,7 @@ def phihrt_pipe(input_json_file):
         data = hot_pixel_mask(data, rows, cols)
         print(" ")
         printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
-
+        
     else:
         printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
 
@@ -663,8 +664,6 @@ def phihrt_pipe(input_json_file):
             hdr_arr[scan]['CAL_PREG'] = 'y: '+str([round(shift_raw[0,i],3) for i in range(pn*wln)]) + ', x: '+str([round(shift_raw[1,i],3) for i in range(pn*wln)])
         
         del old_data
-        
-        
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -1024,65 +1023,94 @@ def phihrt_pipe(input_json_file):
             ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
             hdr_arr[count]['FILENAME'] = stokes_file
-            hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_f.split('/')[-1]}. Flat: {flat_f.split('/')[-1]}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
             hdr_arr[count]['LEVEL'] = 'L2'
             hdr_arr[count]['BTYPE'] = 'STOKES'
             hdr_arr[count]['BUNIT'] = 'I_CONT'
             hdr_arr[count]['DATAMIN'] = int(np.min(data[:,:,:,:,count]))
             hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
             hdr_arr[count] = data_hdr_kw(hdr_arr[count], data[:,:,:,:,count])#add datamedn, datamean etc
-
+            hdr_interm = hdr_arr[count].copy()
+            hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
+            
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
                 hdu_list[0].data = data[:,:,:,:,count].astype(np.float32)
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
                 hdu_list.writeto(out_dir + stokes_file, overwrite=True)
             
-            # DC change 20211014
             
-            if out_intermediate: # DC 20211116
+            if out_intermediate: 
+                # intermediate output with their own header, so they can be easily used as input for the pipeline
+                if dark_c: 
+                    hdr_dark = hdr_interm.copy()
+                    hdr_dark['FILENAME'] = scan_name_list[count] + '_dark_corrected.fits'
+                    # overwrite the stokes history entry
+                    hdr_dark['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}."
+                    hdr_dark['BTYPE'] = 'Intensity'
+                    hdr_dark['BUNIT'] = 'DN'
+                    hdr_dark['DATAMIN'] = int(np.min(data_darkc[:,:,:,:,count]))
+                    hdr_dark['DATAMAX'] = int(np.max(data_darkc[:,:,:,:,count]))
+                    hdr_dark = data_hdr_kw(hdr_dark, data_darkc[:,:,:,:,count])#add datamedn, datamean etc
 
-                if dark_c: # DC 20211116
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits")
                         hdu_list[0].data = data_darkc[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list[0].header = hdr_dark #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
+                
+                if prefilter_c:
+                    hdr_PF = hdr_interm.copy()
+                    hdr_PF['FILENAME'] = scan_name_list[count] + '_prefilter_corrected.fits'
+                    hdr_PF['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}."
+                    hdr_PF['BTYPE'] = 'Intensity'
+                    hdr_PF['BUNIT'] = 'DN'
+                    hdr_PF['DATAMIN'] = int(np.min(data_PFc[:,:,:,:,count]))
+                    hdr_PF['DATAMAX'] = int(np.max(data_PFc[:,:,:,:,count]))
+                    hdr_PF = data_hdr_kw(hdr_PF, data_PFc[:,:,:,:,count])#add datamedn, datamean etc
 
-                if flat_c: # DC 20211116
+                    with fits.open(scan) as hdu_list:
+                        print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits")
+                        hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
+                        hdu_list[0].header = hdr_PF #update the calibration keywords
+                        hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
+
+                if flat_c: 
+                    hdr_flatc = hdr_interm.copy()
+                    hdr_flatc['FILENAME'] = scan_name_list[count] + '_flat_corrected.fits'
+                    hdr_flatc['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}."
+                    hdr_flatc['BTYPE'] = 'Intensity'
+                    hdr_flatc['BUNIT'] = 'DN'
+                    hdr_flatc['DATAMIN'] = int(np.min(data_flatc[:,:,:,:,count]))
+                    hdr_flatc['DATAMAX'] = int(np.max(data_flatc[:,:,:,:,count]))
+                    hdr_flatc = data_hdr_kw(hdr_flatc, data_flatc[:,:,:,:,count])#add datamedn, datamean etc
+                    
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_flat_corrected.fits")
                         hdu_list[0].data = data_flatc[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list[0].header = hdr_flatc #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
-
-                    # with fits.open(flat_f) as hdu_list:
-                    #     print(f"Writing flat field file as: {flat_f.split('/')[-1]}")
-                    #     hdu_list[0].data = flat
-                    #     #update the calibration keywords
-                    #     hdu_list.writeto(out_dir + f"{flat_f.split('/')[-1]}", overwrite=True)
-
 
                     with fits.open(flat_f) as hdu_list:
                         print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
                         hdu_list[0].data = flat_copy.astype(np.float32)
-                        #update the calibration keywords
                         hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}", overwrite=True)
-                
-                if prefilter_f is not None: # DC 20211116
-                    with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits")
-                        hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
-                
-                if demod: # DC 20211116          
+                                
+                if demod:
+                    hdr_demod = hdr_interm.copy()
+                    hdr_demod['FILENAME'] = scan_name_list[count] + '_demodulated.fits'
+                    hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}."
+                    hdr_demod['BTYPE'] = 'STOKES'
+                    hdr_demod['BUNIT'] = 'I_CONT'
+                    hdr_demod['DATAMIN'] = int(np.min(data_demod_normed[:,:,:,:,count]))
+                    hdr_demod['DATAMAX'] = int(np.max(data_demod_normed[:,:,:,:,count]))
+                    hdr_demod = data_hdr_kw(hdr_demod, data_demod_normed[:,:,:,:,count])#add datamedn, datamean etc
+                    
                     with fits.open(scan) as hdu_list:
                         print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
                         hdu_list[0].data = data_demod_normed[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_arr[count] #update the calibration keywords
+                        hdu_list[0].header = hdr_demod #update the calibration keywords
                         hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
-
+        
     else:
         print(" ")
         #check if already defined by input, otherwise generate
