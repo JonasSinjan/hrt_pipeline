@@ -54,8 +54,6 @@ def phihrt_pipe(input_json_file):
     ** Options:
     L1_input: bool, DEFAULT True
         ovverides scale_data, bit_conversion, and accum_scaling, so that correct scaling for L1 data applied
-    L1_8_generate: bool, DEFAULT False
-        if True, assumes L1 input, and generates RTE output with the calibration header information
     scale_data: bool, DEFAULT True
         performs the accumulation scaling + conversion for flat and science (only FALSE for commissioning data)
     bit_conversion: bool, DEFAULT True
@@ -135,7 +133,7 @@ def phihrt_pipe(input_json_file):
         dark_f = input_dict['dark_f']
 
         L1_input = input_dict['L1_input']
-        L1_8_generate = input_dict['L1_8_generate']
+        # L1_8_generate = input_dict['L1_8_generate']
         scale_data = input_dict['scale_data']
         accum_scaling = input_dict['accum_scaling']
         bit_conversion = input_dict['bit_conversion']
