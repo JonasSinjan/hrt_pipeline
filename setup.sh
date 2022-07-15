@@ -2,7 +2,7 @@
 
 module load openmpi_gcc
 module load anaconda/3-5.0.1
-modlue load fftw/3.3.5
+module load fftw/3.3.5
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/local/cfitsio/cfitsio-3.350/lib
 
