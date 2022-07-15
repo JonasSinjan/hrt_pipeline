@@ -14,6 +14,7 @@ import cv2
 from sophi_hrt_pipe.utils import *
 from sophi_hrt_pipe.processes import *
 from sophi_hrt_pipe.inversions import *
+from sophi_hrt_pipe.PSF import *
 
 def phihrt_pipe(input_json_file):
 
@@ -156,6 +157,8 @@ def phihrt_pipe(input_json_file):
         out_intermediate = input_dict['out_intermediate']  # DC 20211116
         
         iss_off = input_dict['iss_off']  # DC
+        PSFmod = input_dict['PSFmod']  # DC
+        PSFstokes = input_dict['PSFstokes']  # DC
         
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
@@ -575,7 +578,7 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if fs_c:
-        data, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
+        _, field_stop = apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped)
         if ghost_c:
             field_stop_ghost = load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped)
         
@@ -673,6 +676,32 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> No frame registration (--> ISS ON)',color=bcolors.WARNING)
 
+    #-----------------
+    # PSF DECONVOLUTION ON MODULATED DATA
+    #-----------------
+
+    if not PSFstokes:
+        if PSFmod:
+            start_time = time.perf_counter()
+
+            print(" ")
+            printc('-->>>>>>> PSF deconvolution on modulated data',color=bcolors.OKGREEN)
+            for scan in range(data_shape[-1]):
+                data[...,scan] = restore_stokes_cube(data[...,scan], hdr_arr[scan],demod=False)
+                hdr_arr[scan]['CAL_PSF'] = 'Modulated'
+            
+            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+            printc(f"------------- PSF deconvolution time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        else:
+            print(" ")
+            printc('-->>>>>>> No PSF deconvolution on modulated data',color=bcolors.WARNING)
+    else:
+        if PSFmod:
+            print(" ")
+            printc('-->>>>>>> Both PSF deconvolutions are True, it will be applied only on the Stokes vectors',color=bcolors.WARNING)
     
     #-----------------
     # APPLY DEMODULATION 
@@ -726,7 +755,7 @@ def phihrt_pipe(input_json_file):
                 if limb_temp is not None: # and Ic_temp is not None: 
                     limb_temp = np.where(limb_temp>0,1,0)
 #                     Ic_temp = np.where(Ic_temp>0,1,0)
-                    Ic_temp = np.zeros((data_size[0],data_size[1])); Ic_temp[sly,slx] = 1; Ic_temp *=field_stop
+                    Ic_temp = np.zeros((data_size[0],data_size[1])); Ic_temp[sly,slx] = 1; Ic_temp *=field_stop[rows,cols]
                     Ic_temp = np.where(Ic_temp>0,1,0)
                     
                     data[:,:,:,:,scan] = data[:,:,:,:,scan]# * limb_temp[:,:,np.newaxis,np.newaxis]
@@ -831,7 +860,7 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        if not iss_off:
+        if not iss_off or not PSFstokes:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
             # DC change 20211019 only for limb
             if limb:
@@ -872,7 +901,7 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        if not iss_off:
+        if not iss_off or not PSFstokes:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
             # DC change 20211019 only for limb
             if limb:
@@ -949,9 +978,10 @@ def phihrt_pipe(input_json_file):
         
         del old_data
         
-        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-        if limb:
-            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+        if not PSFstokes:
+            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+            if limb:
+                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -960,7 +990,29 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> No frame registration (--> ISS ON)',color=bcolors.WARNING)
 
-    
+    #-----------------
+    # PSF DECONVOLUTION ON STOKES
+    #-----------------
+
+    if PSFstokes:
+        start_time = time.perf_counter()
+        
+        print(" ")
+        printc('-->>>>>>> PSF deconvolution on Stokes vectors',color=bcolors.OKGREEN)
+        for scan in range(data_shape[-1]):
+            data[...,scan] = restore_stokes_cube(data[...,scan], hdr_arr[scan],demod=True)
+            hdr_arr[scan]['CAL_PSF'] = 'Stokes'
+
+        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        if limb:
+            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- PSF deconvolution time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    else:
+        print(" ")
+        printc('-->>>>>>> No PSF deconvolution on Stokes vectors',color=bcolors.WARNING)
 
 
     #-----------------
@@ -1030,7 +1082,7 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
             hdr_arr[count] = data_hdr_kw(hdr_arr[count], data[:,:,:,:,count])#add datamedn, datamean etc
             hdr_interm = hdr_arr[count].copy()
-            hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}."
+            hdr_arr[count]['HISTORY'] = f"Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}. PSF deconvolution: {hdr_arr[count]['CAL_PSF']}"
             
             with fits.open(scan) as hdu_list:
                 print(f"Writing out stokes file as: {stokes_file}")
@@ -1045,7 +1097,7 @@ def phihrt_pipe(input_json_file):
                     hdr_dark = hdr_interm.copy()
                     hdr_dark['FILENAME'] = scan_name_list[count] + '_dark_corrected.fits'
                     # overwrite the stokes history entry
-                    hdr_dark['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}."
+                    hdr_dark['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
                     hdr_dark['BTYPE'] = 'Intensity'
                     hdr_dark['BUNIT'] = 'DN'
                     hdr_dark['DATAMIN'] = int(np.min(data_darkc[:,:,:,:,count]))
@@ -1061,7 +1113,7 @@ def phihrt_pipe(input_json_file):
                 if prefilter_c:
                     hdr_PF = hdr_interm.copy()
                     hdr_PF['FILENAME'] = scan_name_list[count] + '_prefilter_corrected.fits'
-                    hdr_PF['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}."
+                    hdr_PF['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
                     hdr_PF['BTYPE'] = 'Intensity'
                     hdr_PF['BUNIT'] = 'DN'
                     hdr_PF['DATAMIN'] = int(np.min(data_PFc[:,:,:,:,count]))
@@ -1077,7 +1129,7 @@ def phihrt_pipe(input_json_file):
                 if flat_c: 
                     hdr_flatc = hdr_interm.copy()
                     hdr_flatc['FILENAME'] = scan_name_list[count] + '_flat_corrected.fits'
-                    hdr_flatc['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}."
+                    hdr_flatc['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
                     hdr_flatc['BTYPE'] = 'Intensity'
                     hdr_flatc['BUNIT'] = 'DN'
                     hdr_flatc['DATAMIN'] = int(np.min(data_flatc[:,:,:,:,count]))
@@ -1098,7 +1150,11 @@ def phihrt_pipe(input_json_file):
                 if demod:
                     hdr_demod = hdr_interm.copy()
                     hdr_demod['FILENAME'] = scan_name_list[count] + '_demodulated.fits'
-                    hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}."
+                    if PSFmod and not PSFstokes:
+                        hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {hdr_arr[count]['CAL_PSF']}"
+                    else:
+                        hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                    
                     hdr_demod['BTYPE'] = 'STOKES'
                     hdr_demod['BUNIT'] = 'I_CONT'
                     hdr_demod['DATAMIN'] = int(np.min(data_demod_normed[:,:,:,:,count]))

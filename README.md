@@ -236,9 +236,12 @@ Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germa
 
 Daniele Calchetti - Max Planck Institute for Solar System Research, Goettingen, Germany
 
+Fatima Kahil - Max Planck Institute for Solar System Research, Goettingen, Germany
+
 ### **Credit**: <br>
 
 - SPGPylibs for the foundation, from which it was expanded upon
 - CMILOS: RTE INVERSION C code for SO-PHI (based on the IDL code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
 - CMILOS-FITS: CMILOS with fits interace, fits interfacing developed by Philipp Loeschl (MPS)
 - P-MILOS:  Parallellised RTE INVERSION C code Authors: Manuel Cabrera, Juan P. Cobos, Luis Bellot Rubio (IAA-CSIC)
+- PyPD for the PSF deconvolution algorithm, by F. Kahil (MPS)

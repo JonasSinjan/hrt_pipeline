@@ -25,7 +25,7 @@ def setup_header(hdr_arr):
          'Polarimetric registration','Prealigment of images before demodulation',
     'cross-talk from I to Q (slope)','cross-talk from I to Q (offset)','cross-talk from I to U (slope)','cross-talk from I to U (offset)','cross-talk from I to V (slope)','cross-talk from I to V (offset)',
     'cross-talk from V to Q (slope)','cross-talk from V to Q (offset)','cross-talk from V to U (slope)','cross-talk from V to U (offset)','Wavelength Registration',
-    'Normalization (normalization constant PROC_Ic)','Fringe correction (name + version of module)','Onboard calibrated for instrumental PSF','Onboard calibrated for instrumental polarization',
+    'Normalization (normalization constant PROC_Ic)','Fringe correction (name + version of module)','PSF deconvolution','Onboard calibrated for instrumental polarization',
     'Onboard scientific data analysis','Inversion mode','Inversion software','Number RTE inversion iterations']
 
     for h in hdr_arr:
@@ -638,7 +638,7 @@ def hot_pixel_mask(data, rows, cols,mode='median'):
         func = lambda a: np.mean(a,axis=0)
     else:
         print('mode not found, input dataset not corrected')
-        return new
+        return data
     
     l = int(np.max(hot_pix_mask))
     

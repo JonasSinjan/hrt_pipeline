@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import scipy.optimize as spo
 import scipy.signal as sps
 from datetime import datetime as dt
+import datetime
 
 import drms
 from astropy.constants import c, R_sun
