@@ -15,7 +15,7 @@ def create_output_filenames(filename, DID, version = '01',gzip = False):
     fmt = "%Y%m%dT%H%M%S"
     
     try:
-        temp = datetime.datetime.fromisoformat(fits.getheader(filename)['DATE-BEG']).strftime(fmt)
+        temp = time.strftime(fmt,time.strptime(fits.getheader(filename)['DATE-BEG'],'%Y-%m-%dT%H:%M:%S.%f'))
     except Exception:
         temp = 'YYYYmmddTHHMMSS'
         print(f"The input file: {filename} does not contain DATE-BEG keyword: using {temp}")

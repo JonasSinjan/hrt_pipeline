@@ -7,22 +7,11 @@ import scipy.signal as sps
 from datetime import datetime as dt
 import datetime
 
-import drms
 from astropy.constants import c, R_sun
 from scipy.ndimage import map_coordinates
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
-import imreg_dft
-
-import sunpy
-import sunpy.map
-from reproject import reproject_interp, reproject_adaptive
-from sunpy.coordinates import get_body_heliographic_stonyhurst
-
-from sunpy.coordinates import frames
-import warnings, sunpy
-warnings.filterwarnings("ignore", category=sunpy.util.SunpyMetadataWarning)
 
 class bcolors:
   HEADER = '\033[95m'
@@ -1115,6 +1104,16 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     icnt, stokes or ilam files are expected as input.
     if allDID is True, all the fits file with the same DID in the directory of the input file will be saved with the new WCS.
     """
+    import sunpy, drms, imreg_dft
+    import sunpy.map
+    from reproject import reproject_interp, reproject_adaptive
+    from sunpy.coordinates import get_body_heliographic_stonyhurst
+
+    from sunpy.coordinates import frames
+    import warnings, sunpy
+    warnings.filterwarnings("ignore", category=sunpy.util.SunpyMetadataWarning)
+
+    
     print('This is a preliminary procedure, not fully tested')
     print('It has been optimized on raw and continuum data')
     print('This script is based on sunpy routines and examples')
