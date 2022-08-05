@@ -819,10 +819,14 @@ def gaussian_fit(a,show=True):
 
 def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
     p_old = [1,0,10]; count = 0
+    it = 0
     while np.abs(p[2] - p_old[2])>eps:
         p_old = p; count += 1
         hi = np.histogram(temp, bins=np.linspace(p[1] - 3*p[2],p[1] + 3*p[2],200),density=False);
         p = gaussian_fit(hi, show=False)
+        if it == 50:
+            break
+        it += 1
     return p, hi
 
   

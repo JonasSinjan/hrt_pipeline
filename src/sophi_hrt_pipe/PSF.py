@@ -272,7 +272,7 @@ def restore_stokes_cube(stokes_data, header, demod = True):
    if demod:
       nlev = 0.01
    else:
-      nlev = 0.001
+      nlev = 0.01
 
    for i in range(4):
       for j in range(6):
@@ -281,5 +281,5 @@ def restore_stokes_cube(stokes_data, header, demod = True):
 
             res_stokes[:,:,i,j] = Wienerfilter(im0,t0,nlev,0.5,10,size)
          elif i==0:
-            res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.001,0.5,10,size)  
+            res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,size)  
    return res_stokes
