@@ -1035,6 +1035,8 @@ def translate_header(h,tvec):
     return h
 
 def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
+    import sunpy.map
+    from reproject import reproject_adaptive
     
     # plot of the maps
     if verbose:

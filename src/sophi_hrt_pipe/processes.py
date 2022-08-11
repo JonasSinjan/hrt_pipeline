@@ -11,14 +11,14 @@ def setup_header(hdr_arr):
     'CAL_CRT0','CAL_CRT1','CAL_CRT2','CAL_CRT3','CAL_CRT4','CAL_CRT5',
     'CAL_CRT6','CAL_CRT7','CAL_CRT8','CAL_CRT9',
     'CAL_WREG','CAL_NORM','CAL_FRIN','CAL_PSF','CAL_IPOL',
-    'CAL_SCIP','RTE_MOD','RTE_SW','RTE_ITER']
+    'CAL_SCIP','RTE_MOD','RTE_SW','RTE_ITER','VERS_CAL']
 
     v = [0,' ',' ',
     ' ','None ','None','NA',
     0,0,0,0,0,0,
     0,0,0,0,
     'None',' ','NA','NA',' ',
-    'None',' ',' ',4294967295]
+    'None',' ',' ',4294967295, hdr_arr[0]['VERS_SW'][1:4]]
 
     c = ['Onboard calibrated for gain table','Unsharp masking correction','Sigma for unsharp masking [px]',
     'Prefilter correction (DID/file)','Ghost correction (name + version of module)',
@@ -26,7 +26,7 @@ def setup_header(hdr_arr):
     'cross-talk from I to Q (slope)','cross-talk from I to Q (offset)','cross-talk from I to U (slope)','cross-talk from I to U (offset)','cross-talk from I to V (slope)','cross-talk from I to V (offset)',
     'cross-talk from V to Q (slope)','cross-talk from V to Q (offset)','cross-talk from V to U (slope)','cross-talk from V to U (offset)','Wavelength Registration',
     'Normalization (normalization constant PROC_Ic)','Fringe correction (name + version of module)','PSF deconvolution','Onboard calibrated for instrumental polarization',
-    'Onboard scientific data analysis','Inversion mode','Inversion software','Number RTE inversion iterations']
+    'Onboard scientific data analysis','Inversion mode','Inversion software','Number RTE inversion iterations', 'Version of calibration pack']
 
     for h in hdr_arr:
         for i in range(len(k)):

@@ -298,17 +298,18 @@ def phihrt_pipe(input_json_file):
     ceny = slice(data_size[0]//2 - data_size[0]//4, data_size[0]//2 + data_size[0]//4)
     cenx = slice(data_size[1]//2 - data_size[1]//4, data_size[1]//2 + data_size[1]//4)
 
+    for hdr in hdr_arr:
+        hdr['VERS_SW'] = version #version of pipeline
+        hdr['VERSION'] = vrs #version of the file V01
+        
     hdr_arr = setup_header(hdr_arr)
     
-    hdr_arr = setup_header(hdr_arr)
     
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------ Load science data time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    for hdr in hdr_arr:
-        hdr['VERS_SW'] = version #version of pipeline
-        hdr['VERSION'] = vrs #version of the file V01
+    
     #-----------------
     # READ FLAT FIELDS
     #-----------------
