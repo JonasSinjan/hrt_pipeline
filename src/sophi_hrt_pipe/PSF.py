@@ -179,6 +179,17 @@ def Wienerfilter(img,t0,reg,cut_off,ap,size):
     scene2 = ifft2(scene).real  
     return scene2
 
+
+def Wienerfilter_th(img,t0,reg,cut_off,ap,size,t0_th):
+    noise_filter = fftshift(noise_mask_high(size,cut_off))
+
+    im0 = apo2d(img,ap)
+    d0 = fft2(im0)
+    scene = t0_th*noise_filter*d0*(np.conj(t0)/(np.abs(t0)**2+reg))
+    scene2 = ifft2(scene).real
+    return scene2
+
+
 def combine_all_PD():
    coefficients = np.zeros(38)
    coefficients[:23] = np.array([ 1.94428601,  0.36762832,  0.61874354, -0.24504269, -0.25386458,
@@ -217,9 +228,6 @@ def slovePara(X,Y):
    Para = leastsq(error, p0, args=(X, Y))
    return Para
 
-
-
-# Output the final result
 def solution(X,Y,zernike,d_in):
    Para = slovePara(X,Y)
    a, b, c = Para[0]
@@ -227,10 +235,12 @@ def solution(X,Y,zernike,d_in):
    return aberr*2*np.pi
 
 
+
 def build_zernikes(Z,d_in):
    n = np.array([0.82,0.52,0.334])
    coefficients = np.zeros(38)
    defocus = solution(n,Z[0],'defocus',d_in)
+# Output the final result
    Y_trefoil = solution(n,Z[5],'Y-Trefoil',d_in)
 
    X_trefoil =  solution(n,Z[6],'X-Trefoil',d_in)
@@ -257,29 +267,45 @@ def make_wf(size,coefficients):
    t0 = OTF(psf_foc)
    return t0
 
+def make_wf_th(size):
+   coe = np.zeros(38)
+   D = 140
+   lam = 617.3*10**(-6)
+   pix = 0.5
+   f = 4125.3
+   ap = 10
+   rpupil = pupil_size(D,lam,pix,size)
+   Mask = mask(rpupil,size)
+   A_f = pupil_foc(coe,size,rpupil)
+   psf_foc = PSF(Mask,A_f)
+   t0 = OTF(psf_foc)
+   return t0
 
 def restore_stokes_cube(stokes_data, header, demod = True):
    #   stokes_data = pyfits.getdata(file_path)
    size = stokes_data[:,:,0,0].shape[0]
    #   header = pyfits.getheader(file_path)
-   d_in = header['DSUN_AU']
-   Z = combine_all_PD()
-   coefficients = build_zernikes(Z,d_in)
+   #d_in = header['DSUN_AU']
+   #Z = combine_all_PD()
+   #coefficients = build_zernikes(Z,d_in)
+   coefficients = np.zeros(38)
+   coefficients[:10] = np.array([ 0.32725408,  -0.01148539,  0.46752924,  0.00413511, 0.01964055,
+                              0.13448377,  -0.59294403,  0.38801043,  0.03050344,  -0.07010066])
    res_stokes = np.zeros((size,size,4,6))
    t0 = make_wf(size,coefficients)
-
+   t0_th = make_wf_th(size)
    #added by DC for running this script on modulated or demodulated data
-   if demod:
-      nlev = 0.01
-   else:
-      nlev = 0.01
+   #if demod:
+    #  nlev = 0.01
+   #else:
+    #  nlev = 0.001
 
    for i in range(4):
       for j in range(6):
          im0 = stokes_data[:,:,i,j]
          if i==1 or i==2 or i==3:
 
-            res_stokes[:,:,i,j] = Wienerfilter(im0,t0,nlev,0.5,10,size)
+            res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)
          elif i==0:
-            res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,size)  
+            res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)  
    return res_stokes
