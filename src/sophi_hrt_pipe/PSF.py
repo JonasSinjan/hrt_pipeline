@@ -284,13 +284,13 @@ def make_wf_th(size):
 def restore_stokes_cube(stokes_data, header, demod = True):
    #   stokes_data = pyfits.getdata(file_path)
    size = stokes_data[:,:,0,0].shape[0]
-   #   header = pyfits.getheader(file_path)
-   #d_in = header['DSUN_AU']
-   #Z = combine_all_PD()
-   #coefficients = build_zernikes(Z,d_in)
-   coefficients = np.zeros(38)
-   coefficients[:10] = np.array([ 0.32725408,  -0.01148539,  0.46752924,  0.00413511, 0.01964055,
-                              0.13448377,  -0.59294403,  0.38801043,  0.03050344,  -0.07010066])
+   header = pyfits.getheader(file_path)
+   d_in = header['DSUN_AU']
+   Z = combine_all_PD()
+   coefficients = build_zernikes(Z,d_in)
+   #coefficients = np.zeros(38)
+   #coefficients[:10] = np.array([ 0.32725408,  -0.01148539,  0.46752924,  0.00413511, 0.01964055, 0.13448377,  -0.59294403,  0.38801043,  0.03050344,  -0.07010066])
+                         
    res_stokes = np.zeros((size,size,4,6))
    t0 = make_wf(size,coefficients)
    t0_th = make_wf_th(size)
