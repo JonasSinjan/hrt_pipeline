@@ -284,7 +284,7 @@ def make_wf_th(size):
 def restore_stokes_cube(stokes_data, header, demod = True):
    #   stokes_data = pyfits.getdata(file_path)
    size = stokes_data[:,:,0,0].shape[0]
-   header = pyfits.getheader(file_path)
+   # header = pyfits.getheader(file_path)
    d_in = header['DSUN_AU']
    Z = combine_all_PD()
    coefficients = build_zernikes(Z,d_in)
