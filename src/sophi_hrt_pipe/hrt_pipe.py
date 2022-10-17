@@ -155,8 +155,13 @@ def phihrt_pipe(input_json_file):
         out_intermediate = input_dict['out_intermediate']  # DC 20211116
         
         iss_off = input_dict['iss_off']  # DC
-        PSFmod = input_dict['PSFmod']  # DC
-        PSFstokes = input_dict['PSFstokes']  # DC
+        PSForbit = input_dict['PSForbit']  # DC
+        PSFaberr = input_dict['PSFaberr']  # DC
+        if PSForbit is not False:
+            PSFstokes = True
+        else:
+            PSFstokes = False
+            
         
         rte = input_dict['rte']
         p_milos = input_dict['p_milos']
@@ -354,6 +359,7 @@ def phihrt_pipe(input_json_file):
         #--------
 
         flat = compare_cpos(flat,cpos_f,cpos_arr[0]) 
+        voltagesData_flat = compare_cpos(voltagesData_flat,cpos_f,cpos_arr[0]) 
 
         flat_pmp_temp = str(header_flat['HPMPTSP1'])
 
@@ -479,7 +485,8 @@ def phihrt_pipe(input_json_file):
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
         data = prefilter_correction(data,voltagesData_arr,prefilter[rows,cols],prefilter_voltages)
-        flat = prefilter_correction(flat[...,np.newaxis],[voltagesData_flat],prefilter,prefilter_voltages)[...,0]
+        # 20221011 test for flat with no cavity and PF
+        # flat = prefilter_correction(flat[...,np.newaxis],[voltagesData_flat],prefilter,prefilter_voltages)[...,0]
         
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
@@ -678,7 +685,7 @@ def phihrt_pipe(input_json_file):
     #-----------------
     # PSF DECONVOLUTION ON MODULATED DATA
     #-----------------
-
+    """
     if not PSFstokes:
         if PSFmod:
             start_time = time.perf_counter()
@@ -701,7 +708,7 @@ def phihrt_pipe(input_json_file):
         if PSFmod:
             print(" ")
             printc('-->>>>>>> Both PSF deconvolutions are True, it will be applied only on the Stokes vectors',color=bcolors.WARNING)
-    
+    """;
     #-----------------
     # APPLY DEMODULATION 
     #-----------------
@@ -739,6 +746,7 @@ def phihrt_pipe(input_json_file):
         start_time = time.perf_counter()
 
         Ic_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]),dtype=bool)
+        AR_mask = np.zeros((data_size[0],data_size[1],data_shape[-1]),dtype=bool)
         I_c = np.ones(data_shape[-1])
         limb_mask = np.ones((data_size[0],data_size[1],data_shape[-1]))
         limb = False
@@ -749,7 +757,7 @@ def phihrt_pipe(input_json_file):
 
             try:
 #                 limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
-                limb_temp, sly, slx, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+                limb_temp, sly, slx, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)], mar = 100)
                 
                 if limb_temp is not None: # and Ic_temp is not None: 
                     limb_temp = np.where(limb_temp>0,1,0)
@@ -776,9 +784,22 @@ def phihrt_pipe(input_json_file):
                 Ic_temp *= field_stop[rows,cols]
             
             Ic_temp = np.array(Ic_temp, dtype=bool)
-            I_c[scan] = np.mean(data[Ic_temp,0,cpos_arr[0],int(scan)])
+            
+            # new Icont normalization removing high magnetic field regions ####################
+            AR_temp = np.ones(Ic_temp.shape,dtype=bool)
+                    
+            for p in range(1,4):
+                hi = np.histogram(data[Ic_temp,p,:,scan].flatten(),bins=np.linspace(-20,20,150))
+                gval = gaussian_fit(hi, show = True)
+                AR_temp *= np.max(np.abs(data[:,:,p,:,scan] - gval[1]),axis=-1) < 5*gval[2]
+
+            AR_temp = np.asarray(AR_temp, dtype=bool)
+            ################################################################
+            
+            I_c[scan] = np.mean(data[Ic_temp*AR_temp,0,cpos_arr[0],int(scan)])
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c[scan]
             Ic_mask[...,scan] = Ic_temp
+            AR_mask[...,scan] = AR_temp
             hdr_arr[scan]['CAL_NORM'] = round(I_c[scan],4) # DC 20211116
 
         if out_intermediate:
@@ -829,7 +850,7 @@ def phihrt_pipe(input_json_file):
             scan_hdr['CAL_CRT9'] = 0 #V-U offset
                 
         try:    
-            data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask)
+            data = CT_ItoQUV(data, CTparams, norm_stokes, cpos_arr, Ic_mask*AR_mask) # new continuum normalization
 
 
         except Exception:
@@ -862,8 +883,9 @@ def phihrt_pipe(input_json_file):
         if not iss_off or not PSFstokes:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
             # DC change 20211019 only for limb
-            if limb:
-                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+            if norm_stokes:
+                if limb:
+                    data *= limb_mask[:,:, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -888,10 +910,10 @@ def phihrt_pipe(input_json_file):
                 ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=Ic_mask[...,scan],nlevel=0.3) # DC 20211116
             
             CTparams[...,scan] = ctalk_params
-            
+            # wrong keywords for CT parameters: fixed on 2022-10-07
             scan_hdr['CAL_CRT6'] = round(ctalk_params[slope,q],4) #V-Q slope
-            scan_hdr['CAL_CRT7'] = round(ctalk_params[slope,u],4) #V-U slope
-            scan_hdr['CAL_CRT8'] = round(ctalk_params[offset,q],4) #V-Q offset
+            scan_hdr['CAL_CRT8'] = round(ctalk_params[slope,u],4) #V-U slope
+            scan_hdr['CAL_CRT7'] = round(ctalk_params[offset,q],4) #V-Q offset
             scan_hdr['CAL_CRT9'] = round(ctalk_params[offset,u],4) #V-U offset
                 
         data = CT_VtoQU(data, CTparams)
@@ -903,8 +925,9 @@ def phihrt_pipe(input_json_file):
         if not iss_off or not PSFstokes:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
             # DC change 20211019 only for limb
-            if limb:
-                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+            if norm_stokes:
+                if limb:
+                    data *= limb_mask[:,:, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -979,8 +1002,9 @@ def phihrt_pipe(input_json_file):
         
         if not PSFstokes:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-            if limb:
-                data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+            if norm_stokes:
+                if limb:
+                    data *= limb_mask[:,:, np.newaxis, np.newaxis]
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -999,12 +1023,13 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> PSF deconvolution on Stokes vectors',color=bcolors.OKGREEN)
         for scan in range(data_shape[-1]):
-            data[...,scan] = restore_stokes_cube(data[...,scan], hdr_arr[scan],demod=True)
-            hdr_arr[scan]['CAL_PSF'] = 'Stokes'
+            data[...,scan] = restore_stokes_cube(data[...,scan], hdr_arr[scan],orbit=PSForbit,aberr_cor=PSFaberr)
+            hdr_arr[scan]['CAL_PSF'] = PSForbit+'; aberration: '+str(PSFaberr)
 
         data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
-        if limb:
-            data *= limb_mask[rows,cols, np.newaxis, np.newaxis]
+        if norm_stokes:
+            if limb:
+                data *= limb_mask[:,:, np.newaxis, np.newaxis]
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- PSF deconvolution time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -1149,10 +1174,10 @@ def phihrt_pipe(input_json_file):
                 if demod:
                     hdr_demod = hdr_interm.copy()
                     hdr_demod['FILENAME'] = scan_name_list[count] + '_demodulated.fits'
-                    if PSFmod and not PSFstokes:
-                        hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {hdr_arr[count]['CAL_PSF']}"
-                    else:
-                        hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                    # if PSFmod and not PSFstokes:
+                    #     hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {hdr_arr[count]['CAL_PSF']}"
+                    # else:
+                    hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
                     
                     hdr_demod['BTYPE'] = 'STOKES'
                     hdr_demod['BUNIT'] = 'I_CONT'

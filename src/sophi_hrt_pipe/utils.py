@@ -433,14 +433,83 @@ def auto_norm(file_name):
     return norm
 
 # new functions by DC ######################################
+def mu_angle(hdr,coord=None):
+    """
+    input
+    hdr: header or filename
+    coord: pixel for which the mu angle is found (if None: center of the FoV)
+    
+    output
+    mu = cosine of the heliocentric angle
+    """
+    if type(hdr) is str:
+        hdr = fits.getheader(hdr)
+    
+    center=center_coord(hdr)
+    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
+    
+    if coord is None:
+        coord = np.asarray([(hdr['PXEND1']-hdr['PXBEG1'])/2,
+                            (hdr['PXEND2']-hdr['PXBEG2'])/2])
+    
+    coord -= center[:2]
+    mu = np.sqrt(Rpix**2 - (coord[0]**2 + coord[1]**2)) / Rpix
+    return mu
+
+def center_coord(hdr):
+    """
+    input
+    hdr: header
+    
+    output
+    center: [x,y,1] coordinates of the solar disk center (units: pixel)
+    """
+    pxbeg1 = hdr['PXBEG1']
+    pxend1 = hdr['PXEND1']
+    pxbeg2 = hdr['PXBEG2']
+    pxend2 = hdr['PXEND2']
+    coord=np.asarray([hdr['CRPIX1'],
+            hdr['CRPIX2'],
+           1])
+
+    angle = hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    rc = [(pxend1-pxbeg1)/2,(pxend2-pxbeg2)/2] # CRPIX from 1 to 2048, so 1024.5 is the center
+
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+
+    coord = (M @ coord)[:2]
+
+    # center of the sun in the rotated reference system
+    center=np.asarray([coord[0]-hdr['CRVAL1']/hdr['CDELT1']-1,
+                       coord[1]-hdr['CRVAL2']/hdr['CDELT2']-1,
+                       1])
+    # rotation of the sun center back to the original reference system
+    angle = -hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+
+    center = (M @ center)
+    
+    return center
+
 def limb_side_finder(img, hdr):
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
-    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    center = center_coord(hdr)[:2] - 1
     
-    x_p = img.shape[1] - (center[0]+Rpix)
-    y_p = img.shape[0] - (center[1]+Rpix)
-    x_n = center[0]-Rpix
-    y_n = center[1]-Rpix
+    x_p = img.shape[1] - (center[0]+np.sqrt(Rpix**2 - (center[1]-img.shape[0])**2))
+    y_p = img.shape[0] - (center[1]+np.sqrt(Rpix**2 - (center[0]-img.shape[1])**2))
+    x_n = center[0]-np.sqrt(Rpix**2 - center[1]**2)
+    y_n = center[1]-np.sqrt(Rpix**2 - center[0]**2)
+
     
     side = ''
     if x_p > 0: 
@@ -810,13 +879,17 @@ def gaussian_fit(a,show=True):
     y=a[0][:]
     p0=[0.,sum(xx*y)/sum(y),np.sqrt(sum(y * (xx - sum(xx*y)/sum(y))**2) / sum(y))] #weighted avg of bins for avg and sigma inital values
     p0[0]=y[find_nearest(xx,p0[1])-5:find_nearest(xx,p0[1])+5].mean() #find init guess for ampltiude of gauss func
-    p,cov=spo.curve_fit(gaus,xx,y,p0=p0)
-    if show:
-        lbl = '{:.2e} $\pm$ {:.2e}'.format(p[1],p[2])
-        plt.plot(xx,gaus(xx,*p),'r--', label=lbl)
-        plt.legend(fontsize=9)
-    return p
-
+    try:
+        p,cov=spo.curve_fit(gaus,xx,y,p0=p0)
+        if show:
+            lbl = '{:.2e} $\pm$ {:.2e}'.format(p[1],p[2])
+            plt.plot(xx,gaus(xx,*p),'r--', label=lbl)
+            plt.legend(fontsize=9)
+        return p
+    except:
+        printc("Gaussian fit failed: return initial guess",color=bcolors.WARNING)
+        return p0
+        
 def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
     p_old = [1,0,10]; count = 0
     it = 0
@@ -1109,6 +1182,7 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     It works correlating HRT data on remap HMI data. Not validated on limb data. Not tested on data with different viewing angle.
     icnt, stokes or ilam files are expected as input.
     if allDID is True, all the fits file with the same DID in the directory of the input file will be saved with the new WCS.
+    return new header, if dir_out is None it does not save any fits file
     """
     import sunpy, drms, imreg_dft
     import sunpy.map
@@ -1264,19 +1338,33 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     name = file_name.split('/')[-1]
     new_name = name.split('L2')[0]+'L2.WCS'+name.split('L2')[1]
     
-    if allDID:
-        did = h_phi['PHIDATID']
-        directory = file_name[:-len(name)]
-        file_n = os.listdir(directory)
-        if type(did) != str:
-            did = str(did)
-        did_n = [directory+i for i in file_n if did in i]
-        l2_n = ['stokes','icnt','bmag','binc','bazi','vlos','blos']
-        for n in l2_n:
-            f = [i for i in did_n if n in i][0]
-            name = f.split('/')[-1]
-            new_name = name.split('L2')[0]+'L2.WCS'+name.split('L2')[1]
-            with fits.open(f) as h:
+    if dir_out is not None:
+        if allDID:
+            did = h_phi['PHIDATID']
+            directory = file_name[:-len(name)]
+            file_n = os.listdir(directory)
+            if type(did) != str:
+                did = str(did)
+            did_n = [directory+i for i in file_n if did in i]
+            l2_n = ['stokes','icnt','bmag','binc','bazi','vlos','blos']
+            for n in l2_n:
+                f = [i for i in did_n if n in i][0]
+                name = f.split('/')[-1]
+                new_name = name.split('L2')[0]+'L2.WCS'+name.split('L2')[1]
+                with fits.open(f) as h:
+                    h[0].header['CROTA'] = ht['CROTA']
+                    h[0].header['CRPIX1'] = ht['CRPIX1']
+                    h[0].header['CRPIX2'] = ht['CRPIX2']
+                    h[0].header['CRVAL1'] = ht['CRVAL1']
+                    h[0].header['CRVAL2'] = ht['CRVAL2']
+                    h[0].header['PC1_1'] = ht['PC1_1']
+                    h[0].header['PC1_2'] = ht['PC1_2']
+                    h[0].header['PC2_1'] = ht['PC2_1']
+                    h[0].header['PC2_2'] = ht['PC2_2']
+                    h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation (continuum intensity)'
+                    h.writeto(dir_out+new_name, overwrite=True)        
+        else:
+            with fits.open(file_name) as h:
                 h[0].header['CROTA'] = ht['CROTA']
                 h[0].header['CRPIX1'] = ht['CRPIX1']
                 h[0].header['CRPIX2'] = ht['CRPIX2']
@@ -1286,20 +1374,7 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
                 h[0].header['PC1_2'] = ht['PC1_2']
                 h[0].header['PC2_1'] = ht['PC2_1']
                 h[0].header['PC2_2'] = ht['PC2_2']
-                h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation (continuum intensity)'
-                h.writeto(dir_out+new_name, overwrite=True)        
-    else:
-        with fits.open(file_name) as h:
-            h[0].header['CROTA'] = ht['CROTA']
-            h[0].header['CRPIX1'] = ht['CRPIX1']
-            h[0].header['CRPIX2'] = ht['CRPIX2']
-            h[0].header['CRVAL1'] = ht['CRVAL1']
-            h[0].header['CRVAL2'] = ht['CRVAL2']
-            h[0].header['PC1_1'] = ht['PC1_1']
-            h[0].header['PC1_2'] = ht['PC1_2']
-            h[0].header['PC2_1'] = ht['PC2_1']
-            h[0].header['PC2_2'] = ht['PC2_2']
-            h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation '
-            h.writeto(dir_out+new_name, overwrite=True)
-
+                h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation '
+                h.writeto(dir_out+new_name, overwrite=True)
+    return ht
 ###############################################
