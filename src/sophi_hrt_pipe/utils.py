@@ -500,7 +500,7 @@ def center_coord(hdr):
     
     return center
 
-def limb_side_finder(img, hdr):
+def limb_side_finder(img, hdr,verbose=True):
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
     # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
     center = center_coord(hdr)[:2] - 1
@@ -521,10 +521,11 @@ def limb_side_finder(img, hdr):
     if y_n > 0:
         side += 'S'
     
-    if side == '':
-        print('Limb is not in the FoV according to WCS keywords')
-    else:
-        print('Limb side:',side)
+    if verbose:
+        if side == '':
+            print('Limb is not in the FoV according to WCS keywords')
+        else:
+            print('Limb side:',side)
 
     ds = 256
     if hdr['DSUN_AU'] < 0.4:
@@ -551,7 +552,7 @@ def limb_side_finder(img, hdr):
 
     return side, center, Rpix, sly, slx
 
-def limb_fitting(img, hdr, mar=200):
+def limb_fitting(img, hdr, mar=200, verbose=True):
     def _residuals(p,x,y):
         xc,yc,R = p
         return R**2 - (x-xc)**2 - (y-yc)**2
@@ -602,14 +603,13 @@ def limb_fitting(img, hdr, mar=200):
 
     from scipy import optimize
     
-    side, center, Rpix, sly, slx = limb_side_finder(img,hdr)
+    side, center, Rpix, sly, slx = limb_side_finder(img,hdr,verbose=verbose)
     
     wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
     wcs_grad = _image_derivative(wcs_mask)
         
     if side == '':
-        print('Limb is not in the FoV according to WCS keywords')
-
+        
         return None, sly, slx, side
     
     if 'W' in side or 'E' in side:
@@ -634,7 +634,10 @@ def limb_fitting(img, hdr, mar=200):
             except:
                 y_start = wcs_col.argmax()+1
             
-            col = img[y_start-mar:y_start+mar,c]
+            r0 = max(y_start-mar,2)
+            r1 = min(y_start+mar,img.shape[0]-2)
+            col = img[r0:r1,c]
+
             g = np.gradient(col*norm)
             gi = _interp(g,m)
             
@@ -655,7 +658,10 @@ def limb_fitting(img, hdr, mar=200):
             except:
                 x_start = wcs_row.argmax()+1
                 
-            row = img[r,x_start-mar:x_start+mar]
+            c0 = max(x_start-mar,2)
+            c1 = min(x_start+mar,img.shape[1]-2)
+            row = img[r,c0:c1]
+
             g = np.gradient(row*norm)
             gi = _interp(g,m)
             
