@@ -213,6 +213,9 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
     elif cpos == 5:
         shift_w =  wave_axis[2] - wavelength
     # DC TEST
+    else:
+        
+        shift_w = 0.0
     wave_axis = wave_axis - shift_w
 
     print('It is assumed the wavelength array is given by the hdr')
@@ -258,7 +261,7 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
     rte_invs = np.zeros((12,y,x)).astype(float)
     for i in range(y*x):
         result[:,i] = res[i*12:(i+1)*12]
-    result = result.reshape(12,y,x)
+    result = result.reshape(12,x,y)
     result = np.einsum('ijk->ikj', result)
     _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
     
@@ -334,7 +337,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
         rte_data_products[6,:,:] = rte_invs_noth[11,:,:] #chisq
 
-        rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
+        rte_data_products *= mask[np.newaxis, :, :, scan] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'cmilos'
@@ -498,7 +501,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         rte_data_products[5,:,:] = rte_out[1,:,:]*np.cos(rte_out[2,:,:]*np.pi/180.) #blos
         rte_data_products[6,:,:] = rte_out[11,:,:] #chisq
 
-        rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
+        rte_data_products *= mask[np.newaxis, :, :, scan] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'cmilos-fits'
@@ -662,7 +665,7 @@ def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[5,:,:] = result[:,:,1]*np.cos(result[:,:,5]*np.pi/180.) #blos
         rte_data_products[5,:,:] = result[:,:,12] #chisq
 
-        rte_data_products *= mask[np.newaxis, :, :, 0] #field stop, set outside to 0
+        rte_data_products *= mask[np.newaxis, :, :, scan] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
         hdr_scan['RTE_SW'] = 'pmilos'
