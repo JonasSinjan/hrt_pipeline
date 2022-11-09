@@ -235,7 +235,7 @@ def phihrt_pipe(input_json_file):
         for scan in range(number_of_scans):
             data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = scale_data)
 
-            wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan],verbose = True)
+            wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan], TemperatureCorrection = True, verbose = True)
 
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
                 print(f"This scan has been flipped in the Y axis to conform to orientation standards. \n File: {data_f[scan]}")
@@ -350,7 +350,7 @@ def phihrt_pipe(input_json_file):
         
         print(flat.shape)
 
-        _, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f,verbose = True) #get flat continuum position
+        _, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f, TemperatureCorrection = True,verbose = True) #get flat continuum position
 
         print(f"The continuum position of the flat field is at {cpos_f} index position")
         
@@ -471,11 +471,11 @@ def phihrt_pipe(input_json_file):
         prefilter_c = True
         start_time = time.perf_counter()
 
-        prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
-                            -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
-                            140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
-                            926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
-                            1711.67,1777.14,1842.61]
+#         prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
+#                             -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
+#                             140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
+#                             926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
+#                             1711.67,1777.14,1842.61]
 
         prefilter, _ = load_fits(prefilter_f)
         if imgdirx_flipped == 'YES':
@@ -484,9 +484,9 @@ def phihrt_pipe(input_json_file):
 #         prefilter = prefilter[rows,cols]
         #prefilter = prefilter[:,652:1419,613:1380] #crop the helioseismology data
 
-        data = prefilter_correction(data,voltagesData_arr,prefilter[rows,cols],prefilter_voltages)
-        # 20221011 test for flat with no cavity and PF
-        # flat = prefilter_correction(flat[...,np.newaxis],[voltagesData_flat],prefilter,prefilter_voltages)[...,0]
+        data = prefilter_correction(data,voltagesData_arr,prefilter[rows,cols])
+        # DC 20221109 test for Smitha. PF already removed to flat
+        # flat = prefilter_correction(flat[...,np.newaxis],[voltagesData_flat],prefilter)[...,0]
         
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f

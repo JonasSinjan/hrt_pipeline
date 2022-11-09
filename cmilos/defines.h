@@ -69,15 +69,25 @@
 // #define INITIAL_MODEL_S0 0.15
 // #define INITIAL_MODEL_S1 0.85
 
+// #define INITIAL_MODEL_B 400
+// #define INITIAL_MODEL_GM 30
+// #define INITIAL_MODEL_AZI 120
+// #define INITIAL_MODEL_ETHA0 10.0    // changed from 3.0 to 10.0  May 2022
+// #define INITIAL_MODEL_LAMBDADOPP 0.035  //en A  changed from 0.025 to 0.035 May 2022
+// #define INITIAL_MODEL_AA 2.0    // changed from 1.0 to 2.0  May 2022
+// #define INITIAL_MODEL_VLOS 0.01 // Km/s
+// #define INITIAL_MODEL_S0 0.22   // changed from 0.15 to 0.22 May 2022
+// #define INITIAL_MODEL_S1 0.85   // changed from 0.85 to 0.78 May 2022
+
 #define INITIAL_MODEL_B 400
 #define INITIAL_MODEL_GM 30
 #define INITIAL_MODEL_AZI 120
-#define INITIAL_MODEL_ETHA0 10.0    // changed from 3.0 to 10.0  May 2022
-#define INITIAL_MODEL_LAMBDADOPP 0.035  //en A  changed from 0.025 to 0.035 May 2022
-#define INITIAL_MODEL_AA 2.0    // changed from 1.0 to 2.0  May 2022
+#define INITIAL_MODEL_ETHA0 1.0    // changed from 10.0 to 1.0  November 2022
+#define INITIAL_MODEL_LAMBDADOPP 0.05  //en A  changed from 0.035 to 0.05 November 2022
+#define INITIAL_MODEL_AA 1.5    // changed from 2.0 to 1.5  November 2022
 #define INITIAL_MODEL_VLOS 0.01 // Km/s
-#define INITIAL_MODEL_S0 0.22   // changed from 0.15 to 0.22 May 2022
-#define INITIAL_MODEL_S1 0.85   // changed from 0.85 to 0.78 May 2022
+#define INITIAL_MODEL_S0 0.22
+#define INITIAL_MODEL_S1 0.85
 
 //NumeroS cuanticos
 #define CUANTIC_NWL 1

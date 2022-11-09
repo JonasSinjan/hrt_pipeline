@@ -150,7 +150,8 @@ void call_milos(const int *options, size_t size, const double *waveaxis, const d
 	double slight;
 	double toplim;
 	int miter;
-	PRECISION weight[4]={1.,10.,10.,4.};
+	PRECISION weight[4]={1.,4.,5.4,4.1}; // changed in November 2022
+	// PRECISION weight[4]={1.,10.,10.,4.};
 	// PRECISION weight[4]={1.,12.,12.,10.};
 	int nweight;
 
@@ -432,7 +433,8 @@ int main(int argc,char **argv){
 	double slight;
 	double toplim;
 	int miter;
-	PRECISION weight[4]={1.,10.,10.,4.};
+    PRECISION weight[4]={1.,4.,5.4,4.1}; // changed in November 2022
+	// PRECISION weight[4]={1.,10.,10.,4.};
 	int nweight;
 
 	clock_t t_ini, t_fin;

@@ -96,9 +96,9 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
         printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
         raise ValueError()
        
-def fits_get_sampling(file,num_wl = 6,verbose = False):
+def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False):
     '''
-    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file)
+    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False)
     No S/C velocity corrected!!!
     cpos = 0 if continuum is at first wavelength and = num_wl - 1 (usually 5) if continuum is at the end
     '''
@@ -108,12 +108,13 @@ def fits_get_sampling(file,num_wl = 6,verbose = False):
         header = hdu_list[fg_head].data
         tunning_constant = float(header[0][4])/1e9
         ref_wavelength = float(header[0][5])/1e3
+        Tfg = hdu_list[0].header['FGOV1PT1'] #temperature of the FG
         
-        voltagesData = np.zeros(num_wl)
-        hi = np.histogram(header['PHI_FG_voltage'],bins=7)
-        yi = hi[0]; xi = hi[1]
-        j = 0
         try:
+            voltagesData = np.zeros(num_wl)
+            hi = np.histogram(header['PHI_FG_voltage'],bins=7)
+            yi = hi[0]; xi = hi[1]
+            j = 0        
             for i in range(num_wl + 1):
                 if yi[i] != 0 :
                     if i < num_wl:
@@ -136,6 +137,13 @@ def fits_get_sampling(file,num_wl = 6,verbose = False):
         print('Continuum position at wave: ', cpos)
     wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
     #print(wave_axis)
+    
+    if TemperatureCorrection:
+        temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
+        temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+        wave_axis += temperature_constant_old*(Tfg-61)
+        voltagesData += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
+
     return wave_axis,voltagesData,tunning_constant,cpos
 
 def fits_get_sampling_SPG(file,verbose = False):

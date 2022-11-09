@@ -374,7 +374,7 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 
 
 
-def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
+def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages = None, TemperatureCorrection=False):
     """
     applies prefilter correction
     adapted from SPGPylibs
@@ -382,6 +382,19 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
     def _get_v1_index1(x):
         index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
         return  v1, index1
+    
+    if prefilter_voltages is None:
+        prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
+                                -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
+                                140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
+                                926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
+                                1711.67,1777.14,1842.61]
+    if TemperatureCorrection:
+        temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
+        temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+        Tfg = 66 # FG was at 66 deg during e2e calibration
+        tunning_constant = 0.0003513 # this shouldn't change
+        prefilter_voltages += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
     
     data_shape = data.shape
     # cop = np.copy(data)
