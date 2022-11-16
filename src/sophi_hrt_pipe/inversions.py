@@ -202,7 +202,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
-def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
+def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],cavity_f = None, rows = slice(0,2048), cols = slice(0,2048), out_dir = './'):
     
     """
     RTE inversion using CMILOS
@@ -251,11 +251,18 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
     #print(y,x,p,l)
     
     filename = out_dir + 'dummy_in.txt'
+
+    if cavity_f is not None:
+        printc("  ---- >>>>> Correcting wavelengths for Cavity Maps shifts: .... ",color=bcolors.OKGREEN)
+        wave_axis_2d = cavity_shifts(cavity_f,wave_axis,rows,cols)
+    else:
+        wave_axis_2d = np.zeros((y,x,1)) + wave_axis[np.newaxis,np.newaxis]
+        
     with open(filename,"w") as f:
         for i in range(x):
             for j in range(y):
                 for k in range(l):
-                    f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
+                    f.write('%e %e %e %e %e \n' % (wave_axis_2d[j,i,k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
 
     printc(f'  ---- >>>>> Inverting data: .... ',color=bcolors.OKGREEN)
 
@@ -288,7 +295,7 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
     
     return result
 
-def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f = None, rows = slice(0,2048), cols = slice(0,2048), vers = '01'):
 
     wavelength = 6173.3354
 
@@ -313,7 +320,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         
         options = [6,15] # # of wavelegths, # of iterations
         
-        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options,out_dir)
+        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options,cavity_f,rows,cols,out_dir)
         
         rte_invs_noth = np.copy(rte_invs)
 

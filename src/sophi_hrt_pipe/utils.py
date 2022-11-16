@@ -135,10 +135,12 @@ def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = 
         cpos = num_wl-1
     if verbose:
         print('Continuum position at wave: ', cpos)
-    wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
+    wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.341
     #print(wave_axis)
     
     if TemperatureCorrection:
+        printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
+        printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
         temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
         temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
         wave_axis += temperature_constant_old*(Tfg-61)
@@ -1392,3 +1394,14 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
                 h.writeto(dir_out+new_name, overwrite=True)
     return ht
 ###############################################
+
+def cavity_shifts(cavity_f, wave_axis,rows,cols):
+    cavityMap, header = load_fits(cavity_f) # cavity maps
+    _,voltagesData,tunning_constant,cpos = fits_get_sampling(cavity_f,num_wl = 6, TemperatureCorrection = True, verbose = False)
+
+    vcore = voltagesData[cpos-3]
+
+    cavityWave = (cavityMap - vcore) * tunning_constant
+    new_wave_axis = wave_axis[np.newaxis,np.newaxis] - cavityWave[...,np.newaxis]
+
+    return new_wave_axis[rows,cols]

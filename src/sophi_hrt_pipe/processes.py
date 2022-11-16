@@ -254,14 +254,14 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     demod = np.tile(demod_data, (shape[0],shape[1],1,1))
 
     if data.ndim == 5:
-        #if data array has more than one scan
+        # if data array has more than one scan
         data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
 
         data = np.matmul(demod,data)
         data = np.moveaxis(data,0,-1) #move scans back to the end
     
     elif data.ndim == 4:
-        #for if data has just one scan
+        # if data has one scan
         data = np.matmul(demod,data)
     
     return data, demod
@@ -326,7 +326,7 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end
     return np.matmul(invM, new_demod_flats*norm_factor)
 
 
-def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
+def flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp=50,rows=slice(0,2048),cols=slice(0,2048)) -> np.ndarray:
     """
     correct science data with flat fields
     """
@@ -355,9 +355,26 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 
             printc("Dividing by 4 flats, one for each pol state",color=bcolors.OKGREEN)
 
-            tmp = np.mean(flat,axis=-1) #avg over wavelength
+            # tmp = np.mean(flat,axis=-1) #avg over wavelength
+            tmp = flat[:,:,:,cpos_arr[0]] # continuum only
 
             return data / tmp[rows,cols, :, np.newaxis, np.newaxis]
+
+        if flat_states == 9:
+            
+            printc("Dividing by 9 flats, one for each wavelength in Stokes I, only continuum in Stokes Q, U and V",color=bcolors.OKGREEN)
+            
+            tmp = np.zeros(flat.shape)
+            demod_flat, demodM = demod_hrt(flat.copy(), flat_pmp_temp, False)
+            tmp[:,:,0] = demod_flat[:,:,0]
+            tmp[:,:,1:] = demod_flat[:,:,1:,cpos_arr[0],np.newaxis]
+            del demod_flat
+            invM = np.linalg.inv(demodM)
+            tmp = np.matmul(invM, tmp)    
+            
+            return data / tmp[rows,cols, :, :, np.newaxis]
+
+
         else:
             print(" ")
             printc('-->>>>>>> Unable to apply flat correction. Please insert valid flat_states',color=bcolors.WARNING)
@@ -369,7 +386,8 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 
         return data
 
-    except: 
+    except Exception as exc:
+        printc(exc,color=bcolors.FAIL) 
         printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
 
@@ -390,6 +408,8 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages = No
                                 926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
                                 1711.67,1777.14,1842.61]
     if TemperatureCorrection:
+        printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
+        printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
         temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
         temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
         Tfg = 66 # FG was at 66 deg during e2e calibration
