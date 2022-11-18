@@ -510,33 +510,49 @@ def center_coord(hdr):
     
     return center
 
-def limb_side_finder(img, hdr,verbose=True):
+def circular_mask(h, w, center, radius):
+
+    Y, X = np.ogrid[:h, :w]
+    dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+    mask = dist_from_center <= radius
+    return mask
+
+def limb_side_finder(img, hdr,verbose=True,outfinder=False):
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
     # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
     center = center_coord(hdr)[:2] - 1
+    limb_wcs = circular_mask(hdr['PXEND2']-hdr['PXBEG2']+1,
+                             hdr['PXEND1']-hdr['PXBEG1']+1,center,Rpix)
     
-    x_p = img.shape[1] - (center[0]+np.sqrt(Rpix**2 - (center[1]-img.shape[0])**2))
-    y_p = img.shape[0] - (center[1]+np.sqrt(Rpix**2 - (center[0]-img.shape[1])**2))
-    x_n = center[0]-np.sqrt(Rpix**2 - center[1]**2)
-    y_n = center[1]-np.sqrt(Rpix**2 - center[0]**2)
+    f = 16
+    fract = int(limb_wcs.shape[0]//f)
+    
+    finder = np.zeros((f,f))
+    for i in range(f):
+        for j in range(f):
+            finder[i,j] = np.sum(~limb_wcs[fract*i:fract*(i+1),fract*j:fract*(j+1)])
 
-    
-    side = ''
-    if x_p > 0: 
-        side += 'W'
-    elif x_n > 0:
-        side += 'E'
-    if y_p > 0:
-        side += 'N'
-    if y_n > 0:
-        side += 'S'
-    
-    if verbose:
-        if side == '':
-            print('Limb is not in the FoV according to WCS keywords')
-        else:
-            print('Limb side:',side)
+    sides = dict(E=0,N=0,W=0,S=0)
 
+    sides['E'] = np.sum(finder[:,0:int(f//3-1)])
+    sides['W'] = np.sum(finder[:,f-int(f//3-1):])
+    sides['S'] = np.sum(finder[0:int(f//3-1)])
+    sides['N'] = np.sum(finder[f-int(f//3-1):])
+    finder_original = finder.copy()
+    
+    finder[:int(f//3-1),:int(f//6)] = 0
+    finder[:int(f//3-1),-int(f//3-1):] = 0
+    finder[-int(f//3-1):,:int(f//3-1)] = 0
+    finder[-int(f//3-1):,-int(f//3-1):] = 0
+
+    if np.any(finder) > 0:
+        side = max(sides,key=sides.get)
+        print('Limb side:',side)
+    else:
+        side = ''
+        print('Limb is not in the FoV according to WCS keywords')
+    
     ds = 256
     if hdr['DSUN_AU'] < 0.4:
         if side == '':
@@ -559,15 +575,18 @@ def limb_side_finder(img, hdr,verbose=True):
         slx = slice(img.shape[1]//2 - ds + dx, img.shape[1]//2 + ds + dx)
     else:
         slx = slice(0,img.shape[1])
+    
+    if outfinder:
+        return side, center, Rpix, sly, slx, finder_original
+    else:
+        return side, center, Rpix, sly, slx
 
-    return side, center, Rpix, sly, slx
-
-def limb_fitting(img, hdr, mar=200, verbose=True):
+def limb_fitting(img, hdr, field_stop, verbose=True):
     def _residuals(p,x,y):
         xc,yc,R = p
         return R**2 - (x-xc)**2 - (y-yc)**2
     
-    def _is_outlier(points, thresh=3):
+    def _is_outlier(points, thresh=2):
         if len(points.shape) == 1:
             points = points[:,None]
         median = np.median(points, axis=0)
@@ -578,23 +597,7 @@ def limb_fitting(img, hdr, mar=200, verbose=True):
         modified_z_score = 0.6745 * diff / med_abs_deviation
 
         return modified_z_score > thresh
-    
-    def _interp(y, m, kind='cubic',fill_value='extrapolate'):
         
-        from scipy.interpolate import interp1d
-        x = np.arange(np.size(y))
-        fn = interp1d(x, y, kind=kind,fill_value=fill_value)
-        x_new = np.arange(len(y), step=1./m)
-        return fn(x_new)
-    
-    def _circular_mask(h, w, center, radius):
-
-        Y, X = np.ogrid[:h, :w]
-        dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
-
-        mask = dist_from_center <= radius
-        return mask
-    
     def _image_derivative(d):
         import numpy as np
         from scipy.signal import convolve
@@ -607,87 +610,57 @@ def limb_fitting(img, hdr, mar=200, verbose=True):
         SX = convolve(d, kx,mode='same')
         SY = convolve(d, ky,mode='same')
 
-        A=SX+SY
+        return SX, SY
 
-        return A
+    from scipy.optimize import least_squares
+    from scipy.ndimage import binary_erosion
 
-    from scipy import optimize
-    
-    side, center, Rpix, sly, slx = limb_side_finder(img,hdr,verbose=verbose)
-    
-    wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
-    wcs_grad = _image_derivative(wcs_mask)
+    side, center, Rpix, sly, slx, finder_small = limb_side_finder(img,hdr,verbose=verbose,outfinder=True)
+    f = 16
+    fract = int(img.shape[0]//f)
+    finder = np.zeros(img.shape)
+    for i in range(f):
+        for j in range(f):
+            finder[fract*i:fract*(i+1),fract*j:fract*(j+1)] = finder_small[i,j]
+
+#     wcs_mask = circular_mask(img.shape[0],img.shape[1],center,Rpix)
+#     wcs_grad = _image_derivative(wcs_mask)
         
     if side == '':
+        return None, sly, slx, side, None, None
+    
+    if 'N' in side or 'S' in side:
+        img = np.moveaxis(img,0,1)
+        center = center[::-1]
+    
+    s = 5
+    thr = 3
+    
+    diff = _image_derivative(img)[0][s:-s,s:-s]
+    rms = np.sqrt(np.mean(diff**2))
+    yi, xi = np.where(np.abs(diff*binary_erosion(field_stop,np.ones((2,2)),iterations=20)[s:-s,s:-s])>rms*thr)
+    tyi = yi.copy(); txi = xi.copy()
+    yi = []; xi = []
+    for i,j in zip(tyi,txi):
+        if finder[i,j]:
+            yi += [i+s]; xi += [j+s]
+    yi = np.asarray(yi); xi = np.asarray(xi)
+    
+    out = _is_outlier(xi)
+
+    yi = yi[~out]
+    xi = xi[~out]
+
+    p = least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi),
+                              bounds = ([center[0]-150,center[1]-150,Rpix-50],[center[0]+150,center[1]+150,Rpix+50]))
         
-        return None, sly, slx, side
+#     mask80 = circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
+    mask100 = circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2])
     
-    if 'W' in side or 'E' in side:
-        mode = 'rows'
+    if 'N' in side or 'S' in side:
+        return np.moveaxis(mask100,0,1), sly, slx, side
     else:
-        mode = 'columns'
-    
-    if 'W' in side or 'N' in side:
-        norm = -1
-    else:
-        norm = 1
-    
-    if mode == 'columns':
-        xi = np.arange(100,img.shape[1]-50,50)
-        yi = []
-        m = 10
-        for c in xi:
-            wcs_col = wcs_grad[1:,c]*norm
-            mm = wcs_col.mean(); ss = wcs_col.std()
-            try:
-                y_start = np.where(wcs_col>mm+5*ss)[0][0]+1
-            except:
-                y_start = wcs_col.argmax()+1
-            
-            r0 = max(y_start-mar,2)
-            r1 = min(y_start+mar,img.shape[0]-2)
-            col = img[r0:r1,c]
-
-            g = np.gradient(col*norm)
-            gi = _interp(g,m)
-            
-            yi += [gi.argmax()/m+y_start-mar]
-        yi = np.asarray(yi)
-        xi = xi[~_is_outlier(yi)]
-        yi = yi[~_is_outlier(yi)]
-    
-    elif mode == 'rows':
-        yi = np.arange(100,img.shape[0]-50,50)
-        xi = []
-        m = 10
-        for r in yi:
-            wcs_row = wcs_grad[r,1:]*norm
-            mm = wcs_row.mean(); ss = wcs_row.std()
-            try:
-                x_start = np.where(wcs_row>mm+5*ss)[0][0]+1
-            except:
-                x_start = wcs_row.argmax()+1
-                
-            c0 = max(x_start-mar,2)
-            c1 = min(x_start+mar,img.shape[1]-2)
-            row = img[r,c0:c1]
-
-            g = np.gradient(row*norm)
-            gi = _interp(g,m)
-            
-            xi += [gi.argmax()/m+x_start-mar]
-        xi = np.asarray(xi)
-        out_one = _is_outlier(xi)
-        out_two = ~out_one
-        yi = yi[~_is_outlier(xi)]
-        xi = xi[~_is_outlier(xi)]
-
-
-    p = optimize.least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi))
-        
-    mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
-#     return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80, side
-    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), sly, slx, side
+        return mask100, sly, slx, side
 
 def fft_shift(img,shift):
     """
