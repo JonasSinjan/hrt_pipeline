@@ -112,7 +112,7 @@ def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = 
         
         try:
             voltagesData = np.zeros(num_wl)
-            hi = np.histogram(header['PHI_FG_voltage'],bins=7)
+            hi = np.histogram(header['PHI_FG_voltage'],bins=num_wl+1)
             yi = hi[0]; xi = hi[1]
             j = 0        
             for i in range(num_wl + 1):
@@ -139,12 +139,14 @@ def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = 
     #print(wave_axis)
     
     if TemperatureCorrection:
-        printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
-        printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
+        if verbose:
+            printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
+            printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
         temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
         temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
-        wave_axis += temperature_constant_old*(Tfg-61)
-        voltagesData += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
+        # wave_axis += temperature_constant_old*(Tfg-61)
+        wave_axis += temperature_constant_new*(Tfg-61) # 20221123 see cavity_maps.ipynb with example
+        # voltagesData += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
 
     return wave_axis,voltagesData,tunning_constant,cpos
 
@@ -1368,13 +1370,14 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     return ht
 ###############################################
 
-def cavity_shifts(cavity_f, wave_axis,rows,cols):
+def cavity_shifts(cavity_f, wave_axis,rows,cols, TemperatureCorrection = False):
     cavityMap, header = load_fits(cavity_f) # cavity maps
-    _,voltagesData,tunning_constant,cpos = fits_get_sampling(cavity_f,num_wl = 6, TemperatureCorrection = True, verbose = False)
+    # Tfg = header['FGOV1PT1']
+    _,voltagesData,tunning_constant,cpos = fits_get_sampling(cavity_f,num_wl = 6, TemperatureCorrection = TemperatureCorrection, verbose = False)
 
     vcore = voltagesData[cpos-3]
-
-    cavityWave = (cavityMap - vcore) * tunning_constant
+    # temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+    cavityWave = (cavityMap - vcore) * tunning_constant # + temperature_constant_new*(Tfg-61) no T correction because it is \Delta V
     new_wave_axis = wave_axis[np.newaxis,np.newaxis] - cavityWave[...,np.newaxis]
 
     return new_wave_axis[rows,cols]

@@ -392,7 +392,7 @@ def flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp=50,rows=slice(0
 
 
 
-def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages = None, TemperatureCorrection=False):
+def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None, TemperatureCorrection=False):
     """
     applies prefilter correction
     adapted from SPGPylibs
@@ -402,19 +402,25 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages = No
         return  v1, index1
     
     if prefilter_voltages is None:
-        prefilter_voltages = [-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
+        prefilter_voltages = np.asarray([-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
                                 -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
                                 140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
                                 926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
-                                1711.67,1777.14,1842.61]
+                                1711.67,1777.14,1842.61])
     if TemperatureCorrection:
-        printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
-        printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
+        # printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
+        # printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
         temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
         temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
         Tfg = 66 # FG was at 66 deg during e2e calibration
         tunning_constant = 0.0003513 # this shouldn't change
-        prefilter_voltages += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
+        ref_wavelength = 6173.341 # this shouldn't change
+        prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength + temperature_constant_new*(Tfg-61)
+        # prefilter_voltages += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
+    else:
+        tunning_constant = 0.0003513
+        ref_wavelength = 6173.341 # this shouldn't change
+        prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength
     
     data_shape = data.shape
     # cop = np.copy(data)
@@ -422,16 +428,16 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages = No
     
     for scan in range(data_shape[-1]):
 
-        voltage_list = voltagesData_arr[scan]
+        wave_list = wave_axis_arr[scan]
         
         for wv in range(6):
 
-            v = voltage_list[wv]
+            v = wave_list[wv]
 
-            vdif = [v - pf for pf in prefilter_voltages]
+            vdif = [v - pf for pf in prefilter_wave]
             
             v1, index1 = _get_v1_index1(vdif)
-            if v < prefilter_voltages[-1] and v > prefilter_voltages[0]:
+            if v < prefilter_wave[-1] and v > prefilter_wave[0]:
                 
                 if vdif[index1] >= 0:
                     v2 = vdif[index1 + 1]
@@ -442,11 +448,11 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages = No
                     index2 = index1 - 1
                     
 #                 imprefilter = (prefilter[:,:, index1]*(0-v1) + prefilter[:,:, index2]*(v2-0))/(v2-v1) #interpolation between nearest voltages
-            elif v >= prefilter_voltages[-1]:
+            elif v >= prefilter_wave[-1]:
                 index2 = index1 - 1
                 v2 = vdif[index2]
                 
-            elif v <= prefilter_voltages[0]:
+            elif v <= prefilter_wave[0]:
                 index2 = index1 + 1
                 v2 = vdif[index2]
                 

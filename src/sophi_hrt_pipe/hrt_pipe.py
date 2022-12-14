@@ -137,6 +137,10 @@ def phihrt_pipe(input_json_file):
         scale_data = input_dict['scale_data']
         accum_scaling = input_dict['accum_scaling']
         bit_conversion = input_dict['bit_conversion']
+        if 'TemperatureCorrection' not in input_dict:
+            TemperatureCorrection = False
+        else:
+            TemperatureCorrection = input_dict['TemperatureCorrection']
 
         dark_c = input_dict['dark_c']
         flat_c = input_dict['flat_c']
@@ -229,7 +233,7 @@ def phihrt_pipe(input_json_file):
         data_arr = [0]*number_of_scans
         hdr_arr = [0]*number_of_scans
 
-        wve_axis_arr = [0]*number_of_scans
+        wave_axis_arr = [0]*number_of_scans
         cpos_arr = [0]*number_of_scans
         voltagesData_arr = [0]*number_of_scans
         tuning_constant_arr = [0]*number_of_scans
@@ -237,7 +241,7 @@ def phihrt_pipe(input_json_file):
         for scan in range(number_of_scans):
             data_arr[scan], hdr_arr[scan] = get_data(data_f[scan], scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = scale_data)
 
-            wve_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan], TemperatureCorrection = True, verbose = True)
+            wave_axis_arr[scan], voltagesData_arr[scan], tuning_constant_arr[scan], cpos_arr[scan] = fits_get_sampling(data_f[scan], TemperatureCorrection = TemperatureCorrection, verbose = True)
 
             if 'IMGDIRX' in hdr_arr[scan] and hdr_arr[scan]['IMGDIRX'] == 'YES':
                 print(f"This scan has been flipped in the Y axis to conform to orientation standards. \n File: {data_f[scan]}")
@@ -352,7 +356,7 @@ def phihrt_pipe(input_json_file):
         
         print(flat.shape)
 
-        _, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f, TemperatureCorrection = True,verbose = True) #get flat continuum position
+        wave_flat, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f, TemperatureCorrection = TemperatureCorrection,verbose = True) #get flat continuum position
 
         print(f"The continuum position of the flat field is at {cpos_f} index position")
         
@@ -479,9 +483,9 @@ def phihrt_pipe(input_json_file):
             prefilter = prefilter[:,::-1]
         # prefilter = prefilter[rows,cols]
         
-        data = prefilter_correction(data,voltagesData_arr,prefilter[rows,cols],TemperatureCorrection=True)
+        data = prefilter_correction(data,wave_axis_arr,prefilter[rows,cols],TemperatureCorrection=TemperatureCorrection)
         # DC 20221109 test for Smitha. PF already removed from the flat
-        flat = prefilter_correction(flat[...,np.newaxis],[voltagesData_flat],prefilter,TemperatureCorrection=True)[...,0]
+        flat = prefilter_correction(flat[...,np.newaxis],[wave_flat],prefilter,TemperatureCorrection=TemperatureCorrection)[...,0]
         
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
@@ -538,6 +542,7 @@ def phihrt_pipe(input_json_file):
     else:
         print(" ")
         printc('-->>>>>>> No normalising flats mode',color=bcolors.WARNING)
+        flat = normalise_flat(flat, flat_f, slice(0,2048), slice(0,2048))
 
     #-----------------
     # APPLY FLAT CORRECTION 
@@ -1215,17 +1220,17 @@ def phihrt_pipe(input_json_file):
         if p_milos:
 
             try:
-                pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                pmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
                     
             except ValueError:
                 print("Running CMILOS txt instead!")
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
+                cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask,imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
 
         else:
             if cmilos_fits_opt:
-                cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+                cmilos_fits(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
             else:
-                cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
+                cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
 
     else:
         print(" ")
