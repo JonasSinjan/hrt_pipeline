@@ -35,3 +35,4 @@ source activate hrt_pipeline_env
 
 pip install -e .
 
+cd pymilos; pip install -e .; cd ..

@@ -550,10 +550,12 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
 
     if np.any(finder) > 0:
         side = max(sides,key=sides.get)
-        print('Limb side:',side)
+        if verbose:
+            print('Limb side:',side)
     else:
         side = ''
-        print('Limb is not in the FoV according to WCS keywords')
+        if verbose:
+            print('Limb is not in the FoV according to WCS keywords')
     
     ds = 256
     if hdr['DSUN_AU'] < 0.4:
@@ -633,13 +635,14 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
     
     if 'N' in side or 'S' in side:
         img = np.moveaxis(img,0,1)
+        finder = np.moveaxis(finder,0,1)
         center = center[::-1]
     
     s = 5
     thr = 3
     
     diff = _image_derivative(img)[0][s:-s,s:-s]
-    rms = np.sqrt(np.mean(diff**2))
+    rms = np.sqrt(np.mean(diff[field_stop[s:-s,s:-s]>0]**2))
     yi, xi = np.where(np.abs(diff*binary_erosion(field_stop,np.ones((2,2)),iterations=20)[s:-s,s:-s])>rms*thr)
     tyi = yi.copy(); txi = xi.copy()
     yi = []; xi = []

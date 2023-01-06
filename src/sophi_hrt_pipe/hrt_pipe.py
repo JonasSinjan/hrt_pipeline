@@ -38,7 +38,8 @@ def phihrt_pipe(input_json_file):
             a) ItoQUV cross talk correction <br>
             b) VtoQU cross talk correction <br>
     15. wavelengths registration
-    16. rte inversion with cmilos <br>
+    16. PSF deconvolution
+    17. rte inversion with cmilos <br>
             a) output rte data products to fits files <br>
 
     Parameters
@@ -114,7 +115,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.4 June 2nd 2022'
+    version = 'V1.6 January 6th 2023'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -168,8 +169,8 @@ def phihrt_pipe(input_json_file):
             
         
         rte = input_dict['rte']
-        p_milos = input_dict['p_milos']
-        cmilos_fits_opt = input_dict['cmilos_fits']
+        # p_milos = input_dict['p_milos']
+        pymilos_opt = input_dict['pymilos']
         cavity_f = input_dict['cavity_f']
         # cavity_f = '/scratch/slam/calchetti/cavity_maps/0263091100_flatPF-Tcorr-0_GAUS-FIT_header.fits'
 
@@ -193,9 +194,7 @@ def phihrt_pipe(input_json_file):
             vrs = input_dict['vers']
             if len(vrs) != 2:
                 printc("WARNING: Version string is larger than 2 digits",color=bcolors.WARNING)
-                # print(f"Desired Version 'vers' from the input file is not 2 characters long: {vrs}")
-                # raise KeyError
-
+                
         #behaviour if clean mode is set to None (null in json)
         if clean_mode is None:
             clean_mode = "V" 
@@ -757,7 +756,7 @@ def phihrt_pipe(input_json_file):
 
             try:
 #                 limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
-                limb_temp, sly, slx, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)], mar = 100)
+                limb_temp, sly, slx, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols])
                 
                 if limb_temp is not None: # and Ic_temp is not None: 
                     limb_temp = np.where(limb_temp>0,1,0)
@@ -774,7 +773,8 @@ def phihrt_pipe(input_json_file):
                     Ic_temp[ceny,cenx] = 1
                     Ic_temp = np.where(Ic_temp>0,1,0)
 
-            except:
+            except Exception as e:
+                print(f"Error during limb fitting: {e}")
                 Ic_temp = np.zeros(data_size)
                 Ic_temp[ceny,cenx] = 1
                 Ic_temp = np.where(Ic_temp>0,1,0)
@@ -1217,20 +1217,22 @@ def phihrt_pipe(input_json_file):
             data = np.mean(data, axis = (-1))
             data_shape = (data_size[0], data_size[1], 1)
 
-        if p_milos:
+        # if p_milos:
 
-            try:
-                pmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
+        #     try:
+        #         pmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
                     
-            except ValueError:
-                print("Running CMILOS txt instead!")
-                cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask,imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
+        #     except ValueError:
+        #         print("Running CMILOS txt instead!")
+                # cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask,imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
 
+        # else:
+        if pymilos_opt:
+            # weight = np.asarray([1.,4.,5.4,4.1]); initial_model = np.asarray([400,30,120,1,0.05,1.5,.01,.22,.85])
+            # py_cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, weight = weight, initial_model = initial_model, vers = vrs)
+            py_cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
         else:
-            if cmilos_fits_opt:
-                cmilos_fits(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = vrs)
-            else:
-                cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
+            cmilos(data_f, hdr_arr, wave_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f, rows, cols, vers = vrs)
 
     else:
         print(" ")
