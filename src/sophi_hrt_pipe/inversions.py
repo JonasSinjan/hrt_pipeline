@@ -11,26 +11,48 @@ def create_output_filenames(filename, DID, version = '01',gzip = False):
     """
     creating the L2 output filenames from the input, assuming L1
     """
+    file_start = 'solo_L2_phi-hrt-ilam_'
+    fmt = "%Y%m%dT%H%M%S"
+    
     try:
-        file_start = filename.split('solo_')[1]
-        file_start = 'solo_' + file_start
-        L2_str = file_start.replace('L1', 'L2')
-        versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
-        if gzip:
-            versioned = versioned + '.gz'
-        stokes_file = versioned.replace('ilam', 'stokes')
-        icnt_file = versioned.replace('ilam', 'icnt')
-        bmag_file = versioned.replace('ilam', 'bmag')
-        bazi_file = versioned.replace('ilam', 'bazi')
-        binc_file = versioned.replace('ilam', 'binc')
-        blos_file = versioned.replace('ilam', 'blos')
-        vlos_file = versioned.replace('ilam', 'vlos')
-
-        return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
-
+        temp = time.strftime(fmt,time.strptime(fits.getheader(filename)['DATE-BEG'],'%Y-%m-%dT%H:%M:%S.%f'))
     except Exception:
-        print("The input file: {file_path} does not contain 'L1'")
-        raise KeyError
+        temp = 'YYYYmmddTHHMMSS'
+        print(f"The input file: {filename} does not contain DATE-BEG keyword: using {temp}")
+    
+    versioned = file_start + temp + '_V' + version + '_' + DID + '.fits'
+    if gzip:
+        versioned = versioned + '.gz'
+    stokes_file = versioned.replace('ilam', 'stokes')
+    icnt_file = versioned.replace('ilam', 'icnt')
+    bmag_file = versioned.replace('ilam', 'bmag')
+    bazi_file = versioned.replace('ilam', 'bazi')
+    binc_file = versioned.replace('ilam', 'binc')
+    blos_file = versioned.replace('ilam', 'blos')
+    vlos_file = versioned.replace('ilam', 'vlos')
+    
+    return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+
+#     try:
+#         file_start = filename.split('solo_')[1]
+#         file_start = 'solo_' + file_start
+#         L2_str = file_start.replace('L1', 'L2')
+#         versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
+#         if gzip:
+#             versioned = versioned + '.gz'
+#         stokes_file = versioned.replace('ilam', 'stokes')
+#         icnt_file = versioned.replace('ilam', 'icnt')
+#         bmag_file = versioned.replace('ilam', 'bmag')
+#         bazi_file = versioned.replace('ilam', 'bazi')
+#         binc_file = versioned.replace('ilam', 'binc')
+#         blos_file = versioned.replace('ilam', 'blos')
+#         vlos_file = versioned.replace('ilam', 'vlos')
+# 
+#         return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+# 
+#     except Exception:
+#         print("The input file: {file_path} does not contain 'L1'")
+#         raise KeyError
 
 
 def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers):
@@ -180,7 +202,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
-def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
+def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
     
     """
     RTE inversion using CMILOS
@@ -230,7 +252,7 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15]):
         exit()
     y,x,p,l = sdata.shape
     #print(y,x,p,l)
-    out_dir = './'
+    
     filename = out_dir + 'dummy_in.txt'
     with open(filename,"w") as f:
         for i in range(x):
@@ -294,7 +316,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         
         options = [6,15] # # of wavelegths, # of iterations
         
-        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options)
+        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options,out_dir)
         
         rte_invs_noth = np.copy(rte_invs)
 
