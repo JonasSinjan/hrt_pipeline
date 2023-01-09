@@ -12,19 +12,20 @@ def create_output_filenames(filename, DID, version = '01',gzip = False):
     creating the L2 output filenames from the input, assuming L1
     """
     try:
+        repl = 'stokes'
         file_start = filename.split('solo_')[1]
         file_start = 'solo_' + file_start
         L2_str = file_start.replace('L1', 'L2')
         versioned = L2_str.split('V')[0] + 'V' + version + '_' + DID + '.fits'
         if gzip:
             versioned = versioned + '.gz'
-        stokes_file = versioned.replace('ilam', 'stokes')
-        icnt_file = versioned.replace('ilam', 'icnt')
-        bmag_file = versioned.replace('ilam', 'bmag')
-        bazi_file = versioned.replace('ilam', 'bazi')
-        binc_file = versioned.replace('ilam', 'binc')
-        blos_file = versioned.replace('ilam', 'blos')
-        vlos_file = versioned.replace('ilam', 'vlos')
+        stokes_file = versioned.replace(repl, 'stokes')
+        icnt_file = versioned.replace(repl, 'icnt')
+        bmag_file = versioned.replace(repl, 'bmag')
+        bazi_file = versioned.replace(repl, 'bazi')
+        binc_file = versioned.replace(repl, 'binc')
+        blos_file = versioned.replace(repl, 'blos')
+        vlos_file = versioned.replace(repl, 'vlos')
 
         return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
 
@@ -90,7 +91,10 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].data = rte_data_products.astype(np.float32)
         hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits.gz', overwrite=True)
 
+
+	
     #blos
+    print(blos_file, bmag_file, binc_file)
     with fits.open(file_path) as hdu_list:
         hdr_scan['FILENAME'] = blos_file
         hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."

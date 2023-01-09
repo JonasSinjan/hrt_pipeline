@@ -843,6 +843,43 @@ def blos_noise(blos_file, fs = None):
     plt.tight_layout()
     plt.show()
 
+def blos_noise_arr(blos, fs = None):
+    """
+    plot blos on left panel, and blos hist + Gaussian fit (w/ iterative option)
+    """
+
+    fig, ax = plt.subplots(1,2, figsize = (14,6))
+    if fs is not None:
+        idx = np.where(fs<1)
+        blos[idx] = -300
+    im1 = ax[0].imshow(blos, cmap = "gray", origin = "lower", vmin = -200, vmax = 200)
+    fig.colorbar(im1, ax = ax[0], fraction=0.046, pad=0.04)
+    hi = ax[1].hist(blos.flatten(), bins=np.linspace(-2e2,2e2,200))
+    #print(hi)
+    tmp = [0,0]
+    tmp[0] = hi[0].astype('float64')
+    tmp[1] = hi[1].astype('float64')
+
+
+    #guassian fit + label
+    p = gaussian_fit(tmp, show = False)  
+    try:  
+        p_iter, hi_iter = iter_noise(blos,[1.,0.,1.],eps=1e-4)
+        ax[1].scatter(0,0, color = 'white', s = 0, label = f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+    except:
+        print("Iterative Gauss Fit failed")
+    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} G'
+    ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+    ax[1].legend(fontsize=15)
+
+    # date = blos_file.split('blos_')[1][:15]
+    # dt_str = dt.strptime(date, "%Y%m%dT%H%M%S")
+    # fig.suptitle(f"Blos {dt_str}")
+
+    plt.tight_layout()
+    plt.show()
+
 def stokes_noise(stokes_file):
     """
     plot stokes V on left panel, and Stokes V hist + Gaussian fit (w/ iterative option)
