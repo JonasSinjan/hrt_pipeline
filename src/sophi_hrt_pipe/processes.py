@@ -7,25 +7,26 @@ import time
 
 def setup_header(hdr_arr):
     k = ['CAL_FLAT','CAL_USH','SIGM_USH',
-    'CAL_PRE','CAL_GHST','CAL_REAL',
+    'CAL_PRE','CAL_GHST','CAL_PREG','CAL_REAL',
     'CAL_CRT0','CAL_CRT1','CAL_CRT2','CAL_CRT3','CAL_CRT4','CAL_CRT5',
     'CAL_CRT6','CAL_CRT7','CAL_CRT8','CAL_CRT9',
-    'CAL_NORM','CAL_FRIN','CAL_PSF','CAL_IPOL',
-    'CAL_SCIP','RTE_MOD','RTE_SW','RTE_ITER']
+    'CAL_WREG','CAL_NORM','CAL_FRIN','CAL_PSF','CAL_IPOL',
+    'CAL_SCIP','RTE_MOD','RTE_SW','RTE_ITER','VERS_CAL']
 
     v = [0,' ',' ',
-    ' ','None ','NA',
+    ' ','None ','None','NA',
     0,0,0,0,0,0,
     0,0,0,0,
-    ' ','NA','NA',' ',
-    'None',' ',' ',4294967295]
+    'None',' ','NA','NA',' ',
+    'None',' ',' ',4294967295, hdr_arr[0]['VERS_SW'][1:4]]
 
     c = ['Onboard calibrated for gain table','Unsharp masking correction','Sigma for unsharp masking [px]',
-    'Prefilter correction (DID/file)','Ghost correction (name + version of module','Prealigment of images before demodulation',
+    'Prefilter correction (DID/file)','Ghost correction (name + version of module)',
+         'Polarimetric registration','Prealigment of images before demodulation',
     'cross-talk from I to Q (slope)','cross-talk from I to Q (offset)','cross-talk from I to U (slope)','cross-talk from I to U (offset)','cross-talk from I to V (slope)','cross-talk from I to V (offset)',
-    'cross-talk from V to Q (slope)','cross-talk from V to Q (offset)','cross-talk from V to U (slope)','cross-talk from V to U (offset)',
-    'Normalization (normalization constant PROC_Ic)','Fringe correction (name + version of module)','Onboard calibrated for instrumental PSF','Onboard calibrated for instrumental polarization',
-    'Onboard scientific data analysis','Inversion mode','Inversion software','Number RTE inversion iterations']
+    'cross-talk from V to Q (slope)','cross-talk from V to Q (offset)','cross-talk from V to U (slope)','cross-talk from V to U (offset)','Wavelength Registration',
+    'Normalization (normalization constant PROC_Ic)','Fringe correction (name + version of module)','PSF deconvolution','Onboard calibrated for instrumental polarization',
+    'Onboard scientific data analysis','Inversion mode','Inversion software','Number RTE inversion iterations', 'Version of calibration pack']
 
     for h in hdr_arr:
         for i in range(len(k)):
@@ -204,6 +205,15 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     '''
     Use constant demodulation matrices to demodulate input data
     '''
+    def _rotation_matrix(angle_rot):
+        c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
+        return np.array([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
+    def _rotate_m(angle,matrix):
+        rot = _rotation_matrix(angle)
+        return np.matmul(matrix,rot)
+    
+    HRT_MOD_ROTATION_ANGLE=0.2
+    
     if pmp_temp == '50':
         # 'original (pre May 2022/RSW1 2022 matrices, that don't account for azimuth angle etc in PMP)
         # demod_data = np.array([[ 0.28037298,  0.18741922,  0.25307596,  0.28119895],
@@ -211,11 +221,12 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
         #              [-0.19126636, -0.5348939,   0.08181918,  0.64422774],
         #              [-0.56897295,  0.58620095, -0.2579202,   0.2414017 ]])
         #Alberto 30/04/22
-        printc(f'Using Alberto demodulation matrix for temp=50',color = bcolors.OKGREEN)
+#         printc(f'Using Alberto demodulation matrix for temp=50',color = bcolors.OKGREEN)
         mod_matrix = np.array([[ 1.0014 ,  0.56715  , 0.3234 , -0.74743  ],
                                [ 1.0007 ,  0.0037942, 0.69968,  0.71423  ],
                                [ 1.0002 , -0.98937  , 0.04716, -0.20392  ],
                                [ 0.99769,  0.27904  ,-0.86715,  0.39908  ]])
+        mod_matrix = _rotate_m(HRT_MOD_ROTATION_ANGLE,mod_matrix)
         demod_data = np.linalg.inv(mod_matrix)
         
     elif pmp_temp == '40':
@@ -225,17 +236,18 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
         #              [ 0.10833212, -0.5317737,  -0.1677862,   0.5923593 ],
         #              [-0.46916953,  0.47738808, -0.43824592,  0.42579797]])
         #Alberto 14/04/22
-        printc(f'Using Alberto demodulation matrix for temp=40',color = bcolors.OKGREEN)
+#         printc(f'Using Alberto demodulation matrix for temp=40',color = bcolors.OKGREEN)
         mod_matrix = np.array([[ 0.99816  ,0.61485 , 0.010613 ,-0.77563 ], 
                                [ 0.99192 , 0.08382 , 0.86254 , 0.46818],
                                [ 1.0042 , -0.84437 , 0.12872 ,-0.53972],
                                [ 1.0057 , -0.30576 ,-0.87969 , 0.40134]])
+        mod_matrix = _rotate_m(HRT_MOD_ROTATION_ANGLE,mod_matrix)
         demod_data = np.linalg.inv(mod_matrix)
-    
+        
     else:
         printc("Demodulation Matrix for PMP TEMP of {pmp_temp} deg is not available", color = bcolors.FAIL)
     if verbose:
-        printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg',color = bcolors.OKGREEN)
+        printc(f'Using a constant demodulation matrix for a PMP TEMP of {pmp_temp} deg, rotated by {HRT_MOD_ROTATION_ANGLE} deg',color = bcolors.OKGREEN)
     
     demod_data = demod_data.reshape((4,4))
     shape = data.shape
@@ -626,7 +638,7 @@ def hot_pixel_mask(data, rows, cols,mode='median'):
         func = lambda a: np.mean(a,axis=0)
     else:
         print('mode not found, input dataset not corrected')
-        return new
+        return data
     
     l = int(np.max(hot_pix_mask))
     
