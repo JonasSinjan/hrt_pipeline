@@ -28,9 +28,6 @@
 
 #define NUM_ITER_SVD_CORDIC 27 //9,18,27,36  --> 18 parece ok!
 
-#define LIMITE_INFERIOR_PRECISION_SVD pow(2.0,-39)
-#define LIMITE_INFERIOR_PRECISION_TRIG pow(2.0,-39)
-#define LIMITE_INFERIOR_PRECISION_SINCOS pow(2.0,-39)
 //#############################################
 
 //INITIAL MODEL 
@@ -44,50 +41,17 @@
 // #define INITIAL_MODEL_S0 0.35
 // #define INITIAL_MODEL_S1 0.85
 
-// RTE init model config ONBOARD
-// Inv Iterations                                   = 15
-// Initial Model Continuum Absoprtion               = 12.0000 // INITIAL_MODEL_ETHA0
-// Initial Model Vector Magnetic Field Strength     = 1200.00000 // INITIAL_MODEL_B
-// Initial Model Line-Of-Sight Velocity             = 0.05000 // INITIAL_MODEL_VLOS
-// Initial Model Doppler Width Of Line              = 0.05000 // INITIAL_MODEL_LAMBDADOPP
-// Initial Model Damping Parameter                  = 0.05000 // INITIAL_MODEL_AA
-// Initial Model Vector Magnetic Field Inclination  = 170.00000 // INITIAL_MODEL_GM
-// Initial Model Vector Magnetic Field Azimuth      = 25.00000 // INITIAL_MODEL_AZI
-// Initial Model Source Function Ordinate At Origin = 0.30000 // INITIAL_MODEL_S0
-// Initial Model Source Function Slope              = 0.80000 // INITIAL_MODEL_S1
-// Wavelength Setting Initial Sampling Wavelength   = 6173.20117
-// Wavelength Setting Spectral Line Step            = 0.07000
-// Wavelength Setting Wavelength Of Line Continuum  = 6173.04117 (blue) 6173.64117 (red)
+// commented for testing new values in call_milos()
+//#define INITIAL_MODEL_B 400
+//#define INITIAL_MODEL_GM 30
+//#define INITIAL_MODEL_AZI 120
+//#define INITIAL_MODEL_ETHA0 3
+//#define INITIAL_MODEL_LAMBDADOPP 0.025  //en A
+//#define INITIAL_MODEL_AA 1.0
+//#define INITIAL_MODEL_VLOS 0.01 // Km/s
+//#define INITIAL_MODEL_S0 0.15
+//#define INITIAL_MODEL_S1 0.85
 
-// #define INITIAL_MODEL_B 400
-// #define INITIAL_MODEL_GM 30
-// #define INITIAL_MODEL_AZI 120
-// #define INITIAL_MODEL_ETHA0 3
-// #define INITIAL_MODEL_LAMBDADOPP 0.025  //en A
-// #define INITIAL_MODEL_AA 1.0
-// #define INITIAL_MODEL_VLOS 0.01 // Km/s
-// #define INITIAL_MODEL_S0 0.15
-// #define INITIAL_MODEL_S1 0.85
-
-// #define INITIAL_MODEL_B 400
-// #define INITIAL_MODEL_GM 30
-// #define INITIAL_MODEL_AZI 120
-// #define INITIAL_MODEL_ETHA0 10.0    // changed from 3.0 to 10.0  May 2022
-// #define INITIAL_MODEL_LAMBDADOPP 0.035  //en A  changed from 0.025 to 0.035 May 2022
-// #define INITIAL_MODEL_AA 2.0    // changed from 1.0 to 2.0  May 2022
-// #define INITIAL_MODEL_VLOS 0.01 // Km/s
-// #define INITIAL_MODEL_S0 0.22   // changed from 0.15 to 0.22 May 2022
-// #define INITIAL_MODEL_S1 0.85   // changed from 0.85 to 0.78 May 2022
-
-#define INITIAL_MODEL_B 400
-#define INITIAL_MODEL_GM 30
-#define INITIAL_MODEL_AZI 120
-#define INITIAL_MODEL_ETHA0 1.0    // changed from 10.0 to 1.0  November 2022
-#define INITIAL_MODEL_LAMBDADOPP 0.05  //en A  changed from 0.035 to 0.05 November 2022
-#define INITIAL_MODEL_AA 1.5    // changed from 2.0 to 1.5  November 2022
-#define INITIAL_MODEL_VLOS 0.01 // Km/s
-#define INITIAL_MODEL_S0 0.22
-#define INITIAL_MODEL_S1 0.85
 
 //NumeroS cuanticos
 #define CUANTIC_NWL 1
@@ -99,14 +63,17 @@
 #define CUANTIC_JUPI 0
 
 
-#define NOISE_SIGMA 0.001 
+#define NOISE_SIGMA 0.004 
 
 #define CLASSICAL_ESTIMATES_SAMPLE_REF 4 //Muestra referencia para cambio de cuadrante de azimuth. Depende del numero de muestras y posicion Continuo
-
 
 #define NTERMS 9  //ojo si es mayor q 10 casca el svdCordic (esta version)
 
 #define	PRECISION double //double or float
+
+#define LIMITE_INFERIOR_PRECISION_SVD pow(2.0,-39)
+#define LIMITE_INFERIOR_PRECISION_TRIG pow(2.0,-39)
+#define LIMITE_INFERIOR_PRECISION_SINCOS pow(2.0,-39)
 
 // END USER CONFIGURATION
 //---------------------------------------------------------
@@ -182,6 +149,7 @@ void Resetear_Puntero_Calculos_Compartidos();
 void Leer_Puntero_Calculos_Compartidos(int Numero,PRECISION ** a,...);
 void Asignar_Puntero_Calculos_Compartidos(int Numero,PRECISION * a,...);
 void Borrar_Calculos_Spectra();
+void Liberar_Puntero_Calculos_Compartidos();
 
 void ReservarMemoriaSinteisisDerivadas(int numl);
 void LiberarMemoriaSinteisisDerivadas();
@@ -199,12 +167,12 @@ int mil_sinrf(Cuantic *cuantic,Init_Model *initModel,double * wlines,int nwlines
 
 double * fgauss(double MC, double * eje,int neje,double landa,int deriv);
 
-_Complex * fft_d(double * spectra, int nspectra,int direc);
-_Complex * fft_c(_Complex * spectra, int nspectra,int direc);
+_Complex double * fft_d(double * spectra, int nspectra,int direc);
+_Complex double * fft_c(_Complex double * spectra, int nspectra,int direc);
 
 
 int Guarda(char * nombre,PRECISION *v,int nv);
-int GuardaC(char * nombre,_Complex *v,int nv,int a);
+int GuardaC(char * nombre,_Complex double *v,int nv,int a);
 
 int fvoigt(PRECISION damp,PRECISION *vv,int nvv,PRECISION *h, PRECISION *f);
 

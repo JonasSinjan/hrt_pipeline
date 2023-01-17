@@ -36,3 +36,4 @@ source activate hrt_pipeline_env
 conda develop . 
 #or 'pip install .'
 
+cd pymilos; pip install -e .; cd ..

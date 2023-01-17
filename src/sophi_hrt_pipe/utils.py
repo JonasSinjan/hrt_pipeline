@@ -96,9 +96,9 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
         printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
         raise ValueError()
        
-def fits_get_sampling(file,num_wl = 6,verbose = False):
+def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False):
     '''
-    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file)
+    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False)
     No S/C velocity corrected!!!
     cpos = 0 if continuum is at first wavelength and = num_wl - 1 (usually 5) if continuum is at the end
     '''
@@ -108,12 +108,13 @@ def fits_get_sampling(file,num_wl = 6,verbose = False):
         header = hdu_list[fg_head].data
         tunning_constant = float(header[0][4])/1e9
         ref_wavelength = float(header[0][5])/1e3
+        Tfg = hdu_list[0].header['FGOV1PT1'] #temperature of the FG
         
-        voltagesData = np.zeros(num_wl)
-        hi = np.histogram(header['PHI_FG_voltage'],bins=7)
-        yi = hi[0]; xi = hi[1]
-        j = 0
         try:
+            voltagesData = np.zeros(num_wl)
+            hi = np.histogram(header['PHI_FG_voltage'],bins=num_wl+1)
+            yi = hi[0]; xi = hi[1]
+            j = 0        
             for i in range(num_wl + 1):
                 if yi[i] != 0 :
                     if i < num_wl:
@@ -134,8 +135,19 @@ def fits_get_sampling(file,num_wl = 6,verbose = False):
         cpos = num_wl-1
     if verbose:
         print('Continuum position at wave: ', cpos)
-    wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
+    wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.341
     #print(wave_axis)
+    
+    if TemperatureCorrection:
+        if verbose:
+            printc('-->>>>>>> If FG temperature is not 61, the relation wl = wlref + V * tunning_constant is not valid anymore',color=bcolors.WARNING)
+            printc('          Use instead: wl =  wlref + V * tunning_constant + temperature_constant_new*(Tfg-61)',color=bcolors.WARNING)
+        temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
+        temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+        # wave_axis += temperature_constant_old*(Tfg-61)
+        wave_axis += temperature_constant_new*(Tfg-61) # 20221123 see cavity_maps.ipynb with example
+        # voltagesData += np.round((temperature_constant_old-temperature_constant_new)*(Tfg-61)/tunning_constant,0)
+
     return wave_axis,voltagesData,tunning_constant,cpos
 
 def fits_get_sampling_SPG(file,verbose = False):
@@ -433,30 +445,118 @@ def auto_norm(file_name):
     return norm
 
 # new functions by DC ######################################
-def limb_side_finder(img, hdr):
+def mu_angle(hdr,coord=None):
+    """
+    input
+    hdr: header or filename
+    coord: pixel for which the mu angle is found (if None: center of the FoV)
+    
+    output
+    mu = cosine of the heliocentric angle
+    """
+    if type(hdr) is str:
+        hdr = fits.getheader(hdr)
+    
+    center=center_coord(hdr)
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
-    center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
     
-    x_p = img.shape[1] - (center[0]+Rpix)
-    y_p = img.shape[0] - (center[1]+Rpix)
-    x_n = center[0]-Rpix
-    y_n = center[1]-Rpix
+    if coord is None:
+        coord = np.asarray([(hdr['PXEND1']-hdr['PXBEG1'])/2,
+                            (hdr['PXEND2']-hdr['PXBEG2'])/2])
     
-    side = ''
-    if x_p > 0: 
-        side += 'W'
-    elif x_n > 0:
-        side += 'E'
-    if y_p > 0:
-        side += 'N'
-    if y_n > 0:
-        side += 'S'
-    
-    if side == '':
-        print('Limb is not in the FoV according to WCS keywords')
-    else:
-        print('Limb side:',side)
+    coord -= center[:2]
+    mu = np.sqrt(Rpix**2 - (coord[0]**2 + coord[1]**2)) / Rpix
+    return mu
 
+def center_coord(hdr):
+    """
+    input
+    hdr: header
+    
+    output
+    center: [x,y,1] coordinates of the solar disk center (units: pixel)
+    """
+    pxbeg1 = hdr['PXBEG1']
+    pxend1 = hdr['PXEND1']
+    pxbeg2 = hdr['PXBEG2']
+    pxend2 = hdr['PXEND2']
+    coord=np.asarray([hdr['CRPIX1'],
+            hdr['CRPIX2'],
+           1])
+
+    angle = hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    rc = [(pxend1-pxbeg1)/2,(pxend2-pxbeg2)/2] # CRPIX from 1 to 2048, so 1024.5 is the center
+
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+
+    coord = (M @ coord)[:2]
+
+    # center of the sun in the rotated reference system
+    center=np.asarray([coord[0]-hdr['CRVAL1']/hdr['CDELT1']-1,
+                       coord[1]-hdr['CRVAL2']/hdr['CDELT2']-1,
+                       1])
+    # rotation of the sun center back to the original reference system
+    angle = -hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+
+    center = (M @ center)
+    
+    return center
+
+def circular_mask(h, w, center, radius):
+
+    Y, X = np.ogrid[:h, :w]
+    dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
+
+    mask = dist_from_center <= radius
+    return mask
+
+def limb_side_finder(img, hdr,verbose=True,outfinder=False):
+    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
+    # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
+    center = center_coord(hdr)[:2] - 1
+    limb_wcs = circular_mask(hdr['PXEND2']-hdr['PXBEG2']+1,
+                             hdr['PXEND1']-hdr['PXBEG1']+1,center,Rpix)
+    
+    f = 16
+    fract = int(limb_wcs.shape[0]//f)
+    
+    finder = np.zeros((f,f))
+    for i in range(f):
+        for j in range(f):
+            finder[i,j] = np.sum(~limb_wcs[fract*i:fract*(i+1),fract*j:fract*(j+1)])
+
+    sides = dict(E=0,N=0,W=0,S=0)
+
+    sides['E'] = np.sum(finder[:,0:int(f//3-1)])
+    sides['W'] = np.sum(finder[:,f-int(f//3-1):])
+    sides['S'] = np.sum(finder[0:int(f//3-1)])
+    sides['N'] = np.sum(finder[f-int(f//3-1):])
+    finder_original = finder.copy()
+    
+    finder[:int(f//3-1),:int(f//6)] = 0
+    finder[:int(f//3-1),-int(f//3-1):] = 0
+    finder[-int(f//3-1):,:int(f//3-1)] = 0
+    finder[-int(f//3-1):,-int(f//3-1):] = 0
+
+    if np.any(finder) > 0:
+        side = max(sides,key=sides.get)
+        if verbose:
+            print('Limb side:',side)
+    else:
+        side = ''
+        if verbose:
+            print('Limb is not in the FoV according to WCS keywords')
+    
     ds = 256
     if hdr['DSUN_AU'] < 0.4:
         if side == '':
@@ -479,15 +579,18 @@ def limb_side_finder(img, hdr):
         slx = slice(img.shape[1]//2 - ds + dx, img.shape[1]//2 + ds + dx)
     else:
         slx = slice(0,img.shape[1])
+    
+    if outfinder:
+        return side, center, Rpix, sly, slx, finder_original
+    else:
+        return side, center, Rpix, sly, slx
 
-    return side, center, Rpix, sly, slx
-
-def limb_fitting(img, hdr, mar=200):
+def limb_fitting(img, hdr, field_stop, verbose=True):
     def _residuals(p,x,y):
         xc,yc,R = p
         return R**2 - (x-xc)**2 - (y-yc)**2
     
-    def _is_outlier(points, thresh=3):
+    def _is_outlier(points, thresh=2):
         if len(points.shape) == 1:
             points = points[:,None]
         median = np.median(points, axis=0)
@@ -498,23 +601,7 @@ def limb_fitting(img, hdr, mar=200):
         modified_z_score = 0.6745 * diff / med_abs_deviation
 
         return modified_z_score > thresh
-    
-    def _interp(y, m, kind='cubic',fill_value='extrapolate'):
         
-        from scipy.interpolate import interp1d
-        x = np.arange(np.size(y))
-        fn = interp1d(x, y, kind=kind,fill_value=fill_value)
-        x_new = np.arange(len(y), step=1./m)
-        return fn(x_new)
-    
-    def _circular_mask(h, w, center, radius):
-
-        Y, X = np.ogrid[:h, :w]
-        dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
-
-        mask = dist_from_center <= radius
-        return mask
-    
     def _image_derivative(d):
         import numpy as np
         from scipy.signal import convolve
@@ -527,82 +614,58 @@ def limb_fitting(img, hdr, mar=200):
         SX = convolve(d, kx,mode='same')
         SY = convolve(d, ky,mode='same')
 
-        A=SX+SY
+        return SX, SY
 
-        return A
+    from scipy.optimize import least_squares
+    from scipy.ndimage import binary_erosion
 
-    from scipy import optimize
-    
-    side, center, Rpix, sly, slx = limb_side_finder(img,hdr)
-    
-    wcs_mask = _circular_mask(img.shape[0],img.shape[1],center,Rpix)
-    wcs_grad = _image_derivative(wcs_mask)
+    side, center, Rpix, sly, slx, finder_small = limb_side_finder(img,hdr,verbose=verbose,outfinder=True)
+    f = 16
+    fract = int(img.shape[0]//f)
+    finder = np.zeros(img.shape)
+    for i in range(f):
+        for j in range(f):
+            finder[fract*i:fract*(i+1),fract*j:fract*(j+1)] = finder_small[i,j]
+
+#     wcs_mask = circular_mask(img.shape[0],img.shape[1],center,Rpix)
+#     wcs_grad = _image_derivative(wcs_mask)
         
     if side == '':
-        print('Limb is not in the FoV according to WCS keywords')
+        return None, sly, slx, side, None, None
+    
+    if 'N' in side or 'S' in side:
+        img = np.moveaxis(img,0,1)
+        finder = np.moveaxis(finder,0,1)
+        center = center[::-1]
+    
+    s = 5
+    thr = 3
+    
+    diff = _image_derivative(img)[0][s:-s,s:-s]
+    rms = np.sqrt(np.mean(diff[field_stop[s:-s,s:-s]>0]**2))
+    yi, xi = np.where(np.abs(diff*binary_erosion(field_stop,np.ones((2,2)),iterations=20)[s:-s,s:-s])>rms*thr)
+    tyi = yi.copy(); txi = xi.copy()
+    yi = []; xi = []
+    for i,j in zip(tyi,txi):
+        if finder[i,j]:
+            yi += [i+s]; xi += [j+s]
+    yi = np.asarray(yi); xi = np.asarray(xi)
+    
+    out = _is_outlier(xi)
 
-        return None, sly, slx, side
-    
-    if 'W' in side or 'E' in side:
-        mode = 'rows'
-    else:
-        mode = 'columns'
-    
-    if 'W' in side or 'N' in side:
-        norm = -1
-    else:
-        norm = 1
-    
-    if mode == 'columns':
-        xi = np.arange(100,img.shape[1]-50,50)
-        yi = []
-        m = 10
-        for c in xi:
-            wcs_col = wcs_grad[1:,c]*norm
-            mm = wcs_col.mean(); ss = wcs_col.std()
-            try:
-                y_start = np.where(wcs_col>mm+5*ss)[0][0]+1
-            except:
-                y_start = wcs_col.argmax()+1
-            
-            col = img[y_start-mar:y_start+mar,c]
-            g = np.gradient(col*norm)
-            gi = _interp(g,m)
-            
-            yi += [gi.argmax()/m+y_start-mar]
-        yi = np.asarray(yi)
-        xi = xi[~_is_outlier(yi)]
-        yi = yi[~_is_outlier(yi)]
-    
-    elif mode == 'rows':
-        yi = np.arange(100,img.shape[0]-50,50)
-        xi = []
-        m = 10
-        for r in yi:
-            wcs_row = wcs_grad[r,1:]*norm
-            mm = wcs_row.mean(); ss = wcs_row.std()
-            try:
-                x_start = np.where(wcs_row>mm+5*ss)[0][0]+1
-            except:
-                x_start = wcs_row.argmax()+1
-                
-            row = img[r,x_start-mar:x_start+mar]
-            g = np.gradient(row*norm)
-            gi = _interp(g,m)
-            
-            xi += [gi.argmax()/m+x_start-mar]
-        xi = np.asarray(xi)
-        out_one = _is_outlier(xi)
-        out_two = ~out_one
-        yi = yi[~_is_outlier(xi)]
-        xi = xi[~_is_outlier(xi)]
+    yi = yi[~out]
+    xi = xi[~out]
 
-
-    p = optimize.least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi))
+    p = least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi),
+                              bounds = ([center[0]-150,center[1]-150,Rpix-50],[center[0]+150,center[1]+150,Rpix+50]))
         
-    mask80 = _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
-#     return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), mask80, side
-    return _circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]), sly, slx, side
+#     mask80 = circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
+    mask100 = circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2])
+    
+    if 'N' in side or 'S' in side:
+        return np.moveaxis(mask100,0,1), sly, slx, side
+    else:
+        return mask100, sly, slx, side
 
 def fft_shift(img,shift):
     """
@@ -810,13 +873,17 @@ def gaussian_fit(a,show=True):
     y=a[0][:]
     p0=[0.,sum(xx*y)/sum(y),np.sqrt(sum(y * (xx - sum(xx*y)/sum(y))**2) / sum(y))] #weighted avg of bins for avg and sigma inital values
     p0[0]=y[find_nearest(xx,p0[1])-5:find_nearest(xx,p0[1])+5].mean() #find init guess for ampltiude of gauss func
-    p,cov=spo.curve_fit(gaus,xx,y,p0=p0)
-    if show:
-        lbl = '{:.2e} $\pm$ {:.2e}'.format(p[1],p[2])
-        plt.plot(xx,gaus(xx,*p),'r--', label=lbl)
-        plt.legend(fontsize=9)
-    return p
-
+    try:
+        p,cov=spo.curve_fit(gaus,xx,y,p0=p0)
+        if show:
+            lbl = '{:.2e} $\pm$ {:.2e}'.format(p[1],p[2])
+            plt.plot(xx,gaus(xx,*p),'r--', label=lbl)
+            plt.legend(fontsize=9)
+        return p
+    except:
+        printc("Gaussian fit failed: return initial guess",color=bcolors.WARNING)
+        return p0
+        
 def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
     p_old = [1,0,10]; count = 0
     it = 0
@@ -1146,6 +1213,7 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     It works correlating HRT data on remap HMI data. Not validated on limb data. Not tested on data with different viewing angle.
     icnt, stokes or ilam files are expected as input.
     if allDID is True, all the fits file with the same DID in the directory of the input file will be saved with the new WCS.
+    return new header, if dir_out is None it does not save any fits file
     """
     import sunpy, drms, imreg_dft
     import sunpy.map
@@ -1301,19 +1369,33 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     name = file_name.split('/')[-1]
     new_name = name.split('L2')[0]+'L2.WCS'+name.split('L2')[1]
     
-    if allDID:
-        did = h_phi['PHIDATID']
-        directory = file_name[:-len(name)]
-        file_n = os.listdir(directory)
-        if type(did) != str:
-            did = str(did)
-        did_n = [directory+i for i in file_n if did in i]
-        l2_n = ['stokes','icnt','bmag','binc','bazi','vlos','blos']
-        for n in l2_n:
-            f = [i for i in did_n if n in i][0]
-            name = f.split('/')[-1]
-            new_name = name.split('L2')[0]+'L2.WCS'+name.split('L2')[1]
-            with fits.open(f) as h:
+    if dir_out is not None:
+        if allDID:
+            did = h_phi['PHIDATID']
+            directory = file_name[:-len(name)]
+            file_n = os.listdir(directory)
+            if type(did) != str:
+                did = str(did)
+            did_n = [directory+i for i in file_n if did in i]
+            l2_n = ['stokes','icnt','bmag','binc','bazi','vlos','blos']
+            for n in l2_n:
+                f = [i for i in did_n if n in i][0]
+                name = f.split('/')[-1]
+                new_name = name.split('L2')[0]+'L2.WCS'+name.split('L2')[1]
+                with fits.open(f) as h:
+                    h[0].header['CROTA'] = ht['CROTA']
+                    h[0].header['CRPIX1'] = ht['CRPIX1']
+                    h[0].header['CRPIX2'] = ht['CRPIX2']
+                    h[0].header['CRVAL1'] = ht['CRVAL1']
+                    h[0].header['CRVAL2'] = ht['CRVAL2']
+                    h[0].header['PC1_1'] = ht['PC1_1']
+                    h[0].header['PC1_2'] = ht['PC1_2']
+                    h[0].header['PC2_1'] = ht['PC2_1']
+                    h[0].header['PC2_2'] = ht['PC2_2']
+                    h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation (continuum intensity)'
+                    h.writeto(dir_out+new_name, overwrite=True)        
+        else:
+            with fits.open(file_name) as h:
                 h[0].header['CROTA'] = ht['CROTA']
                 h[0].header['CRPIX1'] = ht['CRPIX1']
                 h[0].header['CRPIX2'] = ht['CRPIX2']
@@ -1323,20 +1405,19 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
                 h[0].header['PC1_2'] = ht['PC1_2']
                 h[0].header['PC2_1'] = ht['PC2_1']
                 h[0].header['PC2_2'] = ht['PC2_2']
-                h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation (continuum intensity)'
-                h.writeto(dir_out+new_name, overwrite=True)        
-    else:
-        with fits.open(file_name) as h:
-            h[0].header['CROTA'] = ht['CROTA']
-            h[0].header['CRPIX1'] = ht['CRPIX1']
-            h[0].header['CRPIX2'] = ht['CRPIX2']
-            h[0].header['CRVAL1'] = ht['CRVAL1']
-            h[0].header['CRVAL2'] = ht['CRVAL2']
-            h[0].header['PC1_1'] = ht['PC1_1']
-            h[0].header['PC1_2'] = ht['PC1_2']
-            h[0].header['PC2_1'] = ht['PC2_1']
-            h[0].header['PC2_2'] = ht['PC2_2']
-            h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation '
-            h.writeto(dir_out+new_name, overwrite=True)
-
+                h[0].header['HISTORY'] = 'WCS corrected via HRTundistorted - HMI cross correlation '
+                h.writeto(dir_out+new_name, overwrite=True)
+    return ht
 ###############################################
+
+def cavity_shifts(cavity_f, wave_axis,rows,cols, TemperatureCorrection = False):
+    cavityMap, header = load_fits(cavity_f) # cavity maps
+    # Tfg = header['FGOV1PT1']
+    _,voltagesData,tunning_constant,cpos = fits_get_sampling(cavity_f,num_wl = 6, TemperatureCorrection = TemperatureCorrection, verbose = False)
+
+    vcore = voltagesData[cpos-3]
+    # temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+    cavityWave = (cavityMap - vcore) * tunning_constant # + temperature_constant_new*(Tfg-61) no T correction because it is \Delta V
+    new_wave_axis = wave_axis[np.newaxis,np.newaxis] - cavityWave[...,np.newaxis]
+
+    return new_wave_axis[rows,cols]

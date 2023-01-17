@@ -6,6 +6,7 @@ import os
 import time
 import subprocess
 import datetime
+import pymilos
 
 def create_output_filenames(filename, DID, version = '01',gzip = False):
     """
@@ -184,7 +185,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
 
-def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
+def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],cavity_f = None, rows = slice(0,2048), cols = slice(0,2048), out_dir = './'):
     
     """
     RTE inversion using CMILOS
@@ -236,11 +237,18 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
     #print(y,x,p,l)
     
     filename = out_dir + 'dummy_in.txt'
+
+    if cavity_f is not None:
+        printc("  ---- >>>>> Correcting wavelengths for Cavity Maps shifts: .... ",color=bcolors.OKGREEN)
+        wave_axis_2d = cavity_shifts(cavity_f,wave_axis,rows,cols)
+    else:
+        wave_axis_2d = np.zeros((y,x,1)) + wave_axis[np.newaxis,np.newaxis]
+        
     with open(filename,"w") as f:
         for i in range(x):
             for j in range(y):
                 for k in range(l):
-                    f.write('%e %e %e %e %e \n' % (wave_axis[k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
+                    f.write('%e %e %e %e %e \n' % (wave_axis_2d[j,i,k],sdata[j,i,0,k],sdata[j,i,1,k],sdata[j,i,2,k],sdata[j,i,3,k])) #wv, I, Q, U, V
 
     printc(f'  ---- >>>>> Inverting data: .... ',color=bcolors.OKGREEN)
 
@@ -273,7 +281,7 @@ def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],out_dir = './'):
     
     return result
 
-def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f = None, rows = slice(0,2048), cols = slice(0,2048), vers = '01'):
 
     wavelength = 6173.3354
 
@@ -298,8 +306,161 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         
         options = [6,15] # # of wavelegths, # of iterations
         
-        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options,out_dir)
+        rte_invs = run_cmilos(sdata,wave_axis,rte,cpos_arr[0],options,cavity_f,rows,cols,out_dir)
         
+        rte_invs_noth = np.copy(rte_invs)
+
+        """
+        From 0 to 11
+        Counter (PX Id)
+        Iterations
+        Strength
+        Inclination
+        Azimuth
+        Eta0 parameter
+        Doppler width
+        Damping
+        Los velocity
+        Constant source function
+        Slope source function
+        Minimum chisqr value
+        """
+
+        noise_in_V =  np.mean(sdata[:,:,3,cpos_arr[0]]) #ellipsis in case data has 4 dimensions
+        low_values_flags = np.max(np.abs(sdata[:,:,3,:]),axis=-1) < noise_in_V  # Where values are low
+        
+        del sdata
+
+        rte_invs[2,low_values_flags] = 0
+        rte_invs[3,low_values_flags] = 0
+        rte_invs[4,low_values_flags] = 0
+
+        #np.savez_compressed(out_dir+'_RTE', rte_invs=rte_invs, rte_invs_noth=rte_invs_noth)
+        
+#         _ = subprocess.call(f"rm {out_dir+'dummy_out.txt'}",shell=True)
+
+        rte_data_products = np.zeros((7,rte_invs_noth.shape[1],rte_invs_noth.shape[2]))
+
+        rte_data_products[0,:,:] = rte_invs_noth[9,:,:] + rte_invs_noth[10,:,:] #continuum
+        rte_data_products[1,:,:] = rte_invs_noth[2,:,:] #b mag strength
+        rte_data_products[2,:,:] = rte_invs_noth[3,:,:] #inclination
+        rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
+        rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
+        rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
+        rte_data_products[6,:,:] = rte_invs_noth[11,:,:] #chisq
+
+        rte_data_products *= mask[np.newaxis, :, :, scan] #field stop, set outside to 0
+
+        hdr_scan['RTE_MOD'] = rte
+        hdr_scan['RTE_SW'] = 'cmilos'
+        hdr_scan['RTE_ITER'] = str(15)
+
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
+            
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- CMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+
+def run_pymilos(data,wave_axis,rte,cpos,options = np.asarray([6,15,0,0]),cavity_f = None, rows = slice(0,2048), cols = slice(0,2048),weight=np.asarray([1.,4.,5.4,4.1]),initial_model=np.asarray([400,30,120,1,0.05,1.5,.01,.22,.85])):
+    
+    """
+    RTE inversion using CMILOS
+    """
+    print(" ")
+    printc('-->>>>>>> RUNNING PYMILOS ',color=bcolors.OKGREEN)
+    
+    try:
+        CMILOS_LOC = os.path.realpath(__file__)
+
+        CMILOS_LOC = CMILOS_LOC.split('src/')[0] + 'pymilos/lib/' #-11 as hrt_pipe.py is 11 characters
+
+        if os.path.isfile(CMILOS_LOC+'milos'):
+            # printc("Cmilos executable located at:", CMILOS_LOC,color=bcolors.WARNING)
+            pass
+        else:
+            raise ValueError('Cannot find cmilos:', CMILOS_LOC)
+
+    except ValueError as err:
+        printc(err.args[0],color=bcolors.FAIL)
+        printc(err.args[1],color=bcolors.FAIL)
+        return        
+
+    wavelength = 6173.3354
+
+    start_time = time.perf_counter()
+
+    if cpos == 0:
+        shift_w =  wave_axis[3] - wavelength
+    elif cpos == 5:
+        shift_w =  wave_axis[2] - wavelength
+    # DC TEST
+    wave_axis = wave_axis - shift_w
+
+    print('It is assumed the wavelength array is given by the hdr')
+    #print(wave_axis,color = bcolors.WARNING)
+    print("Wave axis is: ", (wave_axis - wavelength)*1000.)
+    print('Saving data into dummy_in.txt for RTE input')
+
+    if data.ndim == 4:
+        sdata = data
+    elif data.ndim != 4:
+        print("Incorrect dimensions of 'data' array")
+        exit()
+    y,x,p,l = sdata.shape
+    #print(y,x,p,l)
+    
+    if rte == 'RTE':
+        options[2] = 0
+    if rte == 'CE':
+        options[2] = 2
+    if rte == 'CE+RTE':
+        options[2] = 1
+    
+    if cavity_f is not None:
+        printc("  ---- >>>>> Correcting wavelengths for Cavity Maps shifts: .... ",color=bcolors.OKGREEN)
+        wave_axis_2d = cavity_shifts(cavity_f,wave_axis,rows,cols)
+        out = np.zeros((y,x,12))
+        printc(f'  ---- >>>>> Inverting data: .... ',color=bcolors.OKGREEN)
+        for i in range(y):
+            for j in range(x):
+                out[i,j] = pymilos.pmilos(options,sdata[i,j],wave_axis_2d[i,j],weight,initial_model)
+        
+    else:
+        printc(f'  ---- >>>>> Inverting data: .... ',color=bcolors.OKGREEN)
+        out = pymilos.pmilos(options,sdata,wave_axis,weight,initial_model)
+    
+    printc(f"CMILOS RTE Inversion Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+    
+    return out
+
+def py_cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, cavity_f = None, rows = slice(0,2048), cols = slice(0,2048), weight=np.asarray([1.,4.,5.4,4.1]), initial_model=np.asarray([400,30,120,1,0.05,1.5,.01,.22,.85]), vers = '01'):
+
+    wavelength = 6173.3354
+
+    for scan in range(int(data_shape[-1])):
+        printc(f'  ---- >>>>> Data scan number: {scan} .... ',color=bcolors.OKGREEN)
+        
+        start_time = time.perf_counter()
+
+        file_path = data_f[scan]
+        wave_axis = wve_axis_arr[scan]
+        hdr_scan = hdr_arr[scan]
+        
+        if data.ndim == 5:
+            sdata = data[:,:,:,:,scan]
+        elif data.ndim > 5 or data.ndim < 4:
+            print("Incorrect dimensions of 'data' array")
+            exit()
+        elif data.ndim == 4:
+            sdata = data       
+        #must invert each scan independently, as cmilos only takes in one dataset at a time
+        #get wave_axis from the hdr information of the science scans - hard code first one, as must all have cpos in initial science load case
+        
+        options = np.asarray([6,15,0,0]) # # of wavelegths, # of iterations
+        
+        rte_invs = run_pymilos(sdata,wave_axis,rte,cpos_arr[0],options,cavity_f,rows,cols,weight,initial_model)
+        rte_invs = np.moveaxis(rte_invs,-1,0)
+
         rte_invs_noth = np.copy(rte_invs)
 
         """
@@ -519,7 +680,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
 
 
 
-def pmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
+def pmilos_not_working(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask, imgdirx_flipped, out_rte_filename, out_dir, vers = '01'):
     """
     RTE inversion using PMILOS
     """

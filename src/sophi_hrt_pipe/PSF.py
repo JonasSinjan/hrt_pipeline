@@ -127,7 +127,7 @@ def PSF(mask,abbe):
 def OTF(psf):
     otf = ifftshift(psf)
     otf = fft2(otf)
-    otf = otf/float(otf[0,0])
+    otf = otf/np.real(otf[0,0])
     #otf = otf/otf.max() # or otf_max = otf[size/2,size/2] if max is shifted to center
    
     return otf
@@ -281,31 +281,51 @@ def make_wf_th(size):
    t0 = OTF(psf_foc)
    return t0
 
-def restore_stokes_cube(stokes_data, header, demod = True):
-   #   stokes_data = pyfits.getdata(file_path)
+def restore_stokes_cube(stokes_data, header, orbit = 'perihelion',aberr_cor=False):
+
    size = stokes_data[:,:,0,0].shape[0]
-   # header = pyfits.getheader(file_path)
-   d_in = header['DSUN_AU']
-   Z = combine_all_PD()
-   coefficients = build_zernikes(Z,d_in)
-   #coefficients = np.zeros(38)
-   #coefficients[:10] = np.array([ 0.32725408,  -0.01148539,  0.46752924,  0.00413511, 0.01964055, 0.13448377,  -0.59294403,  0.38801043,  0.03050344,  -0.07010066])
-                         
    res_stokes = np.zeros((size,size,4,6))
-   t0 = make_wf(size,coefficients)
-   t0_th = make_wf_th(size)
-   #added by DC for running this script on modulated or demodulated data
-   #if demod:
-    #  nlev = 0.01
-   #else:
-    #  nlev = 0.001
+   d_in = header['DSUN_AU']
 
-   for i in range(4):
-      for j in range(6):
+   if orbit=='perihelion':
+    Z = combine_all_PD()
+    coefficients = build_zernikes(Z,d_in)
+    t0 = make_wf(size,coefficients)
+    if aberr_cor:
+     t0_th = make_wf_th(size)
+     for i in range(4):
+       for j in range(6):
          im0 = stokes_data[:,:,i,j]
-         if i==1 or i==2 or i==3:
 
-            res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)
-         elif i==0:
-            res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)  
+         res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)
+
+    else:
+     for i in range(4):
+       for j in range(6):
+         im0 = stokes_data[:,:,i,j]
+         res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,size)
+
+
+                         
+
+   elif orbit == '0.5':
+       coefficients = np.zeros(38)
+       coefficients[:10] = np.array([ 0.32725408,  -0.01148539,  0.46752924,  0.00413511, 0.01964055, 0.13448377,  -0.59294403,  0.38801043,  0.03050344,  -0.07010066])                     
+       t0 = make_wf(size,coefficients)
+        
+       if aberr_cor:
+        t0_th = make_wf_th(size)
+        for i in range(4):
+         for j in range(6):
+          im0 = stokes_data[:,:,i,j]
+
+          res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)
+
+       else:
+        for i in range(4):
+          for j in range(6):
+           im0 = stokes_data[:,:,i,j]
+           res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,size)
+   print('-->>>>>>> PSF deconvolution is done with Z='+str(coefficients)+'\nAberration correction is set to '+str(aberr_cor))
+       
    return res_stokes
