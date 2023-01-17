@@ -359,7 +359,6 @@ def phihrt_pipe(input_json_file):
 
         print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
 
-
         #--------
         # correct for missing line in particular flat field
         #--------
@@ -1036,7 +1035,7 @@ def phihrt_pipe(input_json_file):
         print("Desired Output directory missing / character, will be added")
         out_dir = out_dir + "/"
 
-        #check if the output directory exists, if not, create it
+    #check if the output directory exists, if not, create it
     if not os.path.exists(out_dir): 
         print(f"{out_dir} does not exist -->>>>>>> Creating it")
         os.makedirs(out_dir)
