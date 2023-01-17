@@ -254,14 +254,14 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
     demod = np.tile(demod_data, (shape[0],shape[1],1,1))
 
     if data.ndim == 5:
-        #if data array has more than one scan
+        # if data array has more than one scan
         data = np.moveaxis(data,-1,0) #moving number of scans to first dimension
 
         data = np.matmul(demod,data)
         data = np.moveaxis(data,0,-1) #move scans back to the end
     
     elif data.ndim == 4:
-        #for if data has just one scan
+        # if data has one scan
         data = np.matmul(demod,data)
     
     return data, demod
@@ -326,7 +326,7 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end
     return np.matmul(invM, new_demod_flats*norm_factor)
 
 
-def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
+def flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp=50,rows=slice(0,2048),cols=slice(0,2048)) -> np.ndarray:
     """
     correct science data with flat fields
     """
@@ -355,9 +355,26 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 
             printc("Dividing by 4 flats, one for each pol state",color=bcolors.OKGREEN)
 
-            tmp = np.mean(flat,axis=-1) #avg over wavelength
+            # tmp = np.mean(flat,axis=-1) #avg over wavelength
+            tmp = flat[:,:,:,cpos_arr[0]] # continuum only
 
             return data / tmp[rows,cols, :, np.newaxis, np.newaxis]
+
+        if flat_states == 9:
+            
+            printc("Dividing by 9 flats, one for each wavelength in Stokes I, only continuum in Stokes Q, U and V",color=bcolors.OKGREEN)
+            
+            tmp = np.zeros(flat.shape)
+            demod_flat, demodM = demod_hrt(flat.copy(), flat_pmp_temp, False)
+            tmp[:,:,0] = demod_flat[:,:,0]
+            tmp[:,:,1:] = demod_flat[:,:,1:,cpos_arr[0],np.newaxis]
+            del demod_flat
+            invM = np.linalg.inv(demodM)
+            tmp = np.matmul(invM, tmp)    
+            
+            return data / tmp[rows,cols, :, :, np.newaxis]
+
+
         else:
             print(" ")
             printc('-->>>>>>> Unable to apply flat correction. Please insert valid flat_states',color=bcolors.WARNING)
@@ -369,12 +386,13 @@ def flat_correction(data,flat,flat_states,rows,cols) -> np.ndarray:
 
         return data
 
-    except: 
+    except Exception as exc:
+        printc(exc,color=bcolors.FAIL) 
         printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
 
 
-def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
+def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None, TemperatureCorrection=False):
     """
     applies prefilter correction
     adapted from SPGPylibs
@@ -383,22 +401,54 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
         index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
         return  v1, index1
     
+    if prefilter_voltages is None:
+#         prefilter_voltages = np.asarray([-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
+#                                 -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
+#                                 140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
+#                                 926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
+#                                 1711.67,1777.14,1842.61])
+        prefilter_voltages = np.asarray([-1277.   , -1210.75 , -1145.875, -1080.25 , -1015.25 ,  -950.25 ,
+                                        -885.75 ,  -820.125,  -754.875,  -691.   ,  -625.5  ,  -559.75 ,
+                                        -494.125,  -428.25 ,  -364.   ,  -298.875,  -233.875,  -169.   ,
+                                        -104.625,   -40.875,    21.125,    86.25 ,   152.25 ,   217.5  ,
+                                         282.625,   346.25 ,   411.   ,   476.125,   542.   ,   607.75 ,
+                                         672.125,   738.   ,   803.75 ,   869.625,   932.   ,   996.625,
+                                        1062.125,  1128.   ,  1192.   ,  1258.125,  1323.625,  1387.25 ,
+                                        1451.875,  1516.875,  1582.125,  1647.75 ,  1713.875,  1778.375,
+                                        1844.   ])
+    if TemperatureCorrection:
+        temperature_constant_old = 40.323e-3 # old temperature constant, still used by Johann
+        temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+        Tfg = 66 # FG was at 66 deg during e2e calibration
+        tunning_constant = 0.0003513 # this shouldn't change
+        
+        ref_wavelength = 6173.341 # this shouldn't change
+        prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength + temperature_constant_new*(Tfg-61) - 0.002 # JH ref
+        
+#         ref_wavelength = round(6173.072 - (-1300*tunning_constant),3) # 6173.529. 0 level was different during e2e test
+#         prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength # + temperature_constant_new*(Tfg-61)
+       
+    else:
+        tunning_constant = 0.0003513
+        ref_wavelength = 6173.341 # this shouldn't change
+        prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength
+    
     data_shape = data.shape
     # cop = np.copy(data)
     # new_data = np.zeros(data_shape)
     
     for scan in range(data_shape[-1]):
 
-        voltage_list = voltagesData_arr[scan]
+        wave_list = wave_axis_arr[scan]
         
         for wv in range(6):
 
-            v = voltage_list[wv]
+            v = wave_list[wv]
 
-            vdif = [v - pf for pf in prefilter_voltages]
+            vdif = [v - pf for pf in prefilter_wave]
             
             v1, index1 = _get_v1_index1(vdif)
-            if v < prefilter_voltages[-1] and v > prefilter_voltages[0]:
+            if v < prefilter_wave[-1] and v > prefilter_wave[0]:
                 
                 if vdif[index1] >= 0:
                     v2 = vdif[index1 + 1]
@@ -409,11 +459,11 @@ def prefilter_correction(data,voltagesData_arr,prefilter,prefilter_voltages):
                     index2 = index1 - 1
                     
 #                 imprefilter = (prefilter[:,:, index1]*(0-v1) + prefilter[:,:, index2]*(v2-0))/(v2-v1) #interpolation between nearest voltages
-            elif v >= prefilter_voltages[-1]:
+            elif v >= prefilter_wave[-1]:
                 index2 = index1 - 1
                 v2 = vdif[index2]
                 
-            elif v <= prefilter_voltages[0]:
+            elif v <= prefilter_wave[0]:
                 index2 = index1 + 1
                 v2 = vdif[index2]
                 
@@ -621,7 +671,7 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
     return data
 
 
-def hot_pixel_mask(data, rows, cols,mode='median'):
+def hot_pixel_mask(data, rows, cols, mode='median'):
     """
     Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
     """
@@ -644,8 +694,9 @@ def hot_pixel_mask(data, rows, cols,mode='median'):
     
     for i in range(1,l+1):
         bad = (hot_pix_mask[rows,cols] == i)
-        med = (hot_pix_cont[rows,cols] == i)
-        data[bad] = func(data[med])
+        if np.sum(bad) > 0:
+            med = (hot_pix_cont[rows,cols] == i)
+            data[bad] = func(data[med])
     
     return data
 

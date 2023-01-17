@@ -15,14 +15,14 @@
 "flat_states": 24, 
 "norm_f": true, 
 "fs_c": true, 
-"ghost_c": true,
-"PSFmod":false,
-"PSFstokes":true,
+"ghost_c": false,
 "iss_off": true,
 "demod": true, 
 "norm_stokes": true, 
 "ItoQUV": true,
 "VtoQU": true,
+"PSForbit":false,
+"PSFaberr":true,
 "rte": "CE+RTE",
 "p_milos": false, 
 "cmilos_fits": false, 
@@ -32,4 +32,3 @@
 "out_stokes_file": true, 
 "config": true
 }
-

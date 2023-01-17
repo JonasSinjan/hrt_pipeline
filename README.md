@@ -3,7 +3,7 @@
 Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 
 ![](https://img.shields.io/badge/License-MIT-green) 
-![](https://img.shields.io/badge/Version-V1.5%20September%202nd%202022-brightgreen)
+![](https://img.shields.io/badge/Version-V1.6%20January%206th%202023-brightgreen)
 ![](https://img.shields.io/badge/OS-Linux-yellow)
 ![](https://img.shields.io/github/last-commit/JonasSinjan/hrt_pipeline)
 ![](https://img.shields.io/github/contributors/JonasSinjan/hrt_pipeline)
@@ -30,7 +30,8 @@ Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
         a) ItoQUV cross talk correction <br>
         b) VtoQU cross talk correction <br>
 15. wavelengths registration
-16. rte inversion with cmilos <br>
+16. PSF deconvolution
+17. rte inversion with cmilos <br>
         a) output rte data products to fits files <br>
 
 
@@ -82,6 +83,11 @@ source activate hrt_pipeline_env
 5. Install sophi_hrt_pipe package
 ```bash
 pip install . #or "conda develop ."
+```
+
+6. Install pymilos
+```bash
+cd pymilos; pip install -e .; cd ..
 ```
 ##############################################################
 ### OPTIONAL - load Jupyter Notebook `hrt_pipeline_notebook.ipynb` which contains all the following steps
@@ -243,6 +249,6 @@ Fatima Kahil - Max Planck Institute for Solar System Research, Goettingen, Germa
 
 - SPGPylibs for the foundation, from which it was expanded upon
 - CMILOS: RTE INVERSION C code for SO-PHI (based on the IDL code MILOS by D. Orozco) Author: juanp (IAA-CSIC)
-- CMILOS-FITS: CMILOS with fits interace, fits interfacing developed by Philipp Loeschl (MPS)
+- CMILOS: RTE INVERSION Python wrapper of C code for SO-PHI (based on the IDL code MILOS by D. Orozco) Author: juanp and D. Orozco (IAA-CSIC)
 - P-MILOS:  Parallellised RTE INVERSION C code Authors: Manuel Cabrera, Juan P. Cobos, Luis Bellot Rubio (IAA-CSIC)
 - PyPD for the PSF deconvolution algorithm, by F. Kahil (MPS)

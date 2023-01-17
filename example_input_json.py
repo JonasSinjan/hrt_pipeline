@@ -29,11 +29,12 @@ input_dict = {
     #reduction
     'dark_c' : True,
     'flat_c' : True, 
+    'TemperatureCorrection': None, #if True, wavelength corrected for the FG temperature
     'norm_f' : True, 
     'clean_f' : True, 
     'sigma' : 59, #unsharp masking gaussian width
     'clean_mode' : "V", #options 'QUV', 'UV', 'V' for the unsharp masking
-    'flat_states' : 24, #options 4 (one each pol state), 6 (one each wavelength), 24
+    'flat_states' : 24, #options 4 (continuum only), 6 (one each wavelength), 9 (continuum + Stokes I in all the other wavelengths), 24
     'prefilter_f': None,
     'fs_c' : True, 
     'iss_off': True,
@@ -41,10 +42,12 @@ input_dict = {
     'norm_stokes' : True, 
     'ItoQUV' : True,
     'VtoQU' : True,
+    'PSForbit': False, #options: "perihelion" or "0.5"
+    'PSFaberr': False, #if True, aberration-correction mode
     'ghost_c' : True,
-    'rte' : False, #options: ''RTE', 'CE', 'CE+RTE'
-    'p_milos' : False, #attempted, ran into problems - on hold
-    'cmilos_fits': False, #use cmilos with .fits IO - 16% speed up
+    'cavity_f': None, #filename of the cavity maps used to shift the wavelengths before RTE inversion
+    'rte' : False, #options: 'RTE', 'CE', 'CE+RTE'
+    'pymilos' : False, #run python version of C-milos (~30% faster)
     
     #output dir/filenames
     'out_dir' : './',  
@@ -53,6 +56,7 @@ input_dict = {
     'out_rte_filename' : None,  #if specific and not default name
     'config': True,
     'out_intermediate': False,
+    # 'vers': 'V01', #if not given, version is yyyymmddhhMM
 }
 
 json.dump(input_dict, open(f"./input_jsons/nov_2020_L1.txt", "w"))

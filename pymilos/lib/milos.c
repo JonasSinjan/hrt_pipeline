@@ -132,7 +132,7 @@ const PRECISION crisp_psf[141] = {0.0004,0.0004,0.0005,0.0005,0.0005,0.0005,0.00
 							0.0027,0.0025,0.0023,0.0021,0.0020,0.0019,0.0017,0.0016,0.0015,0.0014,0.0013,0.0012,0.0012,0.0011,0.0010,0.0010,0.0009,0.0009,0.0008,0.0008,0.0007,0.0007,
 							0.0006,0.0006,0.0006,0.0005,0.0005,0.0005,0.0005,0.0004,0.0004};
 
-void call_milos(const int *options, size_t size, const double *waveaxis, const double *inputdata,double *outputdata) {
+void call_milos(const int *options, size_t size, const double *waveaxis, double *weight, double *initial_model, const double *inputdata,double *outputdata) {
     // size_t index;
     // for (index = 0; index < size; ++index)
     //     outputdata[index] = inputdata[index] * 2.0;
@@ -150,8 +150,7 @@ void call_milos(const int *options, size_t size, const double *waveaxis, const d
 	double slight;
 	double toplim;
 	int miter;
-	PRECISION weight[4]={1.,4.,5.4,4.1}; // changed in November 2022
-	// PRECISION weight[4]={1.,10.,10.,4.};
+	//PRECISION weight[4]={1.,10.,10.,4.};
 	// PRECISION weight[4]={1.,12.,12.,10.};
 	int nweight;
 
@@ -169,6 +168,16 @@ void call_milos(const int *options, size_t size, const double *waveaxis, const d
 	double dat[7]={CUANTIC_NWL,CUANTIC_SLOI,CUANTIC_LLOI,CUANTIC_JLOI,CUANTIC_SUPI,CUANTIC_LUPI,CUANTIC_JUPI};
 
 	int Max_iter;
+    
+    PRECISION INITIAL_MODEL_B = initial_model[0];
+    PRECISION INITIAL_MODEL_GM = initial_model[1];
+    PRECISION INITIAL_MODEL_AZI = initial_model[2];
+    PRECISION INITIAL_MODEL_ETHA0 = initial_model[3];
+    PRECISION INITIAL_MODEL_LAMBDADOPP = initial_model[4];  //en A
+    PRECISION INITIAL_MODEL_AA = initial_model[5];
+    PRECISION INITIAL_MODEL_VLOS = initial_model[6]; // Km/s
+    PRECISION INITIAL_MODEL_S0 = initial_model[7];
+    PRECISION INITIAL_MODEL_S1 = initial_model[8];
 
 	NLAMBDA = options[0];
 	Max_iter = options[1];
@@ -433,9 +442,7 @@ int main(int argc,char **argv){
 	double slight;
 	double toplim;
 	int miter;
-
-  PRECISION weight[4]={1.,4.,5.4,4.1}; // changed in November 2022
-	// PRECISION weight[4]={1.,10.,10.,4.};
+	PRECISION weight[4]={1.,10.,10.,4.};
 	int nweight;
 
 	clock_t t_ini, t_fin;
@@ -461,7 +468,17 @@ int main(int argc,char **argv){
 
 	char *nombre,*input_iter;
 	int Max_iter;
-
+    
+    PRECISION INITIAL_MODEL_B = 400;
+    PRECISION INITIAL_MODEL_GM = 30;
+    PRECISION INITIAL_MODEL_AZI = 120;
+    PRECISION INITIAL_MODEL_ETHA0 = 3;
+    PRECISION INITIAL_MODEL_LAMBDADOPP = 0.0205;  //en A
+    PRECISION INITIAL_MODEL_AA = 1.0;
+    PRECISION INITIAL_MODEL_VLOS = 0.01; // Km/s
+    PRECISION INITIAL_MODEL_S0 = 0.15;
+    PRECISION INITIAL_MODEL_S1 = 0.85;
+    
 	//milos NLAMBDA MAX_ITER CLASSICAL_ESTIMATES RFS [FWHM DELTA NPOINTS] perfil.txt
 
 	if(argc!=6 && argc != 7 && argc !=9){
@@ -1648,3 +1665,4 @@ void response_functions_convolution(){
 	}
 
 }
+
