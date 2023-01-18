@@ -652,7 +652,8 @@ def phihrt_pipe(input_json_file):
                     s = [1,1]
                     
                     while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
-                        sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                        sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
+                        s = [sr[1],sc[1]]
                         shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
                         
                         temp = func(fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j]))[sly,slx]
@@ -751,22 +752,24 @@ def phihrt_pipe(input_json_file):
         
         for scan in range(data_shape[-1]):
             #from Daniele Calchetti (modifed JS)
-            
-
             try:
-#                 limb_temp, Ic_temp, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
                 limb_temp, sly, slx, side = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols])
                 
-                if limb_temp is not None: # and Ic_temp is not None: 
+                if limb_temp is not None:
+                    #get region of pixels for norm, which are on for certain on disc
+                    Ic_temp = np.zeros((data_size[0],data_size[1]))
+                    Ic_temp[sly,slx] = 1
+                    Ic_temp *= field_stop[rows,cols]
+                    Ic_temp = np.where(Ic_temp>0,1,0) #final making sure
+
+                    #for use later in the RTE
                     limb_temp = np.where(limb_temp>0,1,0)
-#                     Ic_temp = np.where(Ic_temp>0,1,0)
-                    Ic_temp = np.zeros((data_size[0],data_size[1])); Ic_temp[sly,slx] = 1; Ic_temp *=field_stop[rows,cols]
-                    Ic_temp = np.where(Ic_temp>0,1,0)
-                    
-                    data[:,:,:,:,scan] = data[:,:,:,:,scan]# * limb_temp[:,:,np.newaxis,np.newaxis]
-                    limb_mask[...,scan] = limb_temp
+                    limb_mask[...,scan] = limb_temp 
                     limb = True
 
+                    #no idea why this exists: JS commented out 18/1/23 (the limb_temp was already commented out)
+                    #data[:,:,:,:,scan] = data[:,:,:,:,scan]# * limb_temp[:,:,np.newaxis,np.newaxis]
+                   
                 else:
                     Ic_temp = np.zeros(data_size)
                     Ic_temp[ceny,cenx] = 1
@@ -774,17 +777,18 @@ def phihrt_pipe(input_json_file):
 
             except Exception as e:
                 print(f"Error during limb fitting: {e}")
+                #revert to central region
                 Ic_temp = np.zeros(data_size)
                 Ic_temp[ceny,cenx] = 1
                 Ic_temp = np.where(Ic_temp>0,1,0)
-             
              
             if fs_c:
                 Ic_temp *= field_stop[rows,cols]
             
             Ic_temp = np.array(Ic_temp, dtype=bool)
             
-            # new Icont normalization removing high magnetic field regions ####################
+            ##################################################################
+            """new Icont normalization removing high magnetic field regions"""
             AR_temp = np.ones(Ic_temp.shape,dtype=bool)
                     
             for p in range(1,4):
@@ -793,7 +797,7 @@ def phihrt_pipe(input_json_file):
                 AR_temp *= np.max(np.abs(data[:,:,p,:,scan] - gval[1]),axis=-1) < 5*gval[2]
 
             AR_temp = np.asarray(AR_temp, dtype=bool)
-            ################################################################
+            ##################################################################
             
             I_c[scan] = np.mean(data[Ic_temp*AR_temp,0,cpos_arr[0],int(scan)])
             data[:,:,:,:,scan] = data[:,:,:,:,scan]/I_c[scan]
@@ -971,9 +975,11 @@ def phihrt_pipe(input_json_file):
                     ref = image_derivative(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
                 
                 while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
-                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp])); s = [sr[1],sc[1]]
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
+                    s = [sr[1],sc[1]]
                     shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
                     
+                    """This if else does nothing, can be removed??"""
                     if l != cwl:
                         temp = image_derivative(fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i]))[sly,slx]
 #                         Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
