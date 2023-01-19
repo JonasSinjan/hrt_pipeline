@@ -539,7 +539,7 @@ def phihrt_pipe(input_json_file):
 
     else:
         print(" ")
-        printc('-->>>>>>> No normalising flats mode',color=bcolors.WARNING)
+        printc('-->>>>>>> Normalising flats over whole FOV',color=bcolors.WARNING)
         flat = normalise_flat(flat, flat_f, slice(0,2048), slice(0,2048))
 
     #-----------------
@@ -707,7 +707,7 @@ def phihrt_pipe(input_json_file):
         if PSFmod:
             print(" ")
             printc('-->>>>>>> Both PSF deconvolutions are True, it will be applied only on the Stokes vectors',color=bcolors.WARNING)
-    """;
+    """
     #-----------------
     # APPLY DEMODULATION 
     #-----------------
