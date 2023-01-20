@@ -4,6 +4,7 @@ from operator import itemgetter
 from sophi_hrt_pipe.utils import *
 import os
 import time
+import cv2
 
 def setup_header(hdr_arr):
     k = ['CAL_FLAT','CAL_USH','SIGM_USH',
@@ -798,11 +799,152 @@ def CT_VtoQU(data, ctalk_params):
     
     return data
 
+
+def polarimetric_registration(data, cpos_arr, sly, slx, hdr_arr):
+    """
+    align the mod (pol) states 2,3,4 with state 1 for a given wavelength
+    loop through all wavelengths
+    """
+    pn = 4 
+    wln = 6 
+    # iterations = 3
     
+    data_shape = data.shape
+    data_size = data_shape[:2]
+
+    old_data = data.copy()
+
+    for scan in range(data_shape[-1]):
+        
+        shift_raw = np.zeros((2,pn*wln))
+        for j in range(shift_raw.shape[1]):
+            if j%pn == 0:
+                pass
+            else:
+                ref = image_derivative(old_data[:,:,0,j//pn,scan])[sly,slx]
+                temp = image_derivative(old_data[:,:,j%pn,j//pn,scan])[sly,slx]
+                it = 0
+                s = [1,1]
+                
+                while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
+                    s = [sr[1],sc[1]]
+                    shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
+                    
+                    temp = image_derivative(fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j]))[sly,slx]
+
+                    it += 1
+                    if it ==10:
+                        break
+                
+                print(it,'iterations shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
+                Mtrans = np.float32([[1,0,shift_raw[1,j]],[0,1,shift_raw[0,j]]])
+                data[:,:,j%pn,j//pn,scan]  = cv2.warpAffine(old_data[:,:,j%pn,j//pn,scan].astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
     
+        hdr_arr[scan]['CAL_PREG'] = 'y: '+str([round(shift_raw[0,i],3) for i in range(pn*wln)]) + ', x: '+str([round(shift_raw[1,i],3) for i in range(pn*wln)])
     
+    del old_data
+
+    return data, hdr_arr
     
+
+def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
+    """
+    Align the wavelengths, from the Stokes I image, (after demodulation), using cv2
+    """
+    pn = 4
+    wln = 6
     
+    if cpos_arr[0] == 5:
+        l_i = [0,1,3,4,2] # shift wl
+        cwl = 2
+    else:
+        l_i = [1,2,4,5,3] # shift wl
+        cwl = 3
+    
+    old_data = data.copy()
+
+    data_shape = data.shape
+    data_size = data_shape[:2]
+    
+    for scan in range(data_shape[-1]):
+        shift_stk = np.zeros((2,wln-1))
+        ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
+        
+        for i,l in enumerate(l_i):
+            temp = image_derivative(old_data[:,:,0,l,scan])[sly,slx]
+            it = 0
+            s = [1,1]
+            if l == cwl:
+                temp = image_derivative(np.abs(old_data[:,:,0,l,scan]))[sly,slx]
+                ref = image_derivative(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
+            
+            while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
+                sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
+                s = [sr[1],sc[1]]
+                shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
+                temp = image_derivative(fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i]))[sly,slx]
+
+                it += 1
+                if it == 10:
+                    break
+            print(it,'iterations shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
+            
+            for ss in range(pn):
+                Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
+                data[:,:,ss,l,scan]  = cv2.warpAffine(old_data[:,:,ss,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
+
+            if l == cwl:
+                ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
+        
+        hdr_arr[scan]['CAL_WREG'] = 'y: '+str([round(shift_stk[0,i],3) for i in range(wln-1)]) + ', x: '+str([round(shift_stk[1,i],3) for i in range(wln-1)])
+    
+    del old_data
+
+    return data, hdr_arr
+    
+
+def create_intermediate_hdr(data, hdr_interm, history_str, root_scan_name, file_suffix):
+    hdr = hdr_interm.copy()
+    hdr['FILENAME'] = root_scan_name + file_suffix #scan_name_list[count]
+    #overwrite the stokes history entry
+    hdr['HISTORY'] = history_str
+    hdr['BTYPE'] = 'Intensity'
+    hdr['BUNIT'] = 'DN'
+    hdr['DATAMIN'] = int(np.min(data))
+    hdr['DATAMAX'] = int(np.max(data))
+    hdr = data_hdr_kw(hdr, data)#add datamedn, datamean etc
+
+    return hdr
+
+
+def write_out_dark_intermediate(data_darkc, hdr_interm, history_str, count, scan, scan_name_list, out_dir):
+    """
+    write out intermediate file for the dark, within external larger loop
+    """
+    suffix = 'dark_corrected'
+    hdr_dark = create_intermediate_hdr(data_darkc[:,:,:,:,count], hdr_interm, history_str, scan_name_list[count], '_{suffix}.fits')
+
+    with fits.open(scan) as hdu_list:
+        print(f"Writing intermediate file as: {scan_name_list[count]}_{suffix}.fits")
+        hdu_list[0].data = data_darkc[:,:,:,:,count].astype(np.float32)
+        hdu_list[0].header = hdr_dark #update the calibration keywords
+        hdu_list.writeto(out_dir + scan_name_list[count] + '_{suffix}.fits', overwrite=True)
+
+
+def write_out_prefilter_intermediate(data_PFc, hdr_interm, history_str, count, scan, scan_name_list, out_dir):
+    """
+    write out intermediate file for the prefilter step, within external larger loop
+    """
+    suffix = 'prefilter_corrected'
+    hdr_PF = create_intermediate_hdr(data_PFc[:,:,:,:,count], hdr_interm, history_str, scan_name_list[count], f'_{suffix}.fits')
+
+    with fits.open(scan) as hdu_list:
+        print(f"Writing intermediate file as: {scan_name_list[count]}_{suffix}.fits")
+        hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
+        hdu_list[0].header = hdr_PF #update the calibration keywords
+        hdu_list.writeto(out_dir + scan_name_list[count] + '_{suffix}.fits', overwrite=True)
+
     
     
     

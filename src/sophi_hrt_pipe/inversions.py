@@ -41,11 +41,6 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
     taking care of the azimuth definition if the image is flipped
     """
 
-    # if imgdirx_flipped:
-    #     print("Input image has been flipped as per convention - converting Azimuth to convention")
-    #     azi = rte_data_products[3,:,:].copy()
-    #     rte_data_products[3,:,:] = 180 - azi
-
     if out_rte_filename is None:
             filename_root = str(file_path.split('.fits')[0][-10:])
             if ".gz" in file_path:
@@ -91,8 +86,6 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products.astype(np.float32)
         hdu_list.writeto(out_dir+filename_root+'_rte_data_products.fits.gz', overwrite=True)
-
-
 	
     #blos
     print(blos_file, bmag_file, binc_file)
@@ -184,6 +177,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[0,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+icnt_file, overwrite=True)
+
 
 def run_cmilos(data,wave_axis,rte,cpos,options = [6,15],cavity_f = None, rows = slice(0,2048), cols = slice(0,2048), out_dir = './'):
     

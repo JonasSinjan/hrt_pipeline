@@ -609,6 +609,7 @@ def phihrt_pipe(input_json_file):
     if iss_off:
         print(" ")
         printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
+        #find central region, on disc, for the registration region
         limb_side, _, _, sly, slx = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
         
         if fs_c:
@@ -621,45 +622,7 @@ def phihrt_pipe(input_json_file):
         
         start_time = time.perf_counter()
 
-        pn = 4 
-        wln = 6 
-        # iterations = 3
-        if limb_side == '':
-            func = lambda x: image_derivative(x)
-        else:
-            func = lambda x: image_derivative(x)
-
-        old_data = data.copy()
-        for scan in range(data_shape[-1]):
-            
-            shift_raw = np.zeros((2,pn*wln))
-            for j in range(shift_raw.shape[1]):
-                if j%pn == 0:
-                    pass
-                else:
-                    ref = func(old_data[:,:,0,j//pn,scan])[sly,slx]
-                    temp = func(old_data[:,:,j%pn,j//pn,scan])[sly,slx]
-                    it = 0
-                    s = [1,1]
-                    
-                    while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
-                        sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
-                        s = [sr[1],sc[1]]
-                        shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
-                        
-                        temp = func(fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j]))[sly,slx]
-
-                        it += 1
-                        if it ==10:
-                            break
-                    
-                    print(it,'iterations shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
-                    Mtrans = np.float32([[1,0,shift_raw[1,j]],[0,1,shift_raw[0,j]]])
-                    data[:,:,j%pn,j//pn,scan]  = cv2.warpAffine(old_data[:,:,j%pn,j//pn,scan].astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
-        
-            hdr_arr[scan]['CAL_PREG'] = 'y: '+str([round(shift_raw[0,i],3) for i in range(pn*wln)]) + ', x: '+str([round(shift_raw[1,i],3) for i in range(pn*wln)])
-        
-        del old_data
+        data, hdr_arr = polarimetric_registration(data, cpos_arr, sly, slx, hdr_arr)
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -784,6 +747,7 @@ def phihrt_pipe(input_json_file):
     #-----------------
     # CROSS-TALK CALCULATION 
     #-----------------
+
     if ItoQUV:
         
         print(" ")
@@ -898,59 +862,15 @@ def phihrt_pipe(input_json_file):
     #-----------------
     
     # new procedure to improve calibration when the ISS is off
+    # align the wavelengths, from the Stokes I image, (after demodulation), using cv2
+
     if iss_off:
         print(" ")
         printc('-->>>>>>> Wavelength Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
         
         start_time = time.perf_counter()
         
-        pn = 4
-        wln = 6
-        # iterations = 3
-        
-        if cpos_arr[0] == 5:
-            l_i = [0,1,3,4,2] # shift wl
-            cwl = 2
-        else:
-            l_i = [1,2,4,5,3] # shift wl
-            cwl = 3
-        
-        old_data = data.copy()
-
-        for scan in range(data_shape[-1]):
-            count = 0
-            shift_stk = np.zeros((2,wln-1))
-            ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
-            
-            for i,l in enumerate(l_i):
-                temp = image_derivative(old_data[:,:,0,l,scan])[sly,slx]
-                it = 0
-                s = [1,1]
-                if l == cwl:
-                    temp = image_derivative(np.abs(old_data[:,:,0,l,scan]))[sly,slx]
-                    ref = image_derivative(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
-                
-                while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
-                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
-                    s = [sr[1],sc[1]]
-                    shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
-                    temp = image_derivative(fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i]))[sly,slx]
-
-                    it += 1
-                    if it == 10:
-                        break
-                print(it,'iterations shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
-                
-                for ss in range(pn):
-                    Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
-                    data[:,:,ss,l,scan]  = cv2.warpAffine(old_data[:,:,ss,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
-
-                if l == cwl:
-                    ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
-            
-            hdr_arr[scan]['CAL_WREG'] = 'y: '+str([round(shift_stk[0,i],3) for i in range(wln-1)]) + ', x: '+str([round(shift_stk[1,i],3) for i in range(wln-1)])
-        
-        del old_data
+        data, hdr_arr = wavelength_registration(data, cpos_arr, sly, slx, hdr_arr)
         
         if not PSFstokes:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
@@ -985,17 +905,15 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> No PSF deconvolution on Stokes vectors',color=bcolors.WARNING)
 
-
     #-----------------
-    #CHECK FOR INFs
+    # CHECK FOR INFs
     #-----------------
 
     data[np.isinf(data)] = 0
     data[np.isnan(data)] = 0
 
- 
     #-----------------
-    #WRITE OUT STOKES VECTOR
+    # WRITE OUT STOKES VECTOR
     #-----------------
 
     #rewrite the PARENT keyword to the original FILENAME
@@ -1064,38 +982,17 @@ def phihrt_pipe(input_json_file):
             
             if out_intermediate: 
                 #intermediate output with their own header, so they can be easily used as input for the pipeline
-                if dark_c: 
-                    hdr_dark = hdr_interm.copy()
-                    hdr_dark['FILENAME'] = scan_name_list[count] + '_dark_corrected.fits'
-                    #overwrite the stokes history entry
-                    hdr_dark['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                    hdr_dark['BTYPE'] = 'Intensity'
-                    hdr_dark['BUNIT'] = 'DN'
-                    hdr_dark['DATAMIN'] = int(np.min(data_darkc[:,:,:,:,count]))
-                    hdr_dark['DATAMAX'] = int(np.max(data_darkc[:,:,:,:,count]))
-                    hdr_dark = data_hdr_kw(hdr_dark, data_darkc[:,:,:,:,count])#add datamedn, datamean etc
 
-                    with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_dark_corrected.fits")
-                        hdu_list[0].data = data_darkc[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_dark #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_dark_corrected.fits', overwrite=True)
+                root_scan_name = scan_name_list[count]
+                if dark_c: 
+                    history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+
+                    write_out_dark_intermediate(data_darkc, hdr_interm, history_str, count, scan, scan_name_list, out_dir)
                 
                 if prefilter_c:
-                    hdr_PF = hdr_interm.copy()
-                    hdr_PF['FILENAME'] = scan_name_list[count] + '_prefilter_corrected.fits'
-                    hdr_PF['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                    hdr_PF['BTYPE'] = 'Intensity'
-                    hdr_PF['BUNIT'] = 'DN'
-                    hdr_PF['DATAMIN'] = int(np.min(data_PFc[:,:,:,:,count]))
-                    hdr_PF['DATAMAX'] = int(np.max(data_PFc[:,:,:,:,count]))
-                    hdr_PF = data_hdr_kw(hdr_PF, data_PFc[:,:,:,:,count])#add datamedn, datamean etc
-
-                    with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_prefilter_corrected.fits")
-                        hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_PF #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_prefilter_corrected.fits', overwrite=True)
+                    history_str =  f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                    
+                    write_out_prefilter_intermediate(data_PFc, hdr_interm, history_str, count, scan, scan_name_list, out_dir)
 
                 if flat_c: 
                     hdr_flatc = hdr_interm.copy()
