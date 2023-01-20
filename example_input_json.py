@@ -45,7 +45,7 @@ input_dict = {
     'PSForbit': False, #options: "perihelion" or "0.5"
     'PSFaberr': False, #if True, aberration-correction mode
     'ghost_c' : True,
-    'cavity_f': None, #filename of the cavity maps used to shift the wavelengths before RTE inversion
+    'cavity_f': None, #filename of the cavity maps used to shift the wavelengths before RTE inversion - #0263091100_flatPF-Tcorr-0_GAUS-FIT_header.fits'
     'rte' : False, #options: 'RTE', 'CE', 'CE+RTE'
     'pymilos' : False, #run python version of C-milos (~30% faster)
     
