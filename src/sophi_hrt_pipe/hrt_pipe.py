@@ -441,7 +441,7 @@ def phihrt_pipe(input_json_file):
         if flat_c == False:
             flat = np.empty((2048,2048,4,6))
 
-        data, flat = apply_dark_correction(data, flat, dark, rows, cols)  
+        data = apply_dark_correction(data, dark, rows, cols)  
         
         if flat_c == False:
             flat = np.empty((2048,2048,4,6))
@@ -524,13 +524,13 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if norm_f and flat_c:
-        flat = normalise_flat(flat, flat_f, ceny, cenx)
+        flat = normalise_flat(flat, ceny, cenx)
 
         print(" ")
         printc('-->>>>>>> Normalising flats over central region',color=bcolors.WARNING)
 
     else:
-        flat = normalise_flat(flat, flat_f, slice(0,2048), slice(0,2048))
+        flat = normalise_flat(flat, slice(0,2048), slice(0,2048))
 
         print(" ")
         printc('-->>>>>>> Normalising flats over whole FOV',color=bcolors.WARNING)

@@ -6,7 +6,20 @@ import os
 import time
 import cv2
 
+
 def setup_header(hdr_arr):
+    """Add calibration keywords to header
+
+    Parameters
+    ----------
+    hdr_arr: header
+        Array containing header of each file to be written
+
+    Returns
+    -------
+    hdr_arr
+        Updated header array
+    """
     k = ['CAL_FLAT','CAL_USH','SIGM_USH',
     'CAL_PRE','CAL_GHST','CAL_PREG','CAL_REAL',
     'CAL_CRT0','CAL_CRT1','CAL_CRT2','CAL_CRT3','CAL_CRT4','CAL_CRT5',
@@ -41,9 +54,19 @@ def setup_header(hdr_arr):
                     h.set(k[i], v[i], c[i], after=k[i-1])
     return hdr_arr
 
+
 def data_hdr_kw(hdr, data):
-    """
-    add data descriptive header keywords
+    """Add data description keywords
+
+    Parameters
+    ----------
+    hdr: header
+        file header
+
+    Returns
+    -------
+    hdr
+        Updated file header
     """
     hdr['DATAMEDN'] = float(f"{np.median(data):.8g}")
     hdr['DATAMEAN'] = float(f"{np.mean(data):.8g}")
@@ -52,9 +75,31 @@ def data_hdr_kw(hdr, data):
     #DATAKURT
     return hdr
 
+
 def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
-    """
-    load, scale, flip and correct flat
+    """Load, properly scale, flip in X if needed, and make any necessary corrections for particular flat fields
+
+    Parameters
+    ----------
+    flat_f: string
+        PATH of the flat field
+    accum_scaling: bool
+        if True apply scaling to account for the accumulation
+    bit_conversion: bool
+        if True apply scaling to account for the bit conversion
+    scale_data: bool
+        if True apply scaling (dependent on if IP5 flat or not)
+    header_imgdirx_exits: bool
+        if True, the header keyword exists in the science data - if does not exist, runs to fall back option in `compare_IMGDIRX` func
+    imgdirx_flipped: bool
+        set to True if the science data is flipped, function will flip the flat to match
+    cpos_arr: np.ndarray
+        array containing the continuum positions of the science scans - to make sure that the flat cpos matches the science flat
+
+    Returns
+    -------
+    flat
+        (2k,2k,4,6) shaped numpy array of the flat field
     """
     print(" ")
     printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
@@ -119,8 +164,17 @@ def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_
 
 
 def load_dark(dark_f) -> np.ndarray:
-    """
-    loads dark field from given path
+    """Load dark field
+
+    Parameters
+    ----------
+    dark_f: string
+        PATH of the flat field
+
+    Returns
+    -------
+    dark
+        (2k,2k) numpy array of the flat field
     """
     print(" ")
     printc('-->>>>>>> Reading Darks',color=bcolors.OKGREEN)
@@ -160,9 +214,24 @@ def load_dark(dark_f) -> np.ndarray:
         printc("ERROR, Unable to open and process darks file: {}",dark_f,color=bcolors.FAIL)
 
 
-def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
-    """
-    subtracts dark field from flat field and science data
+def apply_dark_correction(data, dark, rows, cols) -> np.ndarray:
+    """Apply dark field correction to the input data
+
+    Parameters
+    ----------
+    data: ndarray
+        data to be dark fielded
+    dark: ndarray
+        dark field
+    rows: slice object
+        rows to be used from dark - used in case data.shape does not agree with dark, or for testing
+    cols: slice object
+        columns to tbe used from dark - used in case data.shape does not agree with dark, or for testing
+
+    Returns
+    -------
+    data
+        dark fielded data
     """
     print(" ")
     print("-->>>>>>> Subtracting dark field")
@@ -176,12 +245,25 @@ def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
     printc(f"------------- Dark Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    return data, flat
+    return data
 
 
-def normalise_flat(flat, flat_f, ceny, cenx) -> np.ndarray:
-    """
-    normalise flat fields at each wavelength position to remove the spectral line
+def normalise_flat(flat, ceny, cenx) -> np.ndarray:
+    """Normalise flat field at each separate filtergram
+
+    Parameters
+    ----------
+    flat: ndarray
+        flat field
+    ceny: slice object
+        rows (y positions) to be used for the region over which the mean is taken
+    cenx: slice object
+        columns (x positions) to be used for the region over which the mean is taken
+
+    Returns
+    -------
+    flat
+        normalised flat field
     """
     print(" ")
     printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
@@ -199,13 +281,28 @@ def normalise_flat(flat, flat_f, ceny, cenx) -> np.ndarray:
         return flat
 
     except Exception:
-        printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+        printc("ERROR, Unable to normalise the flat field", color=bcolors.FAIL)
 
 
 def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
-    '''
-    Use constant demodulation matrices to demodulate input data
-    '''
+    """Use constant demodulation matrices to demodulate input data
+
+    Parameters
+    ----------
+    data: ndarray
+        input data
+    pmp_temp: str
+        PMP temperature of data to be demodulated, options are '45' or '50
+    verbose: bool
+        if True, more console prints info, DEFAULT = True
+
+    Returns
+    -------
+    data
+        demodulated data
+    demod
+        demodulation matrix used
+    """
     def _rotation_matrix(angle_rot):
         c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
         return np.array([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
