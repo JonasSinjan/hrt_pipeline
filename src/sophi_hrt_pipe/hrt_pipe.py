@@ -930,6 +930,9 @@ def phihrt_pipe(input_json_file):
         print(f"{out_dir} does not exist -->>>>>>> Creating it")
         os.makedirs(out_dir)
 
+    #take out of ifs, so that if both are true, they have the exact same time in the header
+    ntime = datetime.datetime.now()
+
     if out_stokes_file:
         
         print(" ")
@@ -950,7 +953,7 @@ def phihrt_pipe(input_json_file):
         else:
             scan_name_defined = False
 
-        if not scan_name_defined: #check if already defined by user
+        if not scan_name_defined: #check if already defined by user - if not, use auto name generation function
             scan_name_list = check_filenames(data_f) #extract the DIDs and check no duplicates
         
         for count, scan in enumerate(data_f):
@@ -960,8 +963,6 @@ def phihrt_pipe(input_json_file):
             else:
                 gzip = False
             stokes_file = create_output_filenames(scan, scan_name_list[count], version = vrs, gzip = gzip)[0]
-
-            ntime = datetime.datetime.now()
             hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
             hdr_arr[count]['FILENAME'] = stokes_file
             hdr_arr[count]['LEVEL'] = 'L2'
@@ -978,66 +979,53 @@ def phihrt_pipe(input_json_file):
                 tmp = data[:,:,:,:,count].astype(np.float32)
                 hdu_list[0].data = np.moveaxis(tmp, [-1,-2], [0,1]) #want, 6,4,y,x to be consistent with FDT
                 hdu_list[0].header = hdr_arr[count] #update the calibration keywords
-                hdu_list.writeto(out_dir + stokes_file, overwrite=True)
-            
-            if out_intermediate: 
-                #intermediate output with their own header, so they can be easily used as input for the pipeline
-
-                root_scan_name = scan_name_list[count]
-                if dark_c: 
-                    history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-
-                    write_out_dark_intermediate(data_darkc, hdr_interm, history_str, count, scan, scan_name_list, out_dir)
-                
-                if prefilter_c:
-                    history_str =  f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                    
-                    write_out_prefilter_intermediate(data_PFc, hdr_interm, history_str, count, scan, scan_name_list, out_dir)
-
-                if flat_c: 
-                    hdr_flatc = hdr_interm.copy()
-                    hdr_flatc['FILENAME'] = scan_name_list[count] + '_flat_corrected.fits'
-                    hdr_flatc['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                    hdr_flatc['BTYPE'] = 'Intensity'
-                    hdr_flatc['BUNIT'] = 'DN'
-                    hdr_flatc['DATAMIN'] = int(np.min(data_flatc[:,:,:,:,count]))
-                    hdr_flatc['DATAMAX'] = int(np.max(data_flatc[:,:,:,:,count]))
-                    hdr_flatc = data_hdr_kw(hdr_flatc, data_flatc[:,:,:,:,count])#add datamedn, datamean etc
-                    
-                    with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_flat_corrected.fits")
-                        hdu_list[0].data = data_flatc[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_flatc #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_flat_corrected.fits', overwrite=True)
-
-                    with fits.open(flat_f) as hdu_list:
-                        print(f"Writing flat field copy (before US) file as: copy_{flat_f.split('/')[-1]}")
-                        hdu_list[0].data = flat_copy.astype(np.float32)
-                        hdu_list.writeto(out_dir + "copy_" + f"{flat_f.split('/')[-1]}", overwrite=True)
-                                
-                if demod:
-                    hdr_demod = hdr_interm.copy()
-                    hdr_demod['FILENAME'] = scan_name_list[count] + '_demodulated.fits'
-
-                    hdr_demod['HISTORY'] = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                    
-                    hdr_demod['BTYPE'] = 'STOKES'
-                    hdr_demod['BUNIT'] = 'I_CONT'
-                    hdr_demod['DATAMIN'] = int(np.min(data_demod_normed[:,:,:,:,count]))
-                    hdr_demod['DATAMAX'] = int(np.max(data_demod_normed[:,:,:,:,count]))
-                    hdr_demod = data_hdr_kw(hdr_demod, data_demod_normed[:,:,:,:,count])#add datamedn, datamean etc
-                    
-                    with fits.open(scan) as hdu_list:
-                        print(f"Writing intermediate file as: {scan_name_list[count]}_demodulated.fits")
-                        hdu_list[0].data = data_demod_normed[:,:,:,:,count].astype(np.float32)
-                        hdu_list[0].header = hdr_demod #update the calibration keywords
-                        hdu_list.writeto(out_dir + scan_name_list[count] + '_demodulated.fits', overwrite=True)
+                hdu_list.writeto(out_dir + stokes_file, overwrite=True)  
         
     else:
         print(" ")
         #check if already defined by input, otherwise generate
         scan_name_list = check_filenames(data_f)
-        printc('-->>>>>>> No output demod file mode',color=bcolors.WARNING)
+        printc('-->>>>>>> No output Stokes file mode',color=bcolors.WARNING)
+
+    #-----------------
+    # WRITE OUT INTERMEDIATE
+    #-----------------
+
+    if out_intermediate: 
+        #intermediate output with their own header, so they can be easily used as input for the pipeline
+        for count, scan in enumerate(data_f):
+            root_scan_name = scan_name_list[count]
+            hdr_arr[count]['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+            hdr_interm = hdr_arr[count].copy()
+
+            if dark_c: 
+                history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                file_suffix = 'dark_corrected'
+                write_out_intermediate(data_darkc[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir)
+            
+            if prefilter_c:
+                history_str =  f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                file_suffix = 'prefilter_corrected'
+                write_out_intermediate(data_PFc[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir)
+
+            if flat_c: 
+                history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                #with US
+                file_suffix =  'flat_corrected'
+                write_out_intermediate(data_flatc[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir)
+                #without US
+                root_scan_name_before_US = f"copy_{flat_f.split('/')[-1]}"
+                file_suffix = ''
+                write_out_intermediate(flat_copy, hdr_interm, history_str, scan, root_scan_name_before_US, file_suffix, out_dir)
+
+            if demod:
+                history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
+                file_suffix = 'demodulated'
+                write_out_intermediate(data_demod_normed[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir, bunit = 'I_CONT', btype = 'STOKES')
+
+    else:
+        print(" ")
+        printc('-->>>>>>> No intermediate files requested',color=bcolors.WARNING)
 
     #-----------------
     # INVERSION OF DATA WITH CMILOS

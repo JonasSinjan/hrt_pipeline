@@ -904,13 +904,32 @@ def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
     return data, hdr_arr
     
 
-def create_intermediate_hdr(data, hdr_interm, history_str, root_scan_name, file_suffix):
+def create_intermediate_hdr(data, hdr_interm, history_str, file_name, **kwargs):
     hdr = hdr_interm.copy()
-    hdr['FILENAME'] = root_scan_name + file_suffix #scan_name_list[count]
+
+    hdr['FILENAME'] = file_name #scan_name_list[count]
     #overwrite the stokes history entry
     hdr['HISTORY'] = history_str
-    hdr['BTYPE'] = 'Intensity'
-    hdr['BUNIT'] = 'DN'
+    #need to define in case kwargs not passed through
+    b_unit = None
+    b_type = None
+
+    for arg, value in kwargs.items():
+        if arg == 'bunit':
+            b_unit = value
+        if arg is 'btype':
+            b_type = value
+
+    #need separate, as if no kwargs, the top won't show
+    if b_type is None:
+        hdr['BTYPE'] = 'Intensity'
+    else:
+        hdr['BTYPE'] = b_type
+    if b_unit is None:
+        hdr['BUNIT'] = 'DN'
+    else:
+        hdr['BUNIT'] = b_unit
+
     hdr['DATAMIN'] = int(np.min(data))
     hdr['DATAMAX'] = int(np.max(data))
     hdr = data_hdr_kw(hdr, data)#add datamedn, datamean etc
@@ -918,33 +937,19 @@ def create_intermediate_hdr(data, hdr_interm, history_str, root_scan_name, file_
     return hdr
 
 
-def write_out_dark_intermediate(data_darkc, hdr_interm, history_str, count, scan, scan_name_list, out_dir):
+def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_name, suffix, out_dir, **kwargs):
     """
     write out intermediate file for the dark, within external larger loop
     """
-    suffix = 'dark_corrected'
-    hdr_dark = create_intermediate_hdr(data_darkc[:,:,:,:,count], hdr_interm, history_str, scan_name_list[count], '_{suffix}.fits')
+    
+
+    hdr_int = create_intermediate_hdr(data_int, hdr_interm, history_str, f'{root_scan_name}_{suffix}.fits', **kwargs)
 
     with fits.open(scan) as hdu_list:
-        print(f"Writing intermediate file as: {scan_name_list[count]}_{suffix}.fits")
-        hdu_list[0].data = data_darkc[:,:,:,:,count].astype(np.float32)
-        hdu_list[0].header = hdr_dark #update the calibration keywords
-        hdu_list.writeto(out_dir + scan_name_list[count] + '_{suffix}.fits', overwrite=True)
-
-
-def write_out_prefilter_intermediate(data_PFc, hdr_interm, history_str, count, scan, scan_name_list, out_dir):
-    """
-    write out intermediate file for the prefilter step, within external larger loop
-    """
-    suffix = 'prefilter_corrected'
-    hdr_PF = create_intermediate_hdr(data_PFc[:,:,:,:,count], hdr_interm, history_str, scan_name_list[count], f'_{suffix}.fits')
-
-    with fits.open(scan) as hdu_list:
-        print(f"Writing intermediate file as: {scan_name_list[count]}_{suffix}.fits")
-        hdu_list[0].data = data_PFc[:,:,:,:,count].astype(np.float32)
-        hdu_list[0].header = hdr_PF #update the calibration keywords
-        hdu_list.writeto(out_dir + scan_name_list[count] + '_{suffix}.fits', overwrite=True)
-
+        print(f"Writing intermediate file as: {root_scan_name}_{suffix}.fits")
+        hdu_list[0].data = data_int.astype(np.float32)
+        hdu_list[0].header = hdr_int #update the calibration keywords
+        hdu_list.writeto(out_dir + root_scan_name + f'_{suffix}.fits', overwrite=True)
     
     
     
