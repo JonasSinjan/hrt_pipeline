@@ -1300,9 +1300,3 @@ def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_na
         hdu_list[0].data = data_int.astype(np.float32)
         hdu_list[0].header = hdr_int #update the calibration keywords
         hdu_list.writeto(out_dir + root_scan_name + f'_{suffix}.fits', overwrite=True)
-    
-    
-    
-    
-    
-    
