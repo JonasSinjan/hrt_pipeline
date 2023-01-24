@@ -622,7 +622,7 @@ def phihrt_pipe(input_json_file):
         
         start_time = time.perf_counter()
 
-        data, hdr_arr = polarimetric_registration(data, cpos_arr, sly, slx, hdr_arr)
+        data, hdr_arr = polarimetric_registration(data, sly, slx, hdr_arr)
         
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Registration time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)

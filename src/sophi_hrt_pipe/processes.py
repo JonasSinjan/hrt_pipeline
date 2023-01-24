@@ -739,10 +739,8 @@ def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,
 
     Returns
     -------
-    data: ndarray
-        data with field stop applied
-    field_stop: ndarray
-        field stop array
+    ct: ndarray
+        crosstalk coefficients for I to Q,U,V
 
     adapted from SPGPylibs
     """
@@ -906,7 +904,21 @@ def hot_pixel_mask(data, rows, cols, mode='median'):
     """
     Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
     
-    test commit
+    Parameters
+    ----------
+    data: ndarray
+        input data to be corrected
+    rows: slice
+        rows of the data to be corrected
+    cols: slice
+        columns of the data to be corrected
+    mode: str
+        'median' or 'mean' to apply to the data
+
+    Returns
+    -------
+    data: ndarray
+        data with hot pixels masked
     """
     file_loc = os.path.realpath(__file__)
     field_stop_fol = file_loc.split('src/')[0] + 'field_stop/'
@@ -935,6 +947,32 @@ def hot_pixel_mask(data, rows, cols, mode='median'):
 
     
 def crosstalk_auto_VtoQU(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,nlevel=0.3):
+    """Get crosstalk coefficients for V to Q,
+
+    Parameters
+    ----------
+    data_demod: ndarray
+        input data that has been demodulated
+    cpos: int
+        continuum position
+    wl: int
+        wavelength position
+    roi: ndarray
+        region of interest
+    verbose: bool/int
+        if True, plot results
+    npoints: int
+        number of points to use for fitting
+    limit: float
+        limit for Stokes I to be considered for fitting
+
+    Returns
+    -------
+    ct: ndarray
+        crosstalk coefficients for V to Q and U
+
+    adapted from SPGPylibs
+    """
     import random, statistics
     from scipy.optimize import curve_fit
     def linear(x,a,b):
@@ -1004,18 +1042,23 @@ def crosstalk_auto_VtoQU(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,n
 
 
 def CT_VtoQU(data, ctalk_params):
-    """
-    performs cross talk correction for I -> Q,U,V
+    """Apply cross talk correction from V to Q, U
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be corrected
+    ctalk_params: ndarray
+        cross talk parameters
+
+    Returns
+    -------
+    data: ndarray
+        data with cross talk correction applied
     """
     before_ctalk_data = np.copy(data)
-    data_shape = data.shape
-    
-#     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
-#     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
-    
-    for i in range(6):
-                
 
+    for i in range(6):
         tmp_param = ctalk_params#*stokes_i_wv_avg/cont_stokes
 
         q_slope = tmp_param[0,0]
@@ -1028,14 +1071,30 @@ def CT_VtoQU(data, ctalk_params):
 
         data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,3,i,:]*u_slope - u_int
 
-    
     return data
 
 
-def polarimetric_registration(data, cpos_arr, sly, slx, hdr_arr):
-    """
-    align the mod (pol) states 2,3,4 with state 1 for a given wavelength
+def polarimetric_registration(data, sly, slx, hdr_arr):
+    """Align the mod (pol) states 2,3,4 with state 1 for a given wavelength
     loop through all wavelengths
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be aligned polarimetrically
+    sly: slice
+        slice in y direction
+    slx: slice
+        slice in x direction
+    hdr_arr: ndarray
+        header array
+    
+    Returns
+    -------
+    data: ndarray
+        data with polarimetric registration applied
+    hdr_arr: ndarray
+        header array with updated CAL_PREG keyword
     """
     pn = 4 
     wln = 6 
@@ -1081,8 +1140,27 @@ def polarimetric_registration(data, cpos_arr, sly, slx, hdr_arr):
     
 
 def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
-    """
-    Align the wavelengths, from the Stokes I image, (after demodulation), using cv2
+    """Align the wavelengths, from the Stokes I image, (after demodulation), using cv2.warpAffine
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be aligned in wavelength
+    cpos_arr: ndarray
+        array of continuum positions
+    sly: slice
+        slice in y direction
+    slx: slice
+        slice in x direction
+    hdr_arr: ndarray
+        header array
+    
+    Returns
+    -------
+    data: ndarray
+        data with wavelength registration applied
+    hdr_arr: ndarray
+        header array with updated CAL_WREG keyword
     """
     pn = 4
     wln = 6
@@ -1137,6 +1215,26 @@ def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
     
 
 def create_intermediate_hdr(data, hdr_interm, history_str, file_name, **kwargs):
+    """add basic keywords to the intermediate file header
+
+    Parameters
+    ----------
+    data: ndarray
+        data array
+    hdr_interm: fits header
+        intermediate header from the input file
+    history_str: str
+        history string to be added to the header
+    file_name: str
+        name of the output file
+    **kwargs: dict
+        optional arguments: bunit, btype, DEFAULTS: bunit = DN, btype = Intensity
+
+    Returns
+    -------
+    hdr: fits header
+        header with updated keywords
+    """
     hdr = hdr_interm.copy()
 
     hdr['FILENAME'] = file_name #scan_name_list[count]
@@ -1170,11 +1268,31 @@ def create_intermediate_hdr(data, hdr_interm, history_str, file_name, **kwargs):
 
 
 def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_name, suffix, out_dir, **kwargs):
-    """
-    write out intermediate file for the dark, within external larger loop
-    """
-    
+    """Write out intermediate files to output directory
 
+    Parameters
+    ----------
+    data_int: ndarray
+        data array of intermediate step to be written out
+    hdr_interm: fits header
+        intermediate header from the input file
+    history_str: str
+        history string to be added to the header
+    scan: int
+        scan number
+    root_scan_name: str
+        root file name of the intermediate file to be written
+    suffix: str
+        suffix to be added to the intermediate file name
+    out_dir: str
+        output directory
+    **kwargs: dict
+        optional arguments: bunit, btype, DEFAULTS: bunit = DN, btype = Intensity
+
+    Returns
+    -------
+    None
+    """
     hdr_int = create_intermediate_hdr(data_int, hdr_interm, history_str, f'{root_scan_name}_{suffix}.fits', **kwargs)
 
     with fits.open(scan) as hdu_list:
