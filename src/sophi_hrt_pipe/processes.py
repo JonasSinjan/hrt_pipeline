@@ -905,6 +905,8 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
 def hot_pixel_mask(data, rows, cols, mode='median'):
     """
     Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
+    
+    test commit
     """
     file_loc = os.path.realpath(__file__)
     field_stop_fol = file_loc.split('src/')[0] + 'field_stop/'
