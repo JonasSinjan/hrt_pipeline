@@ -636,15 +636,22 @@ def auto_norm(file_name):
     print('accu:',(d[0].header['ACCCOLIT']*d[0].header['ACCROWIT']*d[0].header['ACCACCUM']))
     return norm
 
+
 # new functions by DC ######################################
 def mu_angle(hdr,coord=None):
-    """
-    input
-    hdr: header or filename
-    coord: pixel for which the mu angle is found (if None: center of the FoV)
-    
-    output
-    mu = cosine of the heliocentric angle
+    """get mu angle for a pixel
+
+    Parameters
+    ----------
+    hdr : header or filename
+        header of the fits file or filename path
+    coord : array, optional
+        pixel location for which the mu angle is found (if None: center of the FoV), by default None
+
+    Returns
+    -------
+    mu : float
+        cosine of the heliocentric angle
     """
     if type(hdr) is str:
         hdr = fits.getheader(hdr)
@@ -661,11 +668,15 @@ def mu_angle(hdr,coord=None):
     return mu
 
 def center_coord(hdr):
-    """
-    input
-    hdr: header
-    
-    output
+    """calculate the center of the solar disk in the rotated reference system
+
+    Parameters
+    ----------
+    hdr : header
+        header of the fits file
+
+    Returns
+    -------
     center: [x,y,1] coordinates of the solar disk center (units: pixel)
     """
     pxbeg1 = hdr['PXBEG1']
@@ -704,8 +715,26 @@ def center_coord(hdr):
     
     return center
 
-def circular_mask(h, w, center, radius):
 
+def circular_mask(h, w, center, radius):
+    """create a circular mask
+
+    Parameters
+    ----------
+    h : int
+        height of the mask
+    w : int
+        width of the mask
+    center : [x,y]
+        center of the mask
+    radius : float
+        radius of the mask
+
+    Returns
+    -------
+    mask: 2D array
+        mask with 1 inside the circle and 0 outside
+    """
     Y, X = np.ogrid[:h, :w]
     dist_from_center = np.sqrt((X - center[0])**2 + (Y-center[1])**2)
 
@@ -713,6 +742,34 @@ def circular_mask(h, w, center, radius):
     return mask
 
 def limb_side_finder(img, hdr,verbose=True,outfinder=False):
+    """find the limb in the image
+
+    Parameters
+    ----------
+    img : 2D array
+        data array
+    hdr : header
+        header of the fits file
+    verbose : bool, optional
+        print the limb side, by default True
+    outfinder : bool, optional
+        return the finder array, by default False
+    
+    Returns
+    -------
+    side: str
+        limb side
+    center: [x,y] 
+        coordinates of the solar disk center (units: pixel)
+    Rpix: float
+        Radius of solar disk in pixels
+    sly: slice
+        slice in y direction to be used for normalisation
+    slx: slice
+        slice in x direction to be used for normalisation
+    finder: 2D array
+        finder array, optional, only returned if outfinder is True
+    """
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
     # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
     center = center_coord(hdr)[:2] - 1
@@ -777,7 +834,31 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
     else:
         return side, center, Rpix, sly, slx
 
+
 def limb_fitting(img, hdr, field_stop, verbose=True):
+    """Fits limb to the image using least squares method.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to fit limb to.
+    hdr : astropy.io.fits.header.Header
+        header of fits file
+    field_stop : array
+        field stop array
+    verbose : bool, optional
+        Print limb fitting results, by default True
+
+    Returns
+    -------
+    mask100: numpy.ndarray
+        masked array (ie off disc region)
+     sly: slice
+        slice in y direction to be used for normalisation (ie good pixels on disc)
+    slx: slice
+        slice in x direction to be used for normalisation (ie good pixels on disc)
+    side: str
+    """
     def _residuals(p,x,y):
         xc,yc,R = p
         return R**2 - (x-xc)**2 - (y-yc)**2
