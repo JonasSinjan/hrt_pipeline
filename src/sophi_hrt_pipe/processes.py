@@ -91,8 +91,8 @@ def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_
         if True apply scaling (dependent on if IP5 flat or not)
     header_imgdirx_exits: bool
         if True, the header keyword exists in the science data - if does not exist, runs to fall back option in `compare_IMGDIRX` func
-    imgdirx_flipped: bool
-        set to True if the science data is flipped, function will flip the flat to match
+    imgdirx_flipped: str or bool
+        set to True if the science data is flipped, function will flip the flat to match, OPTIONS: 'YES' or 'NO', or False
     cpos_arr: np.ndarray
         array containing the continuum positions of the science scans - to make sure that the flat cpos matches the science flat
 
@@ -164,7 +164,7 @@ def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_
 
 
 def load_dark(dark_f) -> np.ndarray:
-    """Load dark field
+    """Load dark field - for use in notebooks
 
     Parameters
     ----------
@@ -644,8 +644,8 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
         cols to use
     header_imgdirx_exists: bool
         if imgdirx exists in header
-    imgdirx_flipped: str
-        if input data is flipped
+    imgdirx_flipped: str or bool
+        if input data is flipped, OPTIONS: 'YES', 'NO', or False
 
     Returns
     -------
@@ -687,8 +687,8 @@ def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
     ----------
     header_imgdirx_exists: bool
         if imgdirx exists in header
-    imgdirx_flipped: str
-        if input data is flipped
+    imgdirx_flipped: str or bool
+        if input data is flipped, OPTIONS: 'YES', 'NO', or False
 
     Returns
     -------

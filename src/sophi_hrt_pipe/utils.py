@@ -25,38 +25,69 @@ class bcolors:
   RESET = '\u001b[0m'
 
 def printc(*args, color = bcolors.RESET, **kwargs):
-  """My custom print() function."""
-  print(u"\u001b"+f"{color}", end='\r')
-  print(*args, **kwargs)
-  print(u"\u001b"+f"{bcolors.RESET}", end='\r')
-  return 
+    """My custom print() function.
+
+    Parameters 
+    ----------
+    *args:
+        arguments to be printed
+    color: string
+        color of the text
+    **kwargs:
+        keyword arguments to be passed to print()
+
+    Returns
+    -------
+    None
+
+    From SPGPyLib PHITools
+    """
+    print(u"\u001b"+f"{color}", end='\r')
+    print(*args, **kwargs)
+    print(u"\u001b"+f"{bcolors.RESET}", end='\r')
+    return 
+
 
 def load_fits(path):
-  """
-  load the fits file
-  
-  Parameters
-  ----------
-  path: string, location of the fits file
-  
-  Output
-  ------
-  data: numpy array, of stokes images in (row, col, wv, pol) 
-  header: hdul header object, header of the fits file
-  """
+    """load a fits file
 
-  hdul_tmp = fits.open(f'{path}')
-  
-  data = np.asarray(hdul_tmp[0].data, dtype = np.float32)
+    Parameters
+    ----------
+    path: string
+    location of the fits file
 
-  header = hdul_tmp[0].header
-  
-  return data, header 
+    Output
+    ------
+    data: numpy array, of stokes images in (row, col, wv, pol) 
+    header: hdul header object, header of the fits file
+    """
+    with fits.open(f'{path}') as hdul_tmp:
+        data = np.asarray(hdul_tmp[0].data, dtype = np.float32)
+        header = hdul_tmp[0].header
+
+    return data, header 
 
 
 def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
-    """
-    load science data from path
+    """load science data from path and scale it if needed
+
+    Parameters
+    ----------
+    path: string
+        location of the fits file
+    scaling: bool
+        if True, divide by number of accumulations
+    bit_convert_scale: bool
+        if True, divide by 256 if the data is in 24.8bit format
+    scale_data: bool
+        if True, scale the data to the maximum range of the detector
+    
+    Returns
+    -------
+    data: numpy array
+        stokes images in (row, col, wv, pol)
+    header: hdul header object
+        header of the fits file
     """
     try:
         data, header = load_fits(path)
@@ -96,14 +127,39 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
         printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
         raise ValueError()
        
+
 def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False):
-    '''
-    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False)
+    '''Open fits file, extract the wavelength axis and the continuum position, from Voltages in header
+
+    Parameters
+    ----------
+    file: string
+        location of the fits file
+    num_wl: int
+        number of wavelength
+    TemperatureCorrection: bool
+        if True, apply temperature correction to the wavelength axis
+    verbose: bool
+        if True, print the continuum position
+    
+    Returns
+    -------
+    wave_axis: numpy array
+        wavelength axis
+    voltagesData: numpy array
+        voltages of the wavelength axis
+    tunning_constant: float
+        tunning constant of the etalon
+    cpos: int
+        continuum position
+    
+    Adapted from SPGPyLib
+
+    Usage: wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False)
     No S/C velocity corrected!!!
     cpos = 0 if continuum is at first wavelength and = num_wl - 1 (usually 5) if continuum is at the end
     '''
     fg_head = 3
-
     with fits.open(file) as hdu_list:
         header = hdu_list[fg_head].data
         tunning_constant = float(header[0][4])/1e9
@@ -136,7 +192,6 @@ def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = 
     if verbose:
         print('Continuum position at wave: ', cpos)
     wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.341
-    #print(wave_axis)
     
     if TemperatureCorrection:
         if verbose:
@@ -150,17 +205,32 @@ def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = 
 
     return wave_axis,voltagesData,tunning_constant,cpos
 
+
 def fits_get_sampling_SPG(file,verbose = False):
     '''
-    wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling_SPG(file)
-    No S/C velocity corrected!!!
-    cpos = 0 if continuum is at first wavelength and = 5 if continuum is at the end
+    Obtains the wavelength and voltages from  fits header
 
+    Parameters
+    ----------
+    file : str
+        fits file path
+    verbose : bool, optional
+        More info printed. The default is False.
+
+    Returns
+    -------
+    wave_axis : array
+        wavelength axis
+    voltagesData : array
+        voltages
+    tunning_constant : float
+        tunning constant of etalon (FG)
+    cpos : int
+        continuum position
+    
     From SPGPylibs PHITools
     '''
-    #print('-- Obtaining voltages......')
     fg_head = 3
-    #try:
     with fits.open(file) as hdu_list:
         header = hdu_list[fg_head].data
         j = 0
@@ -175,16 +245,11 @@ def fits_get_sampling_SPG(file,verbose = False):
                     tunning_constant = float(v[4])/1e9
                 if ref_wavelength == 0:
                     ref_wavelength = float(v[5])/1e3
-                #print(dummy, v[2], type(dummy), type(v[2]))
                 if np.abs(np.abs(float(v[2])) - np.abs(dummy)) > 5: #check that the next voltage is more than 5 from the previous, as voltages change slightly
-                    #print(dummy, v[2])
                     voltagesData[j] = float(v[2])
                     dummy = voltagesData[j] 
                     j += 1
 
-    #except Exception:
-    #   print("Unable to open fits file: {}",file)     
-    #print(voltagesData)
     d1 = voltagesData[0] - voltagesData[1]
     d2 = voltagesData[4] - voltagesData[5]
     if np.abs(d1) > np.abs(d2):
@@ -194,13 +259,22 @@ def fits_get_sampling_SPG(file,verbose = False):
     if verbose:
         print('Continuum position at wave: ', cpos)
     wave_axis = voltagesData*tunning_constant + ref_wavelength  #6173.3356
-    #print(wave_axis)
+
     return wave_axis,voltagesData,tunning_constant,cpos
 
 
 def check_filenames(data_f):
-    """
-    checks if the science scans have the same DID - this would cause an issue for naming the output demod files
+    """checks if the science scans have the same DID - this would otherwise cause an issue for naming the output demod files
+
+    Parameters
+    ----------
+    data_f : list
+        list of science scan file names
+    
+    Returns
+    -------
+    scan_name_list : list
+        list of science scan file names with unique DIDs
     """
     try:
         scan_name_list = [fits.getheader(scan)['PHIDATID'] for scan in data_f]
@@ -233,8 +307,16 @@ def check_filenames(data_f):
 
 
 def check_size(data_arr):
-    """
-    checks if science scans have same dimensions
+    """check if science scans have same dimensions
+
+    Parameters
+    ----------
+    data_arr : list
+        list of science scan data arrays
+    
+    Returns
+    -------
+    None
     """
     first_shape = data_arr[0].shape
     result = all(element.shape == first_shape for element in data_arr)
@@ -248,8 +330,16 @@ def check_size(data_arr):
 
 
 def check_cpos(cpos_arr):
-    """
-    checks if the science scans have the same continuum positions
+    """checks if the science scans have the same continuum positions
+
+    Parameters
+    ----------
+    cpos_arr : list
+        list of continuum positions
+
+    Returns
+    -------
+    None
     """
     first_cpos = cpos_arr[0]
     result = all(c_position == first_cpos for c_position in cpos_arr)
@@ -262,32 +352,53 @@ def check_cpos(cpos_arr):
         exit()
 
 
-def compare_cpos(data,cpos,cpos_ref):
-    """
-    checks if flat continuum same as data, if not try to move flat around - this assumes that there was a mistake with the continuum position in the flat
+def compare_cpos(flat,cpos,cpos_ref):
+    """checks if flat continuum same as data, if not try to move flat around - this assumes that there was a mistake with the continuum position in the flat
+
+    Parameters
+    ----------
+    flat : array
+        flat field data array
+    cpos : int
+        continuum position of flat field
+    cpos_ref : int
+        continuum position of science scan
+
+    Returns
+    -------
+    flat : array
+        flat field data array with continuum position corrected
     """
     if cpos != cpos_ref:
         print("The flat field continuum position is not the same as the data, trying to correct.")
 
         if cpos == 5 and cpos_ref == 0:
 
-            return np.roll(data, 1, axis = -1)
+            return np.roll(flat, 1, axis = -1)
 
         elif cpos == 0 and cpos_ref == 5:
 
-            return np.roll(data, -1, axis = -1)
+            return np.roll(flat, -1, axis = -1)
 
         else:
             print("Cannot reconcile the different continuum positions. \n Ending Process.")
 
             exit()
     else:
-        return data
+        return flat
 
 
 def check_pmp_temp(hdr_arr):
-    """
-    check science scans have same PMP temperature set point
+    """check science scans have same PMP temperature set point
+
+    Parameters
+    ----------
+    hdr_arr : list
+        list of science scan header arrays
+    
+    Returns
+    -------
+    pmp_temp : str
     """
     first_pmp_temp = hdr_arr[0]['HPMPTSP1']
     result = all(hdr['HPMPTSP1'] == first_pmp_temp for hdr in hdr_arr)
@@ -302,8 +413,18 @@ def check_pmp_temp(hdr_arr):
 
 
 def check_IMGDIRX(hdr_arr):
-    """
-    check if all scans contain imgdirx keyword
+    """check if all scans contain imgdirx keyword
+
+    Parameters
+    ----------
+    hdr_arr : list
+        list of science scan header arrays
+    
+    Returns
+    -------
+    header_imgdirx_exists : bool
+    imgdirx_flipped : str or bool
+        OPTIONS: 'YES' or 'NO' or False
     """
     if all('IMGDIRX' in hdr for hdr in hdr_arr):
         header_imgdirx_exists = True
@@ -324,8 +445,25 @@ def check_IMGDIRX(hdr_arr):
 
 
 def compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped):
-    """
-    returns flat that matches the orientation of the science data
+    """returns flat that matches the orientation of the science data
+
+    Parameters
+    ----------
+    flat : array
+        flat field data array
+    header_imgdirx_exists : bool
+        if all scans contain imgdirx keyword
+    imgdirx_flipped : str or bool
+        OPTIONS: 'YES' or 'NO' or False
+    header_fltdirx_exists : bool
+        if flat contains fltdirx keyword
+    fltdirx_flipped : str or bool
+        OPTIONS: 'YES' or 'NO' or False
+
+    Returns
+    -------
+    flat : array
+        flat field data array with orientation corrected
     """
     if header_imgdirx_exists and imgdirx_flipped == 'YES': 
         #if science is flipped
@@ -350,8 +488,17 @@ def compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_ex
 
 
 def stokes_reshape(data):
-    """
-    converting science to [y,x,pol,wv,scans]
+    """converting science to [y,x,pol,wv,scans]
+    
+    Parameters
+    ----------
+    data : array
+        science data array
+    
+    Returns
+    -------
+    data : array
+        science data array with shape [y,x,pol,wv,scans]
     """
     data_shape = data.shape
     if data_shape[0] == 25:
@@ -369,7 +516,22 @@ def stokes_reshape(data):
     
 
 def fix_path(path,dir='forward',verbose=False):
-    """
+    """This function is used to fix the path for windows and linux systems
+
+    Parameters
+    ----------
+    path : str
+        path to be fixed
+    dir : str, optional
+        direction of the path, by default 'forward'
+    verbose : bool, optional
+        print the path, by default False
+
+    Returns
+    -------
+    path : str
+        fixed path
+
     From SPGPylibs PHITools
     """
     path = repr(path)
@@ -394,6 +556,24 @@ def fix_path(path,dir='forward',verbose=False):
 
 
 def filling_data(arr, thresh, mode, axis = -1):
+    """filling the data with cubic spline interpolation
+
+    Parameters
+    ----------
+    arr : array
+        array to be filled
+    thresh : float
+        threshold for filling
+    mode : str
+        mode for filling, 'max', 'min', 'abs', 'exact rows', 'exact columns'
+    axis : int, optional
+        axis to be filled, by default -1
+
+    Returns
+    -------
+    array
+        filled array
+    """
     from scipy.interpolate import CubicSpline
     
     a0 = np.zeros(arr.shape)
@@ -431,6 +611,18 @@ def filling_data(arr, thresh, mode, axis = -1):
     
 
 def auto_norm(file_name):
+    """This function is used to normalize the data from the fits extensions
+
+    Parameters
+    ----------
+    file_name : str
+        path to file
+
+    Returns
+    -------
+    norm : float
+        normalization factor
+    """
     d = fits.open(file_name)
     try:
         print('PHI_IMG_maxRange 0:',d[9].data['PHI_IMG_maxRange'][0])

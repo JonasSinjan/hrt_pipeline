@@ -320,68 +320,8 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if flat_c:
-        print(" ")
-        printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
-
-        start_time = time.perf_counter()
         
-        # flat from IP-5
-        if '0024151020000' in flat_f or '0024150020000' in flat_f:
-            flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
-                                        scale_data=False)
-        else:
-            flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
-                                        scale_data=scale_data)
-                    
-        if 'IMGDIRX' in header_flat:
-            header_fltdirx_exists = True
-            fltdirx_flipped = str(header_flat['IMGDIRX'])
-        else:
-            header_fltdirx_exists = False
-            fltdirx_flipped = 'NO'
-        
-        print(f"Flat field shape is {flat.shape}")
-        # correction based on science data - see if flat and science are both flipped or not
-        flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
-        
-        flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
-        flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
-        flat = np.moveaxis(flat, 2,-1)
-        
-        print(flat.shape)
-
-        wave_flat, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f, TemperatureCorrection = TemperatureCorrection,verbose = True) #get flat continuum position
-
-        print(f"The continuum position of the flat field is at {cpos_f} index position")
-        
-        #--------
-        # test if the science and flat have continuum at same position
-        #--------
-
-        flat = compare_cpos(flat,cpos_f,cpos_arr[0]) 
-        voltagesData_flat = compare_cpos(voltagesData_flat,cpos_f,cpos_arr[0]) 
-
-        flat_pmp_temp = str(header_flat['HPMPTSP1'])
-
-        print(f"Flat PMP Temperature Set Point: {flat_pmp_temp}")
-
-        #--------
-        # correct for missing line in particular flat field
-        #--------
-
-        if flat_f[-15:] == '0162201100.fits':  # flat_f[-62:] == 'solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits'
-            print("This flat has a missing line - filling in with neighbouring pixels")
-            flat_copy = flat.copy()
-            flat[:,:,1,2] = filling_data(flat_copy[:,:,1,2], 0, mode = {'exact rows':[1345,1346]}, axis=1)
-
-            del flat_copy
-
-        flat_copy = flat.copy()
-            
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-        printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
-        printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
+        flat = load_flat(flat_f,accum_scaling,bit_conversion,scale_data,header_imgdirx_exists,imgdirx_flipped,cpos_arr)
 
     else:
         print(" ")
