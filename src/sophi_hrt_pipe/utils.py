@@ -852,7 +852,7 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
     Returns
     -------
     mask100: numpy.ndarray
-        masked array (ie off disc region)
+        masked array (ie off disc region) with 100% of the radius
      sly: slice
         slice in y direction to be used for normalisation (ie good pixels on disc)
     slx: slice
@@ -867,17 +867,29 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
         ----------
         p : list
             [xc,yc,R] - coordinates of the centre and radius of the circle
-        x : 
-        y :
+        x : float
+            test x coordinate
+        y : float
+            test y coordinate
 
         Returns
         -------
-        R**2 - (x-xc)**2 - (y-yc)**2
+        residual = R**2 - (x-xc)**2 - (y-yc)**2
         """
         xc,yc,R = p
-        return R**2 - (x-xc)**2 - (y-yc)**2
+        residual = R**2 - (x-xc)**2 - (y-yc)**2
+        return residual
     
     def _is_outlier(points, thresh=2):
+        """Returns a boolean array with True if points are outliers and False otherwise
+        
+        Parameters
+        ----------
+        points : numpy.ndarray
+            1D array of points
+        thresh : int, optional
+            threshold for outlier detection, by default 2
+        """
         if len(points.shape) == 1:
             points = points[:,None]
         median = np.median(points, axis=0)
@@ -890,6 +902,20 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
         return modified_z_score > thresh
         
     def _image_derivative(d):
+        """Calculates the image derivative in x and y using a 3x3 kernel
+        
+        Parameters
+        ----------
+        d : numpy.ndarray
+            image to calculate derivative of
+        
+        Returns
+        -------
+        SX : numpy.ndarray
+            derivative in x direction
+        SY : numpy.ndarray
+            derivative in y direction
+        """
         import numpy as np
         from scipy.signal import convolve
         kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
@@ -913,9 +939,6 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
     for i in range(f):
         for j in range(f):
             finder[fract*i:fract*(i+1),fract*j:fract*(j+1)] = finder_small[i,j]
-
-#     wcs_mask = circular_mask(img.shape[0],img.shape[1],center,Rpix)
-#     wcs_grad = _image_derivative(wcs_mask)
         
     if side == '':
         return None, sly, slx, side, None, None
@@ -946,7 +969,6 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
     p = least_squares(_residuals,x0 = [center[0],center[1],Rpix], args=(xi,yi),
                               bounds = ([center[0]-150,center[1]-150,Rpix-50],[center[0]+150,center[1]+150,Rpix+50]))
         
-#     mask80 = circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2]*.8)
     mask100 = circular_mask(img.shape[0],img.shape[1],[p.x[0],p.x[1]],p.x[2])
     
     if 'N' in side or 'S' in side:
@@ -955,11 +977,20 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
         return mask100, sly, slx, side
 
 def fft_shift(img,shift):
+    """Shift an image in the Fourier domain and return the shifted image (non fourier domain)
+
+    Parameters
+    ----------
+    img : 2D-image
+        2D-image to be shifted
+    shift : list
+        [dy,dx] shift in pixel
+
+    Returns
+    -------
+    img_shf : 2D-image
+        shifted image
     """
-    im: 2D-image to be shifted
-    shift = [dy,dx] shift in pixel
-    """
-    
     try:
         import pyfftw.interfaces.numpy_fft as fft
     except:
@@ -977,14 +1008,35 @@ def fft_shift(img,shift):
     return img_shf
     
 def SPG_shifts_FFT(data,norma=True,prec=100,coarse_prec = 1.5,sequential = False):
+    """FFT shifting function from SPGPylibs as used in FDT pipeline.
 
-    """
+    Parameters
+    ----------
+    data : 3D-array
+        [z,y,x] 3D-array of images to be shifted, images stacked along the first (z) axis.
+    norma : bool, optional
+        If True, the images are normalized before shifting. The default is True.
+    prec : int, optional
+        Precision of the shift. The default is 100.
+    coarse_prec : float, optional
+        Coarse precision of the shift. The default is 1.5.
+    sequential : bool, optional
+        if True, adds shifts to the previous one. The default is False.
+
+    Returns
+    -------
+    row_shift : 1D-array
+        row shifts
+    column_shift : 1D-array
+        column shifts
+    shifted_image: 3D-array
+        shifted images
+
     From SPGPylibs. Same function used for FDT pipeline, adapted by DC
     At least two images should be provided!
-    s_y, s_x, simage = PHI_shifts_FFT(image_cropped,prec=500,verbose=True,norma=False)
-    (row_shift, column_shift) deficed as  center = center + (y,x) 
+    usage: s_y, s_x, simage = PHI_shifts_FFT(image_cropped,prec=500,verbose=True,norma=False)
+    (row_shift, column_shift) defined as  center = center + (y,x) 
     """
-    
     def sampling(N):
         """
         From SPGPylibs. Same function used for FDT pipeline.
@@ -1136,26 +1188,62 @@ def SPG_shifts_FFT(data,norma=True,prec=100,coarse_prec = 1.5,sequential = False
 
 #plotting functions for quick data analysis for communal use
 
-
 def find_nearest(array, value):
-    """
-    return index of nearest value in array to the desired value
+    """return index of nearest value in array to the desired value
+
+    Parameters
+    ----------
+    array : array
+        array to search
+    value : float
+        value to search for
+
+    Returns
+    -------
+    idx : int
+        index of nearest value in array to the desired value
     """
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return idx
 
+
 def gaus(x,a,x0,sigma):
-    """
-    return Gauss function
+    """return Gauss function
+
+    Parameters
+    ----------
+    x : array
+        x values
+    a : float
+        amplitude
+    x0 : float
+        mean x value
+    sigma : float
+        standard deviation
+
+    Returns
+    -------
+    Gauss Function : array
     """
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
+
 def gaussian_fit(a,show=True):
+    """Gaussian fit for data 'a' from np.histogram
+
+    Parameters
+    ----------
+    a : array
+        output from np.histogram
+    show : bool, optional
+        show plot of fit, by default True
+    
+    Returns
+    -------
+    p : array
+        fitted coefficients for Gaussian function
     """
-    gaussian fit for data 'a' from np.histogram
-    """
-#    a=np.histogram(data.flat,density=True,bins=100)
     xx=a[1][:-1] + (a[1][1]-a[1][0])/2
     y=a[0][:]
     p0=[0.,sum(xx*y)/sum(y),np.sqrt(sum(y * (xx - sum(xx*y)/sum(y))**2) / sum(y))] #weighted avg of bins for avg and sigma inital values
@@ -1171,7 +1259,26 @@ def gaussian_fit(a,show=True):
         printc("Gaussian fit failed: return initial guess",color=bcolors.WARNING)
         return p0
         
+
 def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
+    """Iterative Gaussian fit for noise estimate
+
+    Parameters
+    ----------
+    temp : array
+        data to fit
+    p : array, optional
+        initial guess for Gaussian fit, by default [1,0,1e-1]
+    eps : float, optional
+        convergence criteria, by default 1e-6
+    
+    Returns
+    -------
+    p : array
+        fitted coefficients for Gaussian function
+    hi : array
+        output from np.histogram
+    """
     p_old = [1,0,10]; count = 0
     it = 0
     while np.abs(p[2] - p_old[2])>eps:
@@ -1184,36 +1291,27 @@ def iter_noise(temp, p = [1,0,1e-1], eps = 1e-6):
     return p, hi
 
   
-def blos_noise(blos_file, fs = None):
-    """
-    plot blos on left panel, and blos hist + Gaussian fit (w/ iterative option)
-    """
+def blos_noise(blos_file, iter=True, fs = None):
+    """plot blos on left panel, and blos hist + Gaussian fit (w/ iterative fit option - only shown in legend)
 
+    Parameters
+    ----------
+    blos_file : str
+        path to blos file
+    iter : bool, optional
+        performs iterative Gaussian fit, by default True
+    fs : array, optional
+        field stop mask, by default None
+
+    Returns
+    -------
+    p or p_iter: fit coefficients for Gaussian function
+    """
     blos = fits.getdata(blos_file)
     hdr = fits.getheader(blos_file)
-    #first get the pixels that we want (central 512x512 and limb handling)
-    limb_side, center, Rpix, sly, slx = limb_side_finder(blos, hdr)
+    #get the pixels that we want to consider (central 512x512 and limb handling)
+    _, _, _, sly, slx = limb_side_finder(blos, hdr)
     values = blos[sly,slx]
-#     if limb_side == '':#not a limb image
-#         values = blos[512:1536, 512:1536]
-
-#     else:
-#         data_size = np.shape(blos)
-        # ds = 386 #?
-        # dx = 0; dy = 0
-        # if 'N' in limb_side and data_size[0]//2 - ds > 512:
-        #     dy = -512
-        # if 'S' in limb_side and data_size[0]//2 - ds > 512:
-        #     dy = 512
-        # if 'W' in limb_side and data_size[1]//2 - ds > 512:
-        #     dx = -512
-        # if 'E' in limb_side and data_size[1]//2 - ds > 512:
-        #     dx = 512
-
-        # sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
-        # slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
-        # values = blos[sly, slx]
-
 
     fig, ax = plt.subplots(1,2, figsize = (14,6))
     if fs is not None:
@@ -1222,19 +1320,27 @@ def blos_noise(blos_file, fs = None):
     im1 = ax[0].imshow(blos, cmap = "gray", origin = "lower", vmin = -200, vmax = 200)
     fig.colorbar(im1, ax = ax[0], fraction=0.046, pad=0.04)
     hi = ax[1].hist(values.flatten(), bins=np.linspace(-2e2,2e2,200))
-    #print(hi)
     tmp = [0,0]
     tmp[0] = hi[0].astype('float64')
     tmp[1] = hi[1].astype('float64')
 
-
     #guassian fit + label
     p = gaussian_fit(tmp, show = False)    
-    p_iter, hi_iter = iter_noise(values,[1.,0.,1.],eps=1e-4)
     xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
     lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} G'
-    ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
-    ax[1].scatter(0,0, color = 'white', s = 0, label = f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+    
+    if iter:
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,1.],eps=1e-4)
+            ax[1].plot(xx,gaus(xx,*p_iter),'r--', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+            ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+            ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+
+    else:
+        ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+
     ax[1].legend(fontsize=15)
 
     date = blos_file.split('blos_')[1][:15]
@@ -1244,9 +1350,17 @@ def blos_noise(blos_file, fs = None):
     plt.tight_layout()
     plt.show()
 
+    if iter:
+        return p_iter
+    else:
+        return p
+
+
 def blos_noise_arr(blos, fs = None):
     """
     plot blos on left panel, and blos hist + Gaussian fit (w/ iterative option)
+
+    DEPRACATED - use blos_noise instead
     """
 
     fig, ax = plt.subplots(1,2, figsize = (14,6))
@@ -1274,45 +1388,32 @@ def blos_noise_arr(blos, fs = None):
     ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
     ax[1].legend(fontsize=15)
 
-    # date = blos_file.split('blos_')[1][:15]
-    # dt_str = dt.strptime(date, "%Y%m%dT%H%M%S")
-    # fig.suptitle(f"Blos {dt_str}")
-
     plt.tight_layout()
     plt.show()
+    
 
-def stokes_noise(stokes_file):
-    """
-    plot stokes V on left panel, and Stokes V hist + Gaussian fit (w/ iterative option)
-    """
+def stokes_noise(stokes_file, iter=True):
+    """plot stokes V on left panel, and Stokes V hist + Gaussian fit (w/ iterative option)
 
+    Parameters
+    ----------
+    stokes_file : str
+        path to stokes file
+    iter : bool, optional
+        whether to use iterative Gaussian fit, by default True
+
+    Returns
+    -------
+    p or p_iter: array
+        Gaussian fit parameters
+    """
     stokes = fits.getdata(stokes_file)
     hdr = fits.getheader(stokes_file)
     out = fits_get_sampling(stokes_file)
     cpos = out[3]
     #first get the pixels that we want (central 512x512 and limb handling)
-    limb_side, center, Rpix, sly, slx = limb_side_finder(stokes[:,:,3,cpos], hdr)
+    _, _, _, sly, slx = limb_side_finder(stokes[:,:,3,cpos], hdr)
     values = stokes[sly,slx,3,cpos]
-#     if limb_side == '':#not a limb image
-#         values = stokes[512:1536, 512:1536,3,cpos]
-
-#     else:
-#         data_size = np.shape(stokes[:,:,0,0])
-        # ds = 386 #?
-        # dx = 0; dy = 0
-        # if 'N' in limb_side and data_size[0]//2 - ds > 512:
-        #     dy = -512
-        # if 'S' in limb_side and data_size[0]//2 - ds > 512:
-        #     dy = 512
-        # if 'W' in limb_side and data_size[1]//2 - ds > 512:
-        #     dx = -512
-        # if 'E' in limb_side and data_size[1]//2 - ds > 512:
-        #     dx = 512
-
-        # sly = slice(data_size[0]//2 - ds + dy, data_size[0]//2 + ds + dy)
-        # slx = slice(data_size[1]//2 - ds + dx, data_size[1]//2 + ds + dx)
-        # values = blos[sly, slx]
-
 
     fig, ax = plt.subplots(1,2, figsize = (14,6))
     im1 = ax[0].imshow(stokes[:,:,3,cpos], cmap = "gist_heat", origin = "lower", vmin = -1e-2, vmax = 1e-2)
@@ -1323,14 +1424,23 @@ def stokes_noise(stokes_file):
     tmp[0] = hi[0].astype('float64')
     tmp[1] = hi[1].astype('float64')
 
-
     #guassian fit + label
     p = gaussian_fit(tmp, show = False)    
-    p_iter, hi_iter = iter_noise(values,eps=1e-6)
     xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} Ic'
-    ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
-    ax[1].scatter(0,0, color = 'white', s = 0, label = f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} Ic")
+    lbl = f'{p[1]:.2e} $\pm$ {p[2]:.2e} G'
+    
+    if iter:
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,1.],eps=1e-4)
+            ax[1].plot(xx,gaus(xx,*p_iter),'r--', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+            ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+            ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+
+    else:
+        ax[1].plot(xx,gaus(xx,*p),'r--', label=lbl)
+
     ax[1].legend(fontsize=15)
 
     date = stokes_file.split('stokes_')[1][:15]
@@ -1340,12 +1450,26 @@ def stokes_noise(stokes_file):
     plt.tight_layout()
     plt.show()
 
+    if iter:
+        return p_iter
+    else:
+        return p
 
-"""vsnr = iter_noise(img[sly,slx,3,5].ravel())[2]
-    print(data_date[i]+': Stokes V SNR (iterative, iss off): {:.2e}'.format(vsnr))"""
 
 ########### new WCS script 3/6/2022 ###########
 def image_derivative(d):
+    """Calculates the total image derivative (x**2 + y**2) using a 3x3 kernel
+    
+    Parameters
+    ----------
+    d : numpy.ndarray
+        image to calculate derivative of
+    
+    Returns
+    -------
+    A : numpy.ndarray
+        image derivative (combined X and Y)
+    """
     kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
     ky = np.asarray([[1,1,1], [0,0,0], [-1,-1,-1]])
     kx=kx/3.
@@ -1361,6 +1485,7 @@ def image_derivative(d):
 def Inv2(x_c,y_c,x_u,y_u,k):
     """
     undistortion model
+    by F. Kahil (MPS)
     """
     r_u = np.sqrt((x_u-x_c)**2+(y_u-y_c)**2) 
     x_d = x_c+(x_u-x_c)*(1-k*r_u**2)
@@ -1388,7 +1513,22 @@ def und(hrt, order=1, flip = True):
     else:
         return hrt_und
 
+
 def rotate_header(h,angle):
+    """calculate new header when image is rotated by a fixed angle
+
+    Parameters
+    ----------
+    h : astropy.io.fits.header.Header
+        header of image to be rotated
+    angle : float
+        angle to rotate image by (in degrees)
+
+    Returns
+    -------
+    h: astropy.io.fits.header.Header
+        new header
+    """
     h['CROTA'] -= angle
     h['PC1_1'] = np.cos(h['CROTA']*np.pi/180)
     h['PC1_2'] = -np.sin(h['CROTA']*np.pi/180)
@@ -1417,6 +1557,20 @@ def rotate_header(h,angle):
     return h
     
 def translate_header(h,tvec):
+    """calculate new header when image is translated by a fixed vector
+
+    Parameters
+    ----------
+    h : astropy.io.fits.header.Header
+        header of image to be translated
+    tvec : list
+        vector to translate image by (in pixels) [x,y]
+
+    Returns
+    -------
+    h: astropy.io.fits.header.Header
+        new header
+    """
     tr = np.asarray([[1,0,-tvec[1]*h['CDELT1']],[0,1,-tvec[0]*h['CDELT2']],[0,0,1]])
     coords = np.asarray([h['CRVAL1'],h['CRVAL2'],1])
     new_coords = tr @ coords
@@ -1426,6 +1580,24 @@ def translate_header(h,tvec):
     return h
 
 def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
+    """reproject hmi map onto hrt with hrt pixel size and observer coordinates
+    
+    Parameters
+    ----------
+    hrt_map : sunpy.map.GenericMap
+        hrt map
+    hmi_map : sunpy.map.GenericMap
+        hmi map
+    out_shape : tuple
+        shape of output map, default is (1024,1024) (default is only true near HRT = 0.5 au)
+    verbose : bool
+        if True, plot of the maps will be shown
+    
+    Returns
+    -------
+    hmi_map : sunpy.map.GenericMap
+        reprojected hmi map
+    """
     import sunpy.map
     from reproject import reproject_adaptive
     
@@ -1495,12 +1667,27 @@ def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
     return hmi_map
 
 def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False):
-    """
-    This function saves new version of the fits file with updated WCS.
-    It works correlating HRT data on remap HMI data. Not validated on limb data. Not tested on data with different viewing angle.
+    """This function saves new version of the fits file with updated WCS.
+    It works by correlating HRT data on remapped HMI data. This function exports the nearest HMI data from JSOC. [Not downloaded to out_dir]
+    Not validated on limb data. 
+    Not tested on data with different viewing angle.
     icnt, stokes or ilam files are expected as input.
-    if allDID is True, all the fits file with the same DID in the directory of the input file will be saved with the new WCS.
-    return new header, if dir_out is None it does not save any fits file
+
+    Parameters
+    ----------
+    file_name: str
+        path to the fits file
+    jsoc_email: str
+        email address to be used for JSOC connection
+    dir_out: str
+        path to the output directory, DEFAULT: './', if None no file will be saved
+    allDID: bool
+        if True, all the fits file with the same DID in the directory of the input file will be saved with the new WCS.
+
+    Returns
+    -------
+    ht: astropy.io.fits.header.Header
+        new header for hrt
     """
     import sunpy, drms, imreg_dft
     import sunpy.map
@@ -1698,6 +1885,26 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
 ###############################################
 
 def cavity_shifts(cavity_f, wave_axis,rows,cols, TemperatureCorrection = False):
+    """applies cavity shifts to the wave axis for use in RTE
+
+    Parameters
+    ----------
+    cavity_f : str
+        path to cavity map fits file
+    wave_axis : array
+        wavelength axis
+    rows : array
+        rows of the pixels in the image, where the respective wavelength is shifted
+    cols : array
+        columns of the pixels in the image, where the respective wavelength is shifted
+    TemperatureCorrection : bool, optional
+        if True, temperature correction is applied, by default False
+
+    Returns
+    -------
+    new_wave_axis[rows, cols]: array
+        wavelength axis with the cavity shifts applied to the respective pixels
+    """
     cavityMap, header = load_fits(cavity_f) # cavity maps
     # Tfg = header['FGOV1PT1']
     _,voltagesData,tunning_constant,cpos = fits_get_sampling(cavity_f,num_wl = 6, TemperatureCorrection = TemperatureCorrection, verbose = False)
