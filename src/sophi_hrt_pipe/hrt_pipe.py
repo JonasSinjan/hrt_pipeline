@@ -321,7 +321,7 @@ def phihrt_pipe(input_json_file):
 
     if flat_c:
         
-        flat = load_flat(flat_f,accum_scaling,bit_conversion,scale_data,header_imgdirx_exists,imgdirx_flipped,cpos_arr)
+        flat = load_and_process_flat(flat_f,accum_scaling,bit_conversion,scale_data,header_imgdirx_exists,imgdirx_flipped,cpos_arr)
 
     else:
         print(" ")

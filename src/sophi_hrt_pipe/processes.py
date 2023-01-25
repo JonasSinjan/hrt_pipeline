@@ -76,7 +76,7 @@ def data_hdr_kw(hdr, data):
     return hdr
 
 
-def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
+def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
     """Load, properly scale, flip in X if needed, and make any necessary corrections for particular flat fields
 
     Parameters
