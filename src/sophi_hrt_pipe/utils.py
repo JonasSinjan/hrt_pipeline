@@ -860,6 +860,20 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
     side: str
     """
     def _residuals(p,x,y):
+        """
+        Finding the residuals of the fit
+        
+        Parameters
+        ----------
+        p : list
+            [xc,yc,R] - coordinates of the centre and radius of the circle
+        x : 
+        y :
+
+        Returns
+        -------
+        R**2 - (x-xc)**2 - (y-yc)**2
+        """
         xc,yc,R = p
         return R**2 - (x-xc)**2 - (y-yc)**2
     
