@@ -14,44 +14,44 @@ from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
 
 class bcolors:
-  HEADER = '\033[95m'
-  OKBLUE = '\033[94m'
-  OKGREEN = '\033[92m'
-  WARNING = '\033[93m'
-  FAIL = '\033[91m'
-  ENDC = '\033[0m'
-  BOLD = '\033[1m'
-  UNDERLINE = '\033[4m'
-  RESET = '\u001b[0m'
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    RESET = '\u001b[0m'
 
 def printc(*args, color = bcolors.RESET, **kwargs):
-  """My custom print() function."""
-  print(u"\u001b"+f"{color}", end='\r')
-  print(*args, **kwargs)
-  print(u"\u001b"+f"{bcolors.RESET}", end='\r')
-  return 
+    """My custom print() function."""
+    print(u"\u001b"+f"{color}", end='\r')
+    print(*args, **kwargs)
+    print(u"\u001b"+f"{bcolors.RESET}", end='\r')
+    return 
 
 def load_fits(path):
-  """
-  load the fits file
-  
-  Parameters
-  ----------
-  path: string, location of the fits file
-  
-  Output
-  ------
-  data: numpy array, of stokes images in (row, col, wv, pol) 
-  header: hdul header object, header of the fits file
-  """
+    """
+    load the fits file
 
-  hdul_tmp = fits.open(f'{path}')
-  
-  data = np.asarray(hdul_tmp[0].data, dtype = np.float32)
+    Parameters
+    ----------
+    path: string, location of the fits file
 
-  header = hdul_tmp[0].header
-  
-  return data, header 
+    Output
+    ------
+    data: numpy array, of stokes images in (row, col, wv, pol) 
+    header: hdul header object, header of the fits file
+    """
+    
+    hdul_tmp = fits.open(f'{path}')
+    
+    data = np.asarray(hdul_tmp[0].data, dtype = np.float32)
+    
+    header = hdul_tmp[0].header
+    
+    return data, header
 
 
 def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
@@ -59,13 +59,19 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
     load science data from path
     """
     try:
-        data, header = load_fits(path)
-        if 'L2' in header['LEVEL']:
-            return data, header
+        hdr = fits.open(path)
+        data = hdr[0].data
+#         data, header = load_fits(path)
+        if 'L2' in hdr[0].header['LEVEL']:
+            return hdr[0].data, hdr[0].header
+        if np.size(hdr) > 9:
+            ex = 9
+        else:
+            ex = 7
         
         if bit_convert_scale: #conversion from 24.8bit to 32bit
             try:
-                IMGformat = fits.open(path)[9].data['PHI_IMG_format'][-1]
+                IMGformat = hdr[ex].data['PHI_IMG_format'][-1]
             except:
                 print("Most likely file does not have 9th Image extension")
                 IMGformat = 'IMGFMT_16'
@@ -75,7 +81,7 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
                 print("Dataset downloaded as raw: no bit convert scaling needed")
         if scaling:
             
-            accu = header['ACCACCUM']*header['ACCROWIT']*header['ACCCOLIT'] #getting the number of accu from header
+            accu = hdr[0].header['ACCACCUM']*hdr[0].header['ACCROWIT']*hdr[0].header['ACCCOLIT'] #getting the number of accu from header
 
             data /= accu
 
@@ -84,18 +90,18 @@ def get_data(path, scaling = True, bit_convert_scale = True, scale_data = True):
         if scale_data: #not for commissioning data
 
             try:    
-                maxRange = fits.open(path)[9].data['PHI_IMG_maxRange']
+                maxRange = hdr[ex].data['PHI_IMG_maxRange']
             
-                data *= maxRange[0]/maxRange[-1]
+                data *= int(maxRange[0])/int(maxRange[-1])
             except IndexError:
                 data *= 81920/128
                 
-        return data, header
+        return data, hdr[0].header
 
     except Exception:
         printc("ERROR, Unable to open fits file: {}",path,color=bcolors.FAIL)
         raise ValueError()
-       
+
 def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False):
     '''
     wave_axis,voltagesData,tunning_constant,cpos = fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = False)
@@ -631,7 +637,7 @@ def limb_fitting(img, hdr, field_stop, verbose=True):
 #     wcs_grad = _image_derivative(wcs_mask)
         
     if side == '':
-        return None, sly, slx, side, None, None
+        return None, sly, slx, side#, None, None
     
     if 'N' in side or 'S' in side:
         img = np.moveaxis(img,0,1)
@@ -1203,15 +1209,15 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
         phi = phi[:,:,0,cpos]
     
     if phi.shape[0] == 2048:
-        und_phi = und(phi)
-        h_phi['CRPIX1'],h_phi['CRPIX2'] = Inv2(1016,982,h_phi['CRPIX1'],h_phi['CRPIX2'],8e-9)
+        und_phi = phi # und(phi)
+        # h_phi['CRPIX1'],h_phi['CRPIX2'] = Inv2(1016,982,h_phi['CRPIX1'],h_phi['CRPIX2'],8e-9)
         phi_map = sunpy.map.Map((und_phi,h_phi))
     else:
         phi = np.pad(phi,[(start_row,2048-(start_row+phi.shape[0])),(start_col,2048-(start_row+phi.shape[1]))])
         h_phi['NAXIS1'] = 2048; h_phi['NAXIS2'] = 2048
         h_phi['CRPIX1'] += start_col; h_phi['CRPIX2'] += start_row
-        und_phi = und(phi)
-        h_phi['CRPIX1'],h_phi['CRPIX2'] = Inv2(1016,982,h_phi['CRPIX1'],h_phi['CRPIX2'],8e-9)
+        und_phi = phi # und(phi)
+        # h_phi['CRPIX1'],h_phi['CRPIX2'] = Inv2(1016,982,h_phi['CRPIX1'],h_phi['CRPIX2'],8e-9)
         phi_map = sunpy.map.Map((und_phi,h_phi))
     
     if verbose:
@@ -1373,14 +1379,288 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',allDID=False,verbose=False)
     return ht
 ###############################################
 
-def cavity_shifts(cavity_f, wave_axis,rows,cols, TemperatureCorrection = False):
-    cavityMap, header = load_fits(cavity_f) # cavity maps
-    # Tfg = header['FGOV1PT1']
-    _,voltagesData,tunning_constant,cpos = fits_get_sampling(cavity_f,num_wl = 6, TemperatureCorrection = TemperatureCorrection, verbose = False)
-
-    vcore = voltagesData[cpos-3]
-    # temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
-    cavityWave = (cavityMap - vcore) * tunning_constant # + temperature_constant_new*(Tfg-61) no T correction because it is \Delta V
+def cavity_shifts(cavity_f, wave_axis,rows,cols):
+    cavityMap, _ = load_fits(cavity_f) # cavity maps
+    if cavityMap.ndim == 3:
+        cavityWave = cavityMap[:,rows,cols].mean(axis=0)
+    else:
+        cavityWave = cavityMap[rows,cols]
+     
     new_wave_axis = wave_axis[np.newaxis,np.newaxis] - cavityWave[...,np.newaxis]
 
-    return new_wave_axis[rows,cols]
+    return new_wave_axis
+
+def load_l2_rte(directory,did,version=None):
+    file_n = os.listdir(directory)
+    if type(did) != str:
+        did = str(did)
+    if version is None:
+        did_n = [directory+i for i in file_n if did in i]
+    else:
+        did_n = [directory+i for i in file_n if (did in i and version in i)]
+    rte_n = ['icnt','bmag','binc','bazi','vlos','blos','chi2']
+    rte_out = []
+    for n in rte_n:
+        try:
+            rte_out += [fits.getdata([i for i in did_n if n in i][0])]
+        except:
+            print(n+' not found')
+    
+    rte_out = np.asarray(rte_out)
+    
+    return rte_out
+
+def center_coord(hdr):
+    """
+    input
+    hdr: header
+    
+    output
+    center: [x,y,1] coordinates of the solar disk center (units: pixel)
+    """
+    pxbeg1 = hdr['PXBEG1']
+    pxend1 = hdr['PXEND1']
+    pxbeg2 = hdr['PXBEG2']
+    pxend2 = hdr['PXEND2']
+    coord=np.asarray([hdr['CRPIX1']-1,
+            hdr['CRPIX2']-1,
+           1])
+    
+    angle = hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    rc = [(pxend1-pxbeg1)/2,(pxend2-pxbeg2)/2] # CRPIX from 1 to 2048, so 1024.5 is the center
+
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+
+    coord = (M @ coord)[:2]
+
+    # center of the sun in the rotated reference system
+    center=np.asarray([coord[0]-hdr['CRVAL1']/hdr['CDELT1'],
+                       coord[1]-hdr['CRVAL2']/hdr['CDELT2'],
+                       1])
+    # rotation of the sun center back to the original reference system
+    angle = -hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+
+    center = (M @ center)
+    
+    return center
+
+def mu_angle(hdr,coord=None):
+    """
+    input
+    hdr: header or filename
+    coord: pixel for which the mu angle is found (if None: center of the FoV)
+    
+    output
+    mu = cosine of the heliocentric angle
+    """
+    if type(hdr) is str:
+        hdr = fits.getheader(hdr)
+    
+    center=center_coord(hdr)
+    Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
+    
+    if coord is None:
+        coord = np.asarray([(hdr['PXEND1']-hdr['PXBEG1'])/2,
+                            (hdr['PXEND2']-hdr['PXBEG2'])/2])
+    else:
+        coord = np.asarray(coord,dtype=float)
+    
+    coord -= center[:2]
+    mu = np.sqrt(Rpix**2 - (coord[0]**2 + coord[1]**2)) / Rpix
+    return mu
+
+def ccd2HPC(file,coords=None):
+    """
+    from CCD frame to Helioprojective Cartesian
+    
+    Input
+    file: file_name, sunpy map or header
+    coords: (x,y) or np.asarray([[x0,y0],[x1,y1],...])
+            if None: built the coordinates map
+            
+    Output
+    HPCx, HPCy, HPCd
+    """
+    import sunpy.map
+    if type(file) == str:
+        hdr = fits.getheader(file)
+    elif type(file) == sunpy.map.mapbase.GenericMap or type(file) == sunpy.map.sources.sdo.HMIMap:
+        hdr = file.fits_header
+    elif type(file) == fits.header.Header:
+        hdr = file
+    
+    if coords is not None:
+        if type(coords) == list or type(coords) == tuple:
+            coords = np.asarray([coords[0],coords[1],1])
+        elif type(coords) == np.ndarray:
+            if coords.ndim == 1:
+                if coords.shape[0] == 2:
+                    coords = np.append(coords,1)
+            else:
+                if coords.shape[1] == 2:
+                    coords = np.append(coords,np.ones((coords.shape[0],1)),axis=1)
+        if coords.ndim == 1:
+            coords = coords[np.newaxis]
+        
+    pxsc = hdr['CDELT1']
+    sun_dist_m=(hdr['DSUN_AU']*u.AU).to(u.m).value #Earth
+    sun_dist_AU=hdr['DSUN_AU'] #Earth
+    rsun = hdr['RSUN_REF'] # m
+    pxbeg1 = hdr['PXBEG1']
+    pxend1 = hdr['PXEND1']
+    pxbeg2 = hdr['PXBEG2']
+    pxend2 = hdr['PXEND2']
+    
+    dx = 2 * (sun_dist_m-rsun) * np.tan(pxsc/2/3600*np.pi/180) # m/px
+    
+    center = center_coord(hdr)
+    
+    # translation of the reference system from (0,0) to the disk center
+    tr = np.asarray([[1,0,-center[0]],[0,1,-center[1]],[0,0,1]])
+    if coords is None:
+        X,Y = np.meshgrid(np.arange(0,pxend1-pxbeg1+1),np.arange(0,pxend2-pxbeg2+1))
+        tr3 = np.tile(tr, (X.shape[0],X.shape[1],1,1))
+        temp = np.moveaxis(np.moveaxis(np.asarray([[X,Y,np.ones(X.shape)],[X,Y,np.ones(X.shape)],[X,Y,np.ones(X.shape)]]),0,-1),0,-2)
+
+        new_coords = (tr3 @ temp)
+        del temp
+    else:
+        new_coords = tr @ np.moveaxis(coords,0,1)
+    
+    # rotation of the coordinate
+    angle = hdr['CROTA'] # positive angle = clock-wise rotation of the reference system axes 
+    rad = angle * np.pi/180
+    rot = np.asarray([[np.cos(rad),-np.sin(rad),0],[np.sin(rad),np.cos(rad),0],[0,0,1]])
+    rc = [0,0] # center is in (0,0) now
+
+    tr = np.asarray([[1,0,rc[0]],[0,1,rc[1]],[0,0,1]])
+    invtr = np.asarray([[1,0,-rc[0]],[0,1,-rc[1]],[0,0,1]])
+    M = tr @ rot @ invtr
+    
+    if coords is None:
+        M3 = np.tile(M, (X.shape[0],X.shape[1],1,1))
+        new_coords = M3 @ new_coords
+        new_coords = np.moveaxis(new_coords[:,:,:2,0],-1,0)
+    else:
+        new_coords = M @ new_coords
+    
+    new_coords = (new_coords)*pxsc
+    th = np.arctan(np.sqrt(np.cos(new_coords[1]/3600*np.pi/180)**2*np.sin(new_coords[0]/3600*np.pi/180)**2+np.sin(new_coords[1]/3600*np.pi/180)**2/
+                          (np.cos(new_coords[1]/3600*np.pi/180)*np.cos(new_coords[0]/3600*np.pi/180))))
+    b = np.arcsin(sun_dist_m/rsun*np.sin(th)) - th
+    # g = np.pi - th - b
+    d = (sun_dist_m-rsun*np.cos(b))/np.cos(th)
+
+    return new_coords[0],new_coords[1], d
+
+def ccd2HCC(file,coords = None):
+    """
+    coordinate center in the center of the Sun
+    x is pointing westward, y toward the north pole and z toward the observer (max for all should be Rsun)
+    
+    Input
+    file: file_name, sunpy map or header
+    coords: (x,y) or np.asarray([[x0,y0],[x1,y1],...])
+            if None: built the coordinates map
+            
+    Output
+    HCCx, HCCy, HCCz
+    """
+    import sunpy.map
+    if type(file) == str:
+#         smap = sunpy.map.Map(file)
+        hdr = fits.getheader(file)
+    elif type(file) == sunpy.map.mapbase.GenericMap or type(file) == sunpy.map.sources.sdo.HMIMap:
+#         smap = file
+        hdr = file.fits_header
+    elif type(file) == fits.header.Header:
+        hdr = file
+    
+    pxsc = hdr['CDELT1']
+    sun_dist_m=(hdr['DSUN_AU']*u.AU).to(u.m).value #Earth
+    sun_dist_AU=hdr['DSUN_AU'] #Earth
+    rsun = hdr['RSUN_REF'] # m
+    pxbeg1 = hdr['PXBEG1']
+    pxend1 = hdr['PXEND1']
+    pxbeg2 = hdr['PXBEG2']
+    pxend2 = hdr['PXEND2']
+    
+    HPCx, HPCy, HPCd = ccd2HPC(file,coords)
+    
+    HCCx = HPCd * np.cos(HPCy/3600*np.pi/180) * np.sin(HPCx/3600*np.pi/180)
+    HCCy = HPCd * np.sin(HPCy/3600*np.pi/180)
+    HCCz = sun_dist_m - HPCd * np.cos(HPCy/3600*np.pi/180) * np.cos(HPCx/3600*np.pi/180)
+    
+    return HCCx,HCCy,HCCz
+
+def ccd2HGS(file, coords = None):
+    """
+    From CCD frame to Heliographic Stonyhurst coordinates
+    
+    Input
+    file: file_name, sunpy map or header
+    coords: (x,y) or np.asarray([[x0,y0],[x1,y1],...])
+            if None: built the coordinates map
+            
+    Output
+    r, THETA, PHI
+    """
+    import sunpy.map
+    if type(file) == str:
+        hdr = fits.getheader(file)
+    elif type(file) == sunpy.map.mapbase.GenericMap or type(file) == sunpy.map.sources.sdo.HMIMap:
+        hdr = file.fits_header
+    elif type(file) == fits.header.Header:
+        hdr = file
+    
+    pxbeg1 = hdr['PXBEG1']
+    pxend1 = hdr['PXEND1']
+    pxbeg2 = hdr['PXBEG2']
+    pxend2 = hdr['PXEND2']
+    pxsc = hdr['CDELT1']
+    B0 = hdr['HGLT_OBS']*np.pi/180
+    PHI0 = hdr['HGLN_OBS']*np.pi/180
+    sun_dist_m=(hdr['DSUN_AU']*u.AU).to(u.m).value #Earth
+    sun_dist_AU=hdr['DSUN_AU'] #Earth
+    rsun = hdr['RSUN_REF'] # m
+    
+    HCCx, HCCy, HCCz = ccd2HCC(file,coords)
+        
+    r = np.sqrt(HCCx**2 + HCCy**2 + HCCz**2)
+    THETA = np.arcsin((HCCy*np.cos(B0) + HCCz*np.sin(B0))/r)*180/np.pi
+    PHI = PHI0*180/np.pi + np.arctan(HCCx/(HCCz*np.cos(B0) - HCCy*np.sin(B0)))*180/np.pi
+    
+    # THETA == LAT; PHI == LON
+    return r, THETA, PHI
+  
+def phi_disambig(bazi,bamb,method=2):
+    """
+    input
+    bazi: magnetic field azimut. Type: str or array
+    bamb: disambiguation fits. Type: str or array
+    method: method selected for the disambiguation (0, 1 or 2). Type: int (2 as Default)
+    
+    output
+    disbazi: disambiguated azimut. Type: array
+    """
+    # from astropy.io import fits
+    if type(bazi) is str:
+        bazi = fits.getdata(bazi)
+    if type(bamb) is str:
+        bamb = fits.getdata(bamb)
+    
+    disambig = bamb[0]/2**method
+    disbazi = bazi.copy()
+    disbazi[disambig%2 != 0] += 180
+    
+    return disbazi

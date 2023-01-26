@@ -31,8 +31,9 @@ def create_output_filenames(filename, DID, version = '01',gzip = False):
     binc_file = versioned.replace('ilam', 'binc')
     blos_file = versioned.replace('ilam', 'blos')
     vlos_file = versioned.replace('ilam', 'vlos')
+    chi2_file = versioned.replace('ilam', 'chi2')
     
-    return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file
+    return stokes_file, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file, chi2_file
 
 #     try:
 #         file_start = filename.split('solo_')[1]
@@ -73,7 +74,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
                 gzip = True
             else:
                 gzip = False
-            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file = create_output_filenames(file_path, filename_root, version = vers, gzip = gzip)
+            _, icnt_file, bmag_file, bazi_file, binc_file, blos_file, vlos_file, chi2_file = create_output_filenames(file_path, filename_root, version = vers, gzip = gzip)
 
     else:
         if isinstance(out_rte_filename, list):
@@ -86,7 +87,7 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
             filename_root = str(file_path.split('.fits')[0][-10:])
             print(f"out_rte_filename neither string nor list, reverting to default: {filename_root}")
 
-        blos_file, icnt_file, bmag_file, bazi_file, binc_file, vlos_file = 'blos_' + filename_root, 'icnt_' + filename_root, 'bmag_' + filename_root, 'bazi_' + filename_root, 'binc_' + filename_root, 'vlos_' + filename_root
+        blos_file, icnt_file, bmag_file, bazi_file, binc_file, vlos_file, chi2_file = 'blos_' + filename_root, 'icnt_' + filename_root, 'bmag_' + filename_root, 'bazi_' + filename_root, 'binc_' + filename_root, 'vlos_' + filename_root, 'chi2_' + filename_root
 
     ntime = datetime.datetime.now()
     hdr_scan['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
@@ -187,6 +188,21 @@ def write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx
         hdu_list[0].header = hdr_scan
         hdu_list[0].data = rte_data_products[4,:,:].astype(np.float32)
         hdu_list.writeto(out_dir+vlos_file, overwrite=True)
+    
+    #chi2
+    with fits.open(file_path) as hdu_list:
+        hdr_scan['FILENAME'] = chi2_file
+        hdr_scan['HISTORY'] = f"Vers: {version_k}. Dark: {dark_f_k}. Flat : {flat_f_k}, Unsharp: {clean_f_k}. I->QUV ctalk: {ItoQUV_k}. RTE: {rte_sw_k}. RTEmode: {rte_mod_k}."
+        hdr_scan['LEVEL'] = 'L2'
+        hdr_scan['BTYPE'] = 'CHI2'
+        hdr_scan['BUNIT'] = ' '
+        hdr_scan['DATAMIN'] = round(np.min(rte_data_products[6,:,:]),6)
+        hdr_scan['DATAMAX'] = round(np.max(rte_data_products[6,:,:]),6)
+        hdr_scan = data_hdr_kw(hdr_scan, rte_data_products[6,:,:])
+
+        hdu_list[0].header = hdr_scan
+        hdu_list[0].data = rte_data_products[6,:,:].astype(np.float32)
+        hdu_list.writeto(out_dir+chi2_file, overwrite=True)
 
     #Icnt
     with fits.open(file_path) as hdu_list:
@@ -362,7 +378,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         rte_data_products[3,:,:] = rte_invs_noth[4,:,:] #azimuth
         rte_data_products[4,:,:] = rte_invs_noth[8,:,:] #vlos
         rte_data_products[5,:,:] = rte_invs_noth[2,:,:]*np.cos(rte_invs_noth[3,:,:]*np.pi/180.) #blos
-        rte_data_products[6,:,:] = rte_invs_noth[11,:,:] #chisq
+        rte_data_products[6,:,:] = rte_invs_noth[11,:,:] #chi2
 
         rte_data_products *= mask[np.newaxis, :, :, scan] #field stop, set outside to 0
 

@@ -406,10 +406,12 @@ def phihrt_pipe(input_json_file):
 
         try:
 
-            if dark_f[-19:] != '0022210004_000.fits':
-                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = scale_data) 
+            if dark_f[-18:] == '0022210004.fits.gz':
+                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = False, scale_data = False)
+            elif dark_f[-19:] == '0022210004_000.fits':
+                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = False)
             else:
-                dark,h = get_data(dark_f, scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = False)
+                dark,h = get_data(dark_f, scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = scale_data)
             
             dark_shape = dark.shape
             if dark_shape != (2048,2048):
