@@ -951,7 +951,7 @@ def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True,pr
             v = out_value
         return v
 
-    def Iprofile_gaus_parallel(cube,x, nc = 32, out_value = 0, center = False, output = None, parent = False):
+    def Iprofile_gaus_parallel(cube,x, nc = 32, out_value = 0, center = False):
         import multiprocess as mp
         import time
 
@@ -981,17 +981,7 @@ def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True,pr
 
         CM = np.asarray(CM,dtype=np.float32)
 
-        if output is None:
-            return CM
-        else:
-            if parent is not None:
-                with fits.open(parent) as hh:
-                    hh[0].data = CM
-                    hh.writeto(output,overwrite=True)
-                return CM
-            else:
-                dc.save_fits(CM.astype(np.float32),output)
-                return CM
+        return CM
 
     def CMvlos(hdr):
 
@@ -1031,7 +1021,7 @@ def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True,pr
         print(f"Cavity Map computation on polarization modulation {p+1}/4")
         cube = flat[:,:,p,:] / flat[:,:,p,cpos].mean()
         x = wl
-        CM[p] = Iprofile_gaus_parallel(cube,x,nc = nc, out_value = 0, center = False, output = None, parent = None)
+        CM[p] = Iprofile_gaus_parallel(cube,x,nc = nc, out_value = 0, center = False)
     CM -= x[cpos-3]
     
     if solar_rotation:
