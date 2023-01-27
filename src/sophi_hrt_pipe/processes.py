@@ -1300,9 +1300,9 @@ def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_na
         hdu_list[0].header = hdr_int #update the calibration keywords
         hdu_list.writeto(out_dir + root_scan_name + f'_{suffix}.fits', overwrite=True)
 
-        def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, level = 'CAL1', version = 'V01', out_dir = None):
-    
-    from sophi_hrt_pipe.processes import apply_field_stop, hot_pixel_mask
+        
+def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, level = 'CAL1', version = 'V01', out_dir = None):   
+    # from sophi_hrt_pipe.processes import apply_field_stop, hot_pixel_mask
     PD, h = get_data(data_f,True,True,True)
     
     if 'IMGDIRX' in h:
