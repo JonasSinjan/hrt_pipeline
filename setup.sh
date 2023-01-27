@@ -33,6 +33,7 @@ conda env create -f environment.yml
 
 source activate hrt_pipeline_env
 
-pip install -e .
+conda develop . 
+#or 'pip install .'
 
 cd pymilos; pip install -e .; cd ..

@@ -4,8 +4,22 @@ from operator import itemgetter
 from sophi_hrt_pipe.utils import *
 import os
 import time
+import cv2
+
 
 def setup_header(hdr_arr):
+    """Add calibration keywords to header
+
+    Parameters
+    ----------
+    hdr_arr: header
+        Array containing header of each file to be written
+
+    Returns
+    -------
+    hdr_arr
+        Updated header array
+    """
     k = ['CAL_FLAT','CAL_USH','SIGM_USH',
     'CAL_PRE','CAL_GHST','CAL_PREG','CAL_REAL',
     'CAL_CRT0','CAL_CRT1','CAL_CRT2','CAL_CRT3','CAL_CRT4','CAL_CRT5',
@@ -40,9 +54,19 @@ def setup_header(hdr_arr):
                     h.set(k[i], v[i], c[i], after=k[i-1])
     return hdr_arr
 
+
 def data_hdr_kw(hdr, data):
-    """
-    add data descriptive header keywords
+    """Add data description keywords
+
+    Parameters
+    ----------
+    hdr: header
+        file header
+
+    Returns
+    -------
+    hdr
+        Updated file header
     """
     hdr['DATAMEDN'] = float(f"{np.median(data):.8g}")
     hdr['DATAMEAN'] = float(f"{np.mean(data):.8g}")
@@ -51,9 +75,31 @@ def data_hdr_kw(hdr, data):
     #DATAKURT
     return hdr
 
-def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
-    """
-    load, scale, flip and correct flat
+
+def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
+    """Load, properly scale, flip in X if needed, and make any necessary corrections for particular flat fields
+
+    Parameters
+    ----------
+    flat_f: string
+        PATH of the flat field
+    accum_scaling: bool
+        if True apply scaling to account for the accumulation
+    bit_conversion: bool
+        if True apply scaling to account for the bit conversion
+    scale_data: bool
+        if True apply scaling (dependent on if IP5 flat or not)
+    header_imgdirx_exits: bool
+        if True, the header keyword exists in the science data - if does not exist, runs to fall back option in `compare_IMGDIRX` func
+    imgdirx_flipped: str or bool
+        set to True if the science data is flipped, function will flip the flat to match, OPTIONS: 'YES' or 'NO', or False
+    cpos_arr: np.ndarray
+        array containing the continuum positions of the science scans - to make sure that the flat cpos matches the science flat
+
+    Returns
+    -------
+    flat
+        (2k,2k,4,6) shaped numpy array of the flat field
     """
     print(" ")
     printc('-->>>>>>> Reading Flats',color=bcolors.OKGREEN)
@@ -118,8 +164,17 @@ def load_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_
 
 
 def load_dark(dark_f) -> np.ndarray:
-    """
-    loads dark field from given path
+    """Load dark field - for use in notebooks
+
+    Parameters
+    ----------
+    dark_f: string
+        PATH of the flat field
+
+    Returns
+    -------
+    dark
+        (2k,2k) numpy array of the flat field
     """
     print(" ")
     printc('-->>>>>>> Reading Darks',color=bcolors.OKGREEN)
@@ -159,9 +214,24 @@ def load_dark(dark_f) -> np.ndarray:
         printc("ERROR, Unable to open and process darks file: {}",dark_f,color=bcolors.FAIL)
 
 
-def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
-    """
-    subtracts dark field from flat field and science data
+def apply_dark_correction(data, dark, rows, cols) -> np.ndarray:
+    """Apply dark field correction to the input data
+
+    Parameters
+    ----------
+    data: ndarray
+        data to be dark fielded
+    dark: ndarray
+        dark field
+    rows: slice object
+        rows to be used from dark - used in case data.shape does not agree with dark, or for testing
+    cols: slice object
+        columns to tbe used from dark - used in case data.shape does not agree with dark, or for testing
+
+    Returns
+    -------
+    data
+        dark fielded data
     """
     print(" ")
     print("-->>>>>>> Subtracting dark field")
@@ -175,12 +245,25 @@ def apply_dark_correction(data, flat, dark, rows, cols) -> np.ndarray:
     printc(f"------------- Dark Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    return data, flat
+    return data
 
 
-def normalise_flat(flat, flat_f, ceny, cenx) -> np.ndarray:
-    """
-    normalise flat fields at each wavelength position to remove the spectral line
+def normalise_flat(flat, ceny, cenx) -> np.ndarray:
+    """Normalise flat field at each separate filtergram
+
+    Parameters
+    ----------
+    flat: ndarray
+        flat field
+    ceny: slice object
+        rows (y positions) to be used for the region over which the mean is taken
+    cenx: slice object
+        columns (x positions) to be used for the region over which the mean is taken
+
+    Returns
+    -------
+    flat
+        normalised flat field
     """
     print(" ")
     printc('-->>>>>>> Normalising Flats',color=bcolors.OKGREEN)
@@ -198,13 +281,28 @@ def normalise_flat(flat, flat_f, ceny, cenx) -> np.ndarray:
         return flat
 
     except Exception:
-        printc("ERROR, Unable to normalise the flat fields: {}",flat_f,color=bcolors.FAIL)
+        printc("ERROR, Unable to normalise the flat field", color=bcolors.FAIL)
 
 
-def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
-    '''
-    Use constant demodulation matrices to demodulate input data
-    '''
+def demod_hrt(data, pmp_temp, verbose = True) -> np.ndarray:
+    """Use constant demodulation matrices to demodulate input data
+
+    Parameters
+    ----------
+    data: ndarray
+        input data
+    pmp_temp: str
+        PMP temperature of data to be demodulated, options are '45' or '50
+    verbose: bool
+        if True, more console prints info, DEFAULT = True
+
+    Returns
+    -------
+    data
+        demodulated data
+    demod
+        demodulation matrix used
+    """
     def _rotation_matrix(angle_rot):
         c, s = np.cos(2*angle_rot*np.pi/180), np.sin(2*angle_rot*np.pi/180)
         return np.array([[1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]])
@@ -268,9 +366,31 @@ def demod_hrt(data,pmp_temp, verbose = True) -> np.ndarray:
 
 
 def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end=4,verbose=True):
-    """
-    unsharp masks the flat fields to blur our polarimetric structures due to solar rotation
-    clean_f = ['blurring', 'fft']
+    """Apply unsharp masking to the flat fields to remove polarimetric structures due to solar rotation
+
+    Parameters
+    ----------
+    flat: ndarray
+        input flat field
+    sigma: float
+        sigma of the gaussian filter
+    flat_pmp_temp: str
+        PMP temperature of flat to be demodulated, options are '45' or '50'
+    cpos_arr: ndarray
+        array of continuum positions
+    clean_mode: str
+        options are 'QUV', 'UV', 'V'
+    clean_f: str
+        options are 'blurring' or 'fft'
+    pol_end: int
+        last pol state to be cleaned, DEFAULT = 4
+    verbose: bool
+        if True, more console prints info, DEFAULT = True
+
+    Returns
+    -------
+    flat_cleaned: ndarray
+        cleaned flat field
     """
     flat_demod, demodM = demod_hrt(flat, flat_pmp_temp,verbose)
 
@@ -279,8 +399,6 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end
     flat_demod /= norm_factor
 
     new_demod_flats = np.copy(flat_demod)
-    
-#     b_arr = np.zeros((2048,2048,3,5))
 
     if cpos_arr[0] == 0:
         wv_range = range(1,6)
@@ -316,19 +434,41 @@ def unsharp_masking(flat,sigma,flat_pmp_temp,cpos_arr,clean_mode,clean_f,pol_end
 
             a = np.copy(np.clip(flat_demod[:,:,pol,wv], -0.02, 0.02))
             b = a - blur(a)
-#             b_arr[:,:,pol-1,wv-1] = b
             c = a - b
 
             new_demod_flats[:,:,pol,wv] = c
 
     invM = np.linalg.inv(demodM)
 
-    return np.matmul(invM, new_demod_flats*norm_factor)
+    flat_cleaned = np.matmul(invM, new_demod_flats*norm_factor)
+
+    return flat_cleaned
 
 
 def flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp=50,rows=slice(0,2048),cols=slice(0,2048)) -> np.ndarray:
-    """
-    correct science data with flat fields
+    """Apply flat field correction to input data
+
+    Parameters
+    ----------
+    data: ndarray
+        input data
+    flat: ndarray
+        input flat field
+    flat_states: int
+        number of flat fields to use for flat fielding, options are 4, 6, 9 or 24
+    cpos_arr: ndarray
+        array of continuum positions
+    flat_pmp_temp: str
+        PMP temperature of flat to be demodulated, options are '45' or '50'
+    rows: slice
+        rows to be used for flat fielding, DEFAULT = slice(0,2048)
+    cols: slice
+        cols to be used for flat fielding, DEFAULT = slice(0,2048)
+
+    Returns
+    -------
+    data: ndarray
+        flat fielded data
     """
     print(" ")
     printc('-->>>>>>> Correcting Flatfield',color=bcolors.OKGREEN)
@@ -374,7 +514,6 @@ def flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp=50,rows=slice(0
             
             return data / tmp[rows,cols, :, :, np.newaxis]
 
-
         else:
             print(" ")
             printc('-->>>>>>> Unable to apply flat correction. Please insert valid flat_states',color=bcolors.WARNING)
@@ -391,10 +530,27 @@ def flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp=50,rows=slice(0
         printc("ERROR, Unable to apply flat fields",color=bcolors.FAIL)
 
 
-
 def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None, TemperatureCorrection=False):
-    """
-    applies prefilter correction
+    """Apply prefilter correction to input data
+
+    Parameters
+    ----------
+    data: ndarray
+        input data
+    wave_axis_arr: ndarray
+        array containing wavelengths
+    prefilter: ndarray
+        prefilter data
+    prefilter_voltages: ndarray
+        prefilter voltages, DEFAULT = None - uses latest prefilter voltages from on ground calibration
+    temperatureCorrection: bool
+        apply temperature correction to prefilter data, DEFAULT = False
+
+    Returns
+    -------
+    data: ndarray
+        prefilter corrected data
+
     adapted from SPGPylibs
     """
     def _get_v1_index1(x):
@@ -402,11 +558,12 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
         return  v1, index1
     
     if prefilter_voltages is None:
-#         prefilter_voltages = np.asarray([-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
-#                                 -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
-#                                 140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
-#                                 926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
-#                                 1711.67,1777.14,1842.61])
+        # OLD prefilter voltages
+        # prefilter_voltages = np.asarray([-1300.00,-1234.53,-1169.06,-1103.59,-1038.12,-972.644,-907.173,-841.702,-776.231,-710.760,-645.289,
+        #                                 -579.818,-514.347,-448.876,-383.404,-317.933,-252.462,-186.991,-121.520,-56.0490,9.42212,74.8932,
+        #                                 140.364,205.835,271.307, 336.778,402.249,467.720,533.191,598.662,664.133,729.604,795.075,860.547,
+        #                                 926.018,991.489,1056.96,1122.43,1187.90,1253.37, 1318.84,1384.32,1449.79,1515.26,1580.73,1646.20,
+        #                                 1711.67,1777.14,1842.61])
         prefilter_voltages = np.asarray([-1277.   , -1210.75 , -1145.875, -1080.25 , -1015.25 ,  -950.25 ,
                                         -885.75 ,  -820.125,  -754.875,  -691.   ,  -625.5  ,  -559.75 ,
                                         -494.125,  -428.25 ,  -364.   ,  -298.875,  -233.875,  -169.   ,
@@ -425,8 +582,8 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
         ref_wavelength = 6173.341 # this shouldn't change
         prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength + temperature_constant_new*(Tfg-61) - 0.002 # JH ref
         
-#         ref_wavelength = round(6173.072 - (-1300*tunning_constant),3) # 6173.529. 0 level was different during e2e test
-#         prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength # + temperature_constant_new*(Tfg-61)
+        # ref_wavelength = round(6173.072 - (-1300*tunning_constant),3) # 6173.529. 0 level was different during e2e test
+        # prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength # + temperature_constant_new*(Tfg-61)
        
     else:
         tunning_constant = 0.0003513
@@ -434,8 +591,6 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
         prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength
     
     data_shape = data.shape
-    # cop = np.copy(data)
-    # new_data = np.zeros(data_shape)
     
     for scan in range(data_shape[-1]):
 
@@ -458,7 +613,8 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
                     v2 = vdif[index1-1]
                     index2 = index1 - 1
                     
-#                 imprefilter = (prefilter[:,:, index1]*(0-v1) + prefilter[:,:, index2]*(v2-0))/(v2-v1) #interpolation between nearest voltages
+                # imprefilter = (prefilter[:,:, index1]*(0-v1) + prefilter[:,:, index2]*(v2-0))/(v2-v1) #interpolation between nearest voltages
+
             elif v >= prefilter_wave[-1]:
                 index2 = index1 - 1
                 v2 = vdif[index2]
@@ -469,15 +625,34 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
                 
             imprefilter = (prefilter[:,:, index1]*v2 + prefilter[:,:, index2]*(-v1))/(v2-v1) #interpolation between nearest voltages
                 
-#             imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2) #interpolation between nearest voltages
+            # imprefilter = (prefilter[:,:, index1]*v1 + prefilter[:,:, index2]*v2)/(v1+v2) #interpolation between nearest voltages
 
             data[:,:,:,wv,scan] /= imprefilter[...,np.newaxis]
             
     return data
 
 def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
-    """
-    apply field stop mask to the science data
+    """Apply field stop to input data
+
+    Parameters
+    ----------
+    data: ndarray
+        input data
+    rows: slice
+        rows to use
+    cols: slice
+        cols to use
+    header_imgdirx_exists: bool
+        if imgdirx exists in header
+    imgdirx_flipped: str or bool
+        if input data is flipped, OPTIONS: 'YES', 'NO', or False
+
+    Returns
+    -------
+    data: ndarray
+        data with field stop applied
+    field_stop: ndarray
+        field stop array
     """
     print(" ")
     printc("-->>>>>>> Applying field stop",color=bcolors.OKGREEN)
@@ -496,8 +671,8 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
         if imgdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
             field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
 
-
     data *= field_stop[rows,cols,np.newaxis, np.newaxis, np.newaxis]
+
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- Field stop time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -506,8 +681,19 @@ def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -
 
 
 def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
-    """
-    apply field stop ghost mask to the science data
+    """Load field stop with specific ghost correction
+
+    Parameters
+    ----------
+    header_imgdirx_exists: bool
+        if imgdirx exists in header
+    imgdirx_flipped: str or bool
+        if input data is flipped, OPTIONS: 'YES', 'NO', or False
+
+    Returns
+    -------
+    field_stop_ghost: ndarray
+        field stop array with some regions masked for ghost correction
     """
     print(" ")
     printc("-->>>>>>> Loading ghost field stop",color=bcolors.OKGREEN)
@@ -531,10 +717,38 @@ def load_ghost_field_stop(header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
 
 
 def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,limit=0.2):
+    """Get crosstalk coefficients for I to Q,U,V
+
+    Parameters
+    ----------
+    data_demod: ndarray
+        input data that has been demodulated
+    cpos: int
+        continuum position
+    wl: int
+        wavelength position
+    roi: ndarray
+        region of interest
+    verbose: bool/int
+        if True, plot results
+    npoints: int
+        number of points to use for fitting
+    limit: float
+        limit for Stokes I to be considered for fitting
+
+    Returns
+    -------
+    ct: ndarray
+        crosstalk coefficients for I to Q,U,V
+
+    adapted from SPGPylibs
+    """
     import random, statistics
     from scipy.optimize import curve_fit
+
     def linear(x,a,b):
         return a*x + b
+
     my = []
     sy = []
     
@@ -609,14 +823,28 @@ def crosstalk_auto_ItoQUV(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,
         return ct
 
 def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
-    """
-    performs cross talk correction for I -> Q,U,V
+    """Apply cross talk correction from I to Q, U and V
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be corrected
+    ctalk_params: ndarray
+        cross talk parameters
+    norm_stokes: bool
+        if True, apply normalised offset to normed stokes
+    cpos_arr: array
+        array containing continuum positions
+    Ic_mask: ndarray
+        mask for Stokes I continuum to be used as reference
+
+    Returns
+    -------
+    data: ndarray
+        data with cross talk correction applied
     """
     before_ctalk_data = np.copy(data)
     data_shape = data.shape
-    
-#     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
-#     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
 
     cont_stokes = np.ones(data_shape[-1])
     
@@ -674,6 +902,22 @@ def CT_ItoQUV(data, ctalk_params, norm_stokes, cpos_arr, Ic_mask):
 def hot_pixel_mask(data, rows, cols, mode='median'):
     """
     Apply hot pixel mask to the data, just after cross talk to remove pixels that diverge
+    
+    Parameters
+    ----------
+    data: ndarray
+        input data to be corrected
+    rows: slice
+        rows of the data to be corrected
+    cols: slice
+        columns of the data to be corrected
+    mode: str
+        'median' or 'mean' to apply to the data
+
+    Returns
+    -------
+    data: ndarray
+        data with hot pixels masked
     """
     file_loc = os.path.realpath(__file__)
     field_stop_fol = file_loc.split('src/')[0] + 'field_stop/'
@@ -702,6 +946,32 @@ def hot_pixel_mask(data, rows, cols, mode='median'):
 
     
 def crosstalk_auto_VtoQU(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,npoints=5000,nlevel=0.3):
+    """Get crosstalk coefficients for V to Q,
+
+    Parameters
+    ----------
+    data_demod: ndarray
+        input data that has been demodulated
+    cpos: int
+        continuum position
+    wl: int
+        wavelength position
+    roi: ndarray
+        region of interest
+    verbose: bool/int
+        if True, plot results
+    npoints: int
+        number of points to use for fitting
+    limit: float
+        limit for Stokes I to be considered for fitting
+
+    Returns
+    -------
+    ct: ndarray
+        crosstalk coefficients for V to Q and U
+
+    adapted from SPGPylibs
+    """
     import random, statistics
     from scipy.optimize import curve_fit
     def linear(x,a,b):
@@ -771,18 +1041,23 @@ def crosstalk_auto_VtoQU(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,n
 
 
 def CT_VtoQU(data, ctalk_params):
-    """
-    performs cross talk correction for I -> Q,U,V
+    """Apply cross talk correction from V to Q, U
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be corrected
+    ctalk_params: ndarray
+        cross talk parameters
+
+    Returns
+    -------
+    data: ndarray
+        data with cross talk correction applied
     """
     before_ctalk_data = np.copy(data)
-    data_shape = data.shape
-    
-#     ceny = slice(data_shape[0]//2 - data_shape[0]//4, data_shape[0]//2 + data_shape[0]//4)
-#     cenx = slice(data_shape[1]//2 - data_shape[1]//4, data_shape[1]//2 + data_shape[1]//4)
-    
-    for i in range(6):
-                
 
+    for i in range(6):
         tmp_param = ctalk_params#*stokes_i_wv_avg/cont_stokes
 
         q_slope = tmp_param[0,0]
@@ -795,10 +1070,237 @@ def CT_VtoQU(data, ctalk_params):
 
         data[:,:,2,i,:] = before_ctalk_data[:,:,2,i,:] - before_ctalk_data[:,:,3,i,:]*u_slope - u_int
 
-    
     return data
 
-def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, level = 'CAL1', version = 'V01', out_dir = None):
+
+def polarimetric_registration(data, sly, slx, hdr_arr):
+    """Align the mod (pol) states 2,3,4 with state 1 for a given wavelength
+    loop through all wavelengths
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be aligned polarimetrically
+    sly: slice
+        slice in y direction
+    slx: slice
+        slice in x direction
+    hdr_arr: ndarray
+        header array
+    
+    Returns
+    -------
+    data: ndarray
+        data with polarimetric registration applied
+    hdr_arr: ndarray
+        header array with updated CAL_PREG keyword
+    """
+    pn = 4 
+    wln = 6 
+    # iterations = 3
+    
+    data_shape = data.shape
+    data_size = data_shape[:2]
+
+    old_data = data.copy()
+
+    for scan in range(data_shape[-1]):
+        
+        shift_raw = np.zeros((2,pn*wln))
+        for j in range(shift_raw.shape[1]):
+            if j%pn == 0:
+                pass
+            else:
+                ref = image_derivative(old_data[:,:,0,j//pn,scan])[sly,slx]
+                temp = image_derivative(old_data[:,:,j%pn,j//pn,scan])[sly,slx]
+                it = 0
+                s = [1,1]
+                
+                while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
+                    sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
+                    s = [sr[1],sc[1]]
+                    shift_raw[:,j] = [shift_raw[0,j]+s[0],shift_raw[1,j]+s[1]]
+                    
+                    temp = image_derivative(fft_shift(old_data[:,:,j%pn,j//pn,scan], shift_raw[:,j]))[sly,slx]
+
+                    it += 1
+                    if it ==10:
+                        break
+                
+                print(it,'iterations shift (x,y):',round(shift_raw[1,j],3),round(shift_raw[0,j],3))
+                Mtrans = np.float32([[1,0,shift_raw[1,j]],[0,1,shift_raw[0,j]]])
+                data[:,:,j%pn,j//pn,scan]  = cv2.warpAffine(old_data[:,:,j%pn,j//pn,scan].astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
+    
+        hdr_arr[scan]['CAL_PREG'] = 'y: '+str([round(shift_raw[0,i],3) for i in range(pn*wln)]) + ', x: '+str([round(shift_raw[1,i],3) for i in range(pn*wln)])
+    
+    del old_data
+
+    return data, hdr_arr
+    
+
+def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
+    """Align the wavelengths, from the Stokes I image, (after demodulation), using cv2.warpAffine
+
+    Parameters
+    ----------
+    data: ndarray
+        input data to be aligned in wavelength
+    cpos_arr: ndarray
+        array of continuum positions
+    sly: slice
+        slice in y direction
+    slx: slice
+        slice in x direction
+    hdr_arr: ndarray
+        header array
+    
+    Returns
+    -------
+    data: ndarray
+        data with wavelength registration applied
+    hdr_arr: ndarray
+        header array with updated CAL_WREG keyword
+    """
+    pn = 4
+    wln = 6
+    
+    if cpos_arr[0] == 5:
+        l_i = [0,1,3,4,2] # shift wl
+        cwl = 2
+    else:
+        l_i = [1,2,4,5,3] # shift wl
+        cwl = 3
+    
+    old_data = data.copy()
+
+    data_shape = data.shape
+    data_size = data_shape[:2]
+    
+    for scan in range(data_shape[-1]):
+        shift_stk = np.zeros((2,wln-1))
+        ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
+        
+        for i,l in enumerate(l_i):
+            temp = image_derivative(old_data[:,:,0,l,scan])[sly,slx]
+            it = 0
+            s = [1,1]
+            if l == cwl:
+                temp = image_derivative(np.abs(old_data[:,:,0,l,scan]))[sly,slx]
+                ref = image_derivative(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
+            
+            while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
+                sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
+                s = [sr[1],sc[1]]
+                shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
+                temp = image_derivative(fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i]))[sly,slx]
+
+                it += 1
+                if it == 10:
+                    break
+            print(it,'iterations shift (x,y):',round(shift_stk[1,i],3),round(shift_stk[0,i],3))
+            
+            for ss in range(pn):
+                Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
+                data[:,:,ss,l,scan]  = cv2.warpAffine(old_data[:,:,ss,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
+
+            if l == cwl:
+                ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
+        
+        hdr_arr[scan]['CAL_WREG'] = 'y: '+str([round(shift_stk[0,i],3) for i in range(wln-1)]) + ', x: '+str([round(shift_stk[1,i],3) for i in range(wln-1)])
+    
+    del old_data
+
+    return data, hdr_arr
+    
+
+def create_intermediate_hdr(data, hdr_interm, history_str, file_name, **kwargs):
+    """add basic keywords to the intermediate file header
+
+    Parameters
+    ----------
+    data: ndarray
+        data array
+    hdr_interm: fits header
+        intermediate header from the input file
+    history_str: str
+        history string to be added to the header
+    file_name: str
+        name of the output file
+    **kwargs: dict
+        optional arguments: bunit, btype, DEFAULTS: bunit = DN, btype = Intensity
+
+    Returns
+    -------
+    hdr: fits header
+        header with updated keywords
+    """
+    hdr = hdr_interm.copy()
+
+    hdr['FILENAME'] = file_name #scan_name_list[count]
+    #overwrite the stokes history entry
+    hdr['HISTORY'] = history_str
+    #need to define in case kwargs not passed through
+    b_unit = None
+    b_type = None
+
+    for arg, value in kwargs.items():
+        if arg == 'bunit':
+            b_unit = value
+        if arg is 'btype':
+            b_type = value
+
+    #need separate, as if no kwargs, the top won't show
+    if b_type is None:
+        hdr['BTYPE'] = 'Intensity'
+    else:
+        hdr['BTYPE'] = b_type
+    if b_unit is None:
+        hdr['BUNIT'] = 'DN'
+    else:
+        hdr['BUNIT'] = b_unit
+
+    hdr['DATAMIN'] = int(np.min(data))
+    hdr['DATAMAX'] = int(np.max(data))
+    hdr = data_hdr_kw(hdr, data)#add datamedn, datamean etc
+
+    return hdr
+
+
+def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_name, suffix, out_dir, **kwargs):
+    """Write out intermediate files to output directory
+
+    Parameters
+    ----------
+    data_int: ndarray
+        data array of intermediate step to be written out
+    hdr_interm: fits header
+        intermediate header from the input file
+    history_str: str
+        history string to be added to the header
+    scan: int
+        scan number
+    root_scan_name: str
+        root file name of the intermediate file to be written
+    suffix: str
+        suffix to be added to the intermediate file name
+    out_dir: str
+        output directory
+    **kwargs: dict
+        optional arguments: bunit, btype, DEFAULTS: bunit = DN, btype = Intensity
+
+    Returns
+    -------
+    None
+    """
+    hdr_int = create_intermediate_hdr(data_int, hdr_interm, history_str, f'{root_scan_name}_{suffix}.fits', **kwargs)
+
+    with fits.open(scan) as hdu_list:
+        print(f"Writing intermediate file as: {root_scan_name}_{suffix}.fits")
+        hdu_list[0].data = data_int.astype(np.float32)
+        hdu_list[0].header = hdr_int #update the calibration keywords
+        hdu_list.writeto(out_dir + root_scan_name + f'_{suffix}.fits', overwrite=True)
+
+        def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, level = 'CAL1', version = 'V01', out_dir = None):
     
     from sophi_hrt_pipe.processes import apply_field_stop, hot_pixel_mask
     PD, h = get_data(data_f,True,True,True)

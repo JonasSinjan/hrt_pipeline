@@ -82,7 +82,7 @@ source activate hrt_pipeline_env
 
 5. Install sophi_hrt_pipe package
 ```bash
-pip install -e .
+pip install . #or "conda develop ."
 ```
 
 6. Install pymilos
@@ -195,14 +195,15 @@ Shape: [Y,X,POL,WAVE]
 
 - File: `_rte_data_products.fits`
 
-Shape: [6,Y,X] <br>
+Shape: [7,Y,X] <br>
 First Index:
 - 0: Continuum Intensity
 - 1: Magnetic Field Strength |B| (Gauss)
 - 2: Inclination (degrees)
 - 3: Azimuth (degrees)
 - 4: Vlos (km/s)
-- 5: Blos (Gauss) </p>
+- 5: Blos (Gauss) 
+- 6: ChiSq </p>
 
 #### **Intermediate/Auxilliary Files**
 
