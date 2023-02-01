@@ -1299,3 +1299,256 @@ def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_na
         hdu_list[0].data = data_int.astype(np.float32)
         hdu_list[0].header = hdr_int #update the calibration keywords
         hdu_list.writeto(out_dir + root_scan_name + f'_{suffix}.fits', overwrite=True)
+
+        
+def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, level = 'CAL1', version = 'V01', out_dir = None):   
+    # from sophi_hrt_pipe.processes import apply_field_stop, hot_pixel_mask
+    PD, h = get_data(data_f,True,True,True)
+    
+    if 'IMGDIRX' in h:
+        header_PDdirx_exists = True
+        PDdirx_flipped = str(h['IMGDIRX'])
+    else:
+        header_PDdirx_exists = False
+        PDdirx_flipped = 'NO'
+        
+    PD = compare_IMGDIRX(PD,True,'YES',header_PDdirx_exists,PDdirx_flipped)
+
+    # Voltage is 850, same as the continuum in the observations on the same day
+    # PMP voltages are 2093 2036 as for the first polarization state in each cycle
+
+    F, hF = get_data(flat_f,True, True, True)
+    if 'IMGDIRX' in hF:
+        header_flatdirx_exists = True
+        flatdirx_flipped = str(hF['IMGDIRX'])
+    else:
+        header_flatdirx_exists = False
+        flatdirx_flipped = 'NO'
+    
+    F = compare_IMGDIRX(F,True,'YES',header_flatdirx_exists,flatdirx_flipped)
+    F = stokes_reshape(F)
+    wave_flat, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
+    
+    D, hD = get_data(dark_f,True,False,True)
+    if 'IMGDIRX' in hD:
+        header_drkdirx_exists = True
+        drkdirx_flipped = str(hD['IMGDIRX'])
+    else:
+        header_drkdirx_exists = False
+        drkdirx_flipped = 'NO'
+        
+    D = compare_IMGDIRX(D[np.newaxis],True,'YES',header_drkdirx_exists,drkdirx_flipped)[0]
+    
+    if norm_f:
+        F = F/F[slice(1024-256,1024+256),slice(1024-256,1024+256)].mean(axis=(0,1))[np.newaxis,np.newaxis]
+    else:
+        F = F/F[slice(0,2048),slice(0,2048)].mean(axis=(0,1))[np.newaxis,np.newaxis]
+    
+    PDd = (PD - D[np.newaxis])# / F[np.newaxis,:,:,0,5]
+
+    if prefilter_f is not None:
+        prefilter, _ = load_fits(prefilter_f)
+        prefilter = prefilter[:,::-1]
+    
+        tunning_constant = 0.0003513 # this shouldn't change
+        temperature_constant_new = 37.625e-3 # new and more accurate temperature constant
+        ref_wavelength = 6173.341 # this shouldn't change
+        Tfg = h['FGH_TSP1']
+        Volt = fits.open(data_f)[3].data['PHI_FG_voltage'][0]
+        wl = Volt * tunning_constant + ref_wavelength + temperature_constant_new*(Tfg-61)
+        
+        fakePD = np.zeros((2048,2048,4,6,1)); fakePD[:,:,0,0,0] = PDd[0].copy(); fakePD[:,:,0,1,0] = PDd[1].copy()
+        # voltagesData_arr = [np.asarray([Volt,Volt,Volt,Volt,Volt,Volt])]
+        wlData_arr = [np.asarray([wl,wl,wl,wl,wl,wl])]
+        fakePD = prefilter_correction(fakePD,wlData_arr,prefilter,None,True)
+        PDd = np.squeeze(np.moveaxis(fakePD[:,:,0,:2,0],2,0))
+        F = prefilter_correction(F[...,np.newaxis],[wave_flat],prefilter,None,True)[...,0]
+    
+    
+    PDdf = PDd / F[np.newaxis,:,:,0,cpos_f]
+    
+    field_stop_loc = os.path.realpath(__file__)
+    field_stop_loc = field_stop_loc.split('src/')[0] + 'field_stop/'
+    field_stop,_ = load_fits(field_stop_loc + 'HRT_field_stop_new.fits')
+    field_stop = np.where(field_stop > 0,1,0)
+
+    if header_PDdirx_exists:
+        if PDdirx_flipped == 'YES': #should be YES for any L1 data, but mistake in processing software
+            field_stop = field_stop[:,::-1] #also need to flip the flat data after dark correction
+
+
+    PDdf *= field_stop[np.newaxis]
+
+    PDdf = np.moveaxis(hot_pixel_mask(np.moveaxis(PDdf,0,-1),slice(0,2048),slice(0,2048)),-1,0)
+    
+    if out_dir is not None:
+        temp = data_f.split('/')[-1].split('L1')
+        temp[1] = temp[1].split('V')
+        temp[1][1][13:]
+        name = temp[0]+level+temp[1][0]+version+temp[1][1][13:]
+
+        with fits.open(data_f) as hdr:
+            hdr[0].data = PDdf
+            hdr[0].header['CAL_DARK'] = dark_f
+            hdr[0].header['CAL_FLAT'] = flat_f
+            if prefilter_f is not None:
+                hdr[0].header['CAL_PRE'] = prefilter_f
+            hdr.writeto(out_dir+name, overwrite=True)
+    
+    return PDdf
+
+def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True,prefilter_f=None,solar_rotation=True):
+    """
+    Cavity Map computation from flat field.
+    This function returns the Cavity errors in \AA at each polarimetric modulation.
+    It requires multiprocess package
+    
+    INPUT
+    filen (str): file name of the flat field
+    out_name: name of the output file. If None, no output file is saved. Header from the parent flat field + some changes (Default: None)
+    nc (int): number of cores to be used for parallel computing (Default: 32)
+    TemperatureCorrection (bool): if True, wavelengths are corrected for the etalon temperature (Default: True)
+    prefilter_f: file name of the prefilter. If None, no prefilter correction is applied (Default: None)
+    solar_rotation (bool): if True, Doppler shift due to solar rotation is removed from the cavity (Default: True)
+    
+    OUTPUT
+    CM (array): Cavity Map array. Units are \AA. Shape: (4,2048,2048)
+    """
+    
+    def gausfit_1profile(profile, x, center=False, out_value=0, show=False, weight=True):
+        def _gaus(x,a,x0,sigma):
+            return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+        def _gaussian_fit(a,xx=None,weight=True, show=True):
+            from scipy import optimize
+            if xx is None:
+                print('x not given')
+                xx=np.arange(np.size(a))
+            y=a
+            p0=[max(y),xx[np.argmax(y)],np.sqrt(sum(y * (xx - xx[np.argmax(y)])**2) / sum(y))]#,np.min(y)]
+            if weight == True:
+                sigma = np.abs(np.linspace(-np.size(xx)//2,+np.size(xx)//2,np.size(xx)))
+            elif weight == False:
+                sigma = None
+            else:
+                sigma = weight
+
+            p,cov=optimize.curve_fit(_gaus,xx,y,p0=p0,
+                                     sigma=sigma,
+                                     absolute_sigma=True)
+            if show:
+                plt.figure()
+                plt.plot(xx,a,'k.',alpha=.2)
+                plt.plot(xx,_gaus(xx,*p),'r.')
+            return p
+
+        y = -profile; y -= y.min(); xx = x
+        dd = 2
+        if center:
+            ind = y.argmax(); y = y[ind-dd:ind+dd+1]; xx = np.asarray(x[ind-dd:ind+dd+1].copy())
+        try:
+            p = _gaussian_fit(y,xx,weight=weight,show=show)
+            v = p[1]
+        except:
+            v = out_value
+        return v
+
+    def Iprofile_gaus_parallel(cube,x, nc = 32, out_value = 0, center = False):
+        import multiprocess as mp
+        import time
+
+        def f(row,x,center,out_value):
+            c = []
+            for r in row:
+                c += [gausfit_1profile(r,x,center,out_value,False,True)]
+            return c
+
+    #     print("Number of processors: ", mp.cpu_count())
+        if nc > mp.cpu_count():
+            print('WARNING: Number of processor greater than the maximum: st to half maximum')
+            nc = int(mp.cpu_count()/2)
+
+        ny = cube.shape[0]
+        nx = cube.shape[1]
+
+        dd = 2
+
+        N = nx*ny
+        pool = mp.Pool(nc)
+
+        t0 = time.time()
+        CM = pool.starmap(f, [(row,x,center,out_value) for row in cube])
+        t1 = time.time()
+        print('CM computation time:',np.round(t1-t0,1),'s')
+
+        CM = np.asarray(CM,dtype=np.float32)
+
+        return CM
+
+    def CMvlos(hdr):
+
+        X = ccd2HGS(hdr)
+        a = 2.894e-6 * u.rad/u.s; b = -0.428e-6 * u.rad/u.s; c = -0.370e-6 * u.rad/u.s; 
+        vrot = (a + b*np.sin(X[1]*u.deg)**2 + c*np.sin(X[1]*u.deg)**4)*np.cos(X[1]*u.deg)* 695700000. * u.m/u.rad
+        vlos = (vrot)*np.sin(X[2]*u.deg)*np.cos(hdr['CRLT_OBS']*u.deg)
+
+        c = 299792.458
+        wlref = 6173.341
+        wlvlos = (vlos.value*1e-3*wlref/c)
+
+        return wlvlos
+
+    import warnings, datetime
+    from scipy.optimize import OptimizeWarning
+    warnings.filterwarnings("ignore", category=OptimizeWarning)
+    hh = fits.open(filen)
+    idx = np.where(hh[8].data['PHI_PROC_operation']=='PROC_MEAN')[0]+1
+    values = hh[8].data['PHI_PROC_scalar1'][idx]*0.125
+    wl, v, _, cpos = fits_get_sampling(filen,TemperatureCorrection = TemperatureCorrection, verbose=False)
+    if cpos == 0:
+        values /= values[:4].mean()
+    else:
+        values /= values[-4:].mean()
+    flat = hh[0].data
+    flat *= values[:,np.newaxis,np.newaxis]
+    flat = stokes_reshape(flat)
+    
+    if prefilter_f is not None:
+        print("Prefilter correction")
+        prefilter = fits.getdata(prefilter_f)[:,::-1]
+        flat = prefilter_correction(flat.copy()[...,np.newaxis],[wl],prefilter,TemperatureCorrection=TemperatureCorrection)[...,0]
+    
+    CM = np.zeros((4,flat.shape[0],flat.shape[1]))
+    for p in range(4):
+        print(f"Cavity Map computation on polarization modulation {p+1}/4")
+        cube = flat[:,:,p,:] / flat[:,:,p,cpos].mean()
+        x = wl
+        CM[p] = Iprofile_gaus_parallel(cube,x,nc = nc, out_value = 0, center = False)
+    CM -= x[cpos-3]
+    
+    if solar_rotation:
+        print("Removing signal of the solar rotation according to WCS Keywords in the flat header")
+        rotation = CMvlos(hh[0].header)
+        CM -= rotation
+    
+    print("Saving Cavity Maps")
+    ntime = datetime.datetime.now()
+    
+    if out_name is not None:
+        with fits.open(filen) as hdr:
+            hdr[0].data = CM.astype(np.float32)
+            hdr[0].header['SUBJECT'] = 'CAVITY MAP'
+            hdr[0].header['LEVEL'] = 'CAL'
+            hdr[0].header['BTYPE'] = 'Wavelength Shift'
+            hdr[0].header['BUNIT'] = '\AA'
+            hdr[0].header['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+            hdr[0].header['FILENAME'] = out_name.split('/')[-1]
+
+            hdr[0].header['HISTORY'] = 'Cavity Map computed from flat field '+filen.split('/')[-1]
+            if solar_rotation:
+                hdr[0].header['HISTORY'] = 'Solar rotation removed from the cavity'
+                hdr[0].header['HISTORY'] = 'Parameters: a = 2.894e-6 * u.rad/u.s; b = -0.428e-6 * u.rad/u.s; c = -0.370e-6 * u.rad/u.s; '
+            hdr.writeto(out_name,overwrite=True)
+
+    return CM
+
