@@ -160,7 +160,7 @@ def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, hea
     printc(f"------------ Load flats time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-    return flat
+    return flat, flat_pmp_temp, header_flat
 
 
 def load_dark(dark_f) -> np.ndarray:

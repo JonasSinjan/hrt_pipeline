@@ -321,7 +321,7 @@ def phihrt_pipe(input_json_file):
 
     if flat_c:
         
-        flat = load_and_process_flat(flat_f,accum_scaling,bit_conversion,scale_data,header_imgdirx_exists,imgdirx_flipped,cpos_arr)
+        flat, flat_pmp_temp, header_flat = load_and_process_flat(flat_f,accum_scaling,bit_conversion,scale_data,header_imgdirx_exists,imgdirx_flipped,cpos_arr)
 
     else:
         print(" ")
@@ -418,6 +418,7 @@ def phihrt_pipe(input_json_file):
         
         data = prefilter_correction(data,wave_axis_arr,prefilter[rows,cols],TemperatureCorrection=TemperatureCorrection)
         # DC 20221109 test for Smitha. PF already removed from the flat
+        wave_flat, voltagesData_flat, _, cpos_f = fits_get_sampling(flat_f,verbose = True)
         flat = prefilter_correction(flat[...,np.newaxis],[wave_flat],prefilter,TemperatureCorrection=TemperatureCorrection)[...,0]
         
         for hdr in hdr_arr:
