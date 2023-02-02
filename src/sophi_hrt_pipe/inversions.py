@@ -474,7 +474,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         hdr_scan['RTE_SW'] = 'cmilos'
         hdr_scan['RTE_ITER'] = str(15)
 
-        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, vers, out_rte_filename)
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, out_dir, vers, out_rte_filename)
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -696,7 +696,7 @@ def py_cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, ma
         hdr_scan['RTE_SW'] = 'cmilos'
         hdr_scan['RTE_ITER'] = str(15)
 
-        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, out_dir, out_rte_filename, vers)
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -890,7 +890,7 @@ def cmilos_fits(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, 
         hdr_scan['RTE_SW'] = 'cmilos-fits'
         hdr_scan['RTE_ITER'] = str(15)
 
-        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, out_dir, out_rte_filename, vers)
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS-FITS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -1054,7 +1054,7 @@ def pmilos_not_working(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data
         hdr_scan['RTE_SW'] = 'pmilos'
         hdr_scan['RTE_ITER'] = str(15)
 
-    write_output_inversion(rte_data_products, file_path, scan, hdr_scan, imgdirx_flipped, out_dir, out_rte_filename, vers)
+    write_output_inversion(rte_data_products, file_path, scan, hdr_scan, out_dir, out_rte_filename, vers)
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc(f"------------- PMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
