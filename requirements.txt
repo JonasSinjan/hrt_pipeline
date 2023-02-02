@@ -4,3 +4,6 @@ astropy==4.0.1.post1
 matplotlib==3.3.1
 requests==2.24.0
 python-dotenv==0.14.0
+photutils==1.6.0
+opencv-python==4.7.0.68
+Cython==0.29.33
