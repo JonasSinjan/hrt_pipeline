@@ -1490,7 +1490,7 @@ def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True,pr
         X = ccd2HGS(hdr)
         a = 2.894e-6 * u.rad/u.s; b = -0.428e-6 * u.rad/u.s; c = -0.370e-6 * u.rad/u.s; 
         vrot = (a + b*np.sin(X[1]*u.deg)**2 + c*np.sin(X[1]*u.deg)**4)*np.cos(X[1]*u.deg)* 695700000. * u.m/u.rad
-        vlos = (vrot)*np.sin(X[2]*u.deg)*np.cos(hdr['CRLT_OBS']*u.deg)
+        vlos = (vrot)*np.sin((X[2]-hdr['HGLN_OBS'])*u.deg)*np.cos(hdr['CRLT_OBS']*u.deg)
 
         c = 299792.458
         wlref = 6173.341
