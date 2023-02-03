@@ -170,7 +170,7 @@ def fits_get_sampling(file,num_wl = 6, TemperatureCorrection = False, verbose = 
         header = hdu_list[fg_head].data
         tunning_constant = float(header[0][4])/1e9
         ref_wavelength = float(header[0][5])/1e3
-        Tfg = hdu_list[0].header['FGOV1PT1'] #temperature of the FG
+        Tfg = hdu_list[0].header['FGH_TSP1'] #temperature of the FG
         
         try:
             voltagesData = np.zeros(num_wl)
