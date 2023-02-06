@@ -115,7 +115,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.6.1 February 3rd 2023'
+    version = 'V1.6.2 February 6th 2023'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -664,7 +664,7 @@ def phihrt_pipe(input_json_file):
             # automatic bins looking at max std of the continuum polarization
             lim = np.max((data[Ic_temp,1:,cpos_arr[0],scan]).std(axis=(0,1)))*7
             bins = np.linspace(-lim,lim,150)
-            
+
             for p in range(1,4):
                 hi = np.histogram(data[Ic_temp,p,:,scan].flatten(),bins=bins)
                 gval = gaussian_fit(hi, show = False)
