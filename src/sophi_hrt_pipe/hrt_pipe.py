@@ -8,7 +8,7 @@ from operator import itemgetter
 import json
 import matplotlib.pyplot as plt
 from numpy.core.numeric import True_
-from scipy.ndimage import binary_dilation, generate_binary_structure
+from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
 import cv2
 
 from sophi_hrt_pipe.utils import *
@@ -115,7 +115,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.6 January 6th 2023'
+    version = 'V1.6.2 February 6th 2023'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -661,13 +661,19 @@ def phihrt_pipe(input_json_file):
             ##################################################################
             """new Icont normalization removing high magnetic field regions"""
             AR_temp = np.ones(Ic_temp.shape,dtype=bool)
-                    
+            # automatic bins looking at max std of the continuum polarization
+            lim = np.max((data[Ic_temp,1:,cpos_arr[0],scan]).std(axis=(0,1)))*7
+            bins = np.linspace(-lim,lim,150)
+
             for p in range(1,4):
-                hi = np.histogram(data[Ic_temp,p,:,scan].flatten(),bins=np.linspace(-20,20,150))
+                hi = np.histogram(data[Ic_temp,p,:,scan].flatten(),bins=bins)
                 gval = gaussian_fit(hi, show = False)
                 AR_temp *= np.max(np.abs(data[:,:,p,:,scan] - gval[1]),axis=-1) < 5*gval[2]
 
             AR_temp = np.asarray(AR_temp, dtype=bool)
+            
+            # erosion and dilation to remove small scale masked elements
+            AR_temp = ~binary_dilation(binary_erosion(~AR_temp.copy(),generate_binary_structure(2,2), iterations=3),generate_binary_structure(2,2), iterations=3)
             ##################################################################
             
             I_c[scan] = np.mean(data[Ic_temp*AR_temp,0,cpos_arr[0],int(scan)])

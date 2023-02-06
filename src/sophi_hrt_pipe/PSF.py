@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.fftpack import fftshift, ifftshift, fft2, ifft2
 from scipy.optimize import leastsq
-
+from scipy import signal as sig
 
 def Zernike_polar(coefficients, r, u):
    #Z= np.insert(np.array([0,0,0]),3,coefficients)  
@@ -145,27 +145,30 @@ def noise_mask_high(size,cut_off):
 
 def apo2d(masi,perc):
    s = masi.shape
-   edge = 100./perc
+   # edge = 100./perc
    mean = np.mean(masi)
    masi = masi-mean
-   xmask = np.ones(s[1])
-   ymask = np.ones(s[0])
-   smooth_x = int(s[1]/edge)
-   smooth_y = int(s[0]/edge)
+   # xmask = np.ones(s[1])
+   # ymask = np.ones(s[0])
+   # smooth_x = int(s[1]/edge)
+   # smooth_y = int(s[0]/edge)
 
-   for i in range(0,smooth_x):
-      xmask[i] = (1.-np.cos(np.pi*float(i)/float(smooth_x)))/2.
-      ymask[i] = (1.-np.cos(np.pi*float(i)/float(smooth_y)))/2.
+   # for i in range(0,smooth_x):
+   #    xmask[i] = (1.-np.cos(np.pi*float(i)/float(smooth_x)))/2.
+   #    ymask[i] = (1.-np.cos(np.pi*float(i)/float(smooth_y)))/2.
     
-   xmask[s[1] - smooth_x:s[1]] = (xmask[0:smooth_x])[::-1]
-   ymask[s[0] - smooth_y:s[0]] = (ymask[0:smooth_y])[::-1]
+   # xmask[s[1] - smooth_x:s[1]] = (xmask[0:smooth_x])[::-1]
+   # ymask[s[0] - smooth_y:s[0]] = (ymask[0:smooth_y])[::-1]
 
-   #mask_x = np.outer(xmask,xmask)
-   #mask_y = np.outer(ymask,ymask)
-   for i in range(0,s[1]):
-      masi[:,i] = masi[:,i]*xmask[i]
-   for i in range(0,s[0]):
-      masi[i,:] = masi[i,:]*ymask[i]
+   mask = sig.tukey(s[0], alpha=perc*2/100)[np.newaxis]*sig.tukey(s[1], alpha=perc*2/100)[:,np.newaxis]
+   masi *= mask
+
+   # #mask_x = np.outer(xmask,xmask)
+   # #mask_y = np.outer(ymask,ymask)
+   # for i in range(0,s[1]):
+   #    masi[:,i] = masi[:,i]*xmask[i]
+   # for i in range(0,s[0]):
+   #    masi[i,:] = masi[i,:]*ymask[i]
    masi = masi+mean
    return masi
 
@@ -284,26 +287,36 @@ def make_wf_th(size):
 def restore_stokes_cube(stokes_data, header, orbit = 'perihelion',aberr_cor=False):
 
    size = stokes_data[:,:,0,0].shape[0]
-   res_stokes = np.zeros((size,size,4,6))
+   if size < 2048:
+      edge_mask = np.zeros((size,size))
+      edge_mask[3:-3,3:-3] = 1
+   else:
+      edge_mask = np.ones((size,size))
+   pad_width = int(size*10/(100-10*2))
+   res_stokes = np.zeros((size+pad_width*2,size+pad_width*2,4,6))
+   pad_size = size+pad_width*2
    d_in = header['DSUN_AU']
 
    if orbit=='perihelion':
     Z = combine_all_PD()
     coefficients = build_zernikes(Z,d_in)
-    t0 = make_wf(size,coefficients)
+    t0 = make_wf(pad_size,coefficients)
     if aberr_cor:
-     t0_th = make_wf_th(size)
+     t0_th = make_wf_th(pad_size)
      for i in range(4):
        for j in range(6):
-         im0 = stokes_data[:,:,i,j]
+         im0 = stokes_data[:,:,i,j] * edge_mask
+         im0 = np.pad(im0, pad_width=((pad_width, pad_width), (pad_width, pad_width)), mode='symmetric')
 
-         res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)
+         res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,pad_size,t0_th)
 
     else:
      for i in range(4):
        for j in range(6):
-         im0 = stokes_data[:,:,i,j]
-         res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,size)
+         im0 = stokes_data[:,:,i,j] * edge_mask
+         im0 = np.pad(im0, pad_width=((pad_width, pad_width), (pad_width, pad_width)), mode='symmetric')
+
+         res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,pad_size)
 
 
                          
@@ -311,21 +324,25 @@ def restore_stokes_cube(stokes_data, header, orbit = 'perihelion',aberr_cor=Fals
    elif orbit == '0.5':
        coefficients = np.zeros(38)
        coefficients[:10] = np.array([ 0.32725408,  -0.01148539,  0.46752924,  0.00413511, 0.01964055, 0.13448377,  -0.59294403,  0.38801043,  0.03050344,  -0.07010066])                     
-       t0 = make_wf(size,coefficients)
+       t0 = make_wf(pad_size,coefficients)
         
        if aberr_cor:
-        t0_th = make_wf_th(size)
+        t0_th = make_wf_th(pad_size)
         for i in range(4):
          for j in range(6):
-          im0 = stokes_data[:,:,i,j]
+          im0 = stokes_data[:,:,i,j] * edge_mask
+          im0 = np.pad(im0, pad_width=((pad_width, pad_width), (pad_width, pad_width)), mode='symmetric')
 
-          res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,size,t0_th)
+          res_stokes[:,:,i,j] = Wienerfilter_th(im0,t0,0.01,0.5,10,pad_size,t0_th)
 
        else:
         for i in range(4):
           for j in range(6):
-           im0 = stokes_data[:,:,i,j]
-           res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,size)
+           im0 = stokes_data[:,:,i,j] * edge_mask
+           im0 = np.pad(im0, pad_width=((pad_width, pad_width), (pad_width, pad_width)), mode='symmetric')
+
+           res_stokes[:,:,i,j] = Wienerfilter(im0,t0,0.01,0.5,10,pad_size)
    print('-->>>>>>> PSF deconvolution is done with Z='+str(coefficients)+'\nAberration correction is set to '+str(aberr_cor))
-       
+
+   res_stokes = res_stokes[pad_width:-pad_width,pad_width:-pad_width] * edge_mask[:,:,np.newaxis,np.newaxis]
    return res_stokes
