@@ -474,7 +474,7 @@ def cmilos(data_f, hdr_arr, wve_axis_arr, data_shape, cpos_arr, data, rte, mask,
         hdr_scan['RTE_SW'] = 'cmilos'
         hdr_scan['RTE_ITER'] = str(15)
 
-        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, out_dir, vers, out_rte_filename)
+        write_output_inversion(rte_data_products, file_path, scan, hdr_scan, out_dir, out_rte_filename, vers)
             
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- CMILOS RTE Run Time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
