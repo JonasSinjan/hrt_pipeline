@@ -321,7 +321,21 @@ def phihrt_pipe(input_json_file):
 
     if flat_c:
         
-        flat, flat_pmp_temp, header_flat = load_and_process_flat(flat_f,accum_scaling,bit_conversion,scale_data,header_imgdirx_exists,imgdirx_flipped,cpos_arr)
+        flat, flat_pmp_temp, header_flat = load_and_process_flat(flat_f,accum_scaling,bit_conversion,scale_data)
+
+        #----------
+        # check if the flat needs to be flipped in the Y axis if science data is flipped
+        #----------
+
+        header_fltdirx_exists, fltdirx_flipped = check_IMGDIRX([header_flat])
+        flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
+
+        #----------
+        # check if the flat has the same continuum position as the science data
+        #----------
+
+        cpos_f = get_cpos_f(flat_f)
+        flat = compare_cpos(flat, cpos_f, cpos_arr[0])
 
     else:
         print(" ")
@@ -332,66 +346,29 @@ def phihrt_pipe(input_json_file):
     #-----------------
 
     if dark_c:
-        print(" ")
-        printc('-->>>>>>> Reading Darks                   ',color=bcolors.OKGREEN)
+        
+        dark, header_dark = load_dark(dark_f,accum_scaling,bit_conversion,scale_data)
 
-        start_time = time.perf_counter()
+        #----------
+        # check if the dark needs to be flipped in the Y axis if science data is flipped
+        #----------
 
-        try:
-
-            if dark_f[-18:] == '0022210004.fits.gz':
-                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = False, scale_data = False)
-            elif dark_f[-19:] == '0022210004_000.fits':
-                dark,h = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = False)
-            else:
-                dark,h = get_data(dark_f, scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = scale_data)
+        header_drkdirx_exists, drkdirx_flipped = check_IMGDIRX([header_dark])
+        dark = compare_IMGDIRX(dark[np.newaxis],header_imgdirx_exists,imgdirx_flipped,header_drkdirx_exists,drkdirx_flipped)[0] #this output is 1,2k,2k, so we need to remove the first dimension
             
-            dark_shape = dark.shape
-            if dark_shape != (2048,2048):
-                
-                printc("Dark Field Input File not in 2048,2048 format: {}",dark_f,color=bcolors.WARNING)
-                printc("Attempting to correct ",color=bcolors.WARNING)
-          
-                try:
-                    if dark_shape[0] > 2048:
-                        dark = dark[dark_shape[0]-2048:,:]
-                
-                except Exception:
-                    printc("ERROR, Unable to correct shape of dark field data: {}",dark_f,color=bcolors.FAIL)
-            # DC change 20211018
-            if 'IMGDIRX' in h:
-                header_drkdirx_exists = True
-                drkdirx_flipped = str(h['IMGDIRX'])
-            else:
-                header_drkdirx_exists = False
-                drkdirx_flipped = 'NO'
-            
-            dark = compare_IMGDIRX(dark[np.newaxis],header_imgdirx_exists,imgdirx_flipped,header_drkdirx_exists,drkdirx_flipped)[0]
-            
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------ Load darks time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-
-        except Exception:
-            printc("ERROR, Unable to open darks file: {}",dark_f,color=bcolors.FAIL)
-            raise ValueError() 
-
         #-----------------
         # APPLY DARK CORRECTION 
         #-----------------  
 
-        if flat_c == False:
-            flat = np.empty((2048,2048,4,6))
-
         data = apply_dark_correction(data, dark, rows, cols)  
         
-        if flat_c == False:
-            flat = np.empty((2048,2048,4,6))
+        # if flat_c == False:
+        #     flat = np.empty((2048,2048,4,6)) #needed for functions later on
 
         if out_intermediate:
             data_darkc = data.copy()
 
-        DID_dark = h['FILENAME']
+        DID_dark = header_dark['FILENAME']
 
         for hdr in hdr_arr:
             hdr['CAL_DARK'] = DID_dark
@@ -440,9 +417,9 @@ def phihrt_pipe(input_json_file):
     # OPTIONAL Unsharp Masking clean the flat field stokes Q, U or V images
     #-----------------
 
+    flat_copy = flat.copy()
+
     if clean_f and flat_c:
-        flat_copy = flat.copy()
-    
         print(" ")
         printc('-->>>>>>> Cleaning flats with Unsharp Masking',color=bcolors.OKGREEN)
 
@@ -949,27 +926,27 @@ def phihrt_pipe(input_json_file):
 
             if dark_c: 
                 history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {False}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                file_suffix = 'dark_corrected'
+                file_suffix = '_dark_corrected'
                 write_out_intermediate(data_darkc[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir)
             
             if prefilter_c:
                 history_str =  f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {False}, Unsharp: {False}. Flat norm: {False}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                file_suffix = 'prefilter_corrected'
+                file_suffix = '_prefilter_corrected'
                 write_out_intermediate(data_PFc[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir)
 
             if flat_c: 
                 history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
                 #with US
-                file_suffix =  'flat_corrected'
+                file_suffix =  '_flat_corrected'
                 write_out_intermediate(data_flatc[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir)
-                #without US
+                #without US (but could be with prefilter - and is not normalised)
                 root_scan_name_before_US = f"copy_{flat_f.split('/')[-1]}"
                 file_suffix = ''
                 write_out_intermediate(flat_copy, hdr_interm, history_str, scan, root_scan_name_before_US, file_suffix, out_dir)
 
             if demod:
                 history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {False}. PSF deconvolution: {False}"
-                file_suffix = 'demodulated'
+                file_suffix = '_demodulated'
                 write_out_intermediate(data_demod_normed[:,:,:,:,count], hdr_interm, history_str, scan, root_scan_name, file_suffix, out_dir, bunit = 'I_CONT', btype = 'STOKES')
 
     else:

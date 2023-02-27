@@ -76,8 +76,8 @@ def data_hdr_kw(hdr, data):
     return hdr
 
 
-def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, header_imgdirx_exists, imgdirx_flipped, cpos_arr) -> np.ndarray:
-    """Load, properly scale, flip in X if needed, and make any necessary corrections for particular flat fields
+def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data) -> np.ndarray:
+    """Load, properly scale, and make any necessary corrections for particular flat fields
 
     Parameters
     ----------
@@ -89,12 +89,6 @@ def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, hea
         if True apply scaling to account for the bit conversion
     scale_data: bool
         if True apply scaling (dependent on if IP5 flat or not)
-    header_imgdirx_exits: bool
-        if True, the header keyword exists in the science data - if does not exist, runs to fall back option in `compare_IMGDIRX` func
-    imgdirx_flipped: str or bool
-        set to True if the science data is flipped, function will flip the flat to match, OPTIONS: 'YES' or 'NO', or False
-    cpos_arr: np.ndarray
-        array containing the continuum positions of the science scans - to make sure that the flat cpos matches the science flat
 
     Returns
     -------
@@ -113,33 +107,12 @@ def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, hea
     else:
         flat, header_flat = get_data(flat_f, scaling = accum_scaling,  bit_convert_scale=bit_conversion,
                                     scale_data=scale_data)
-                
-    if 'IMGDIRX' in header_flat:
-        header_fltdirx_exists = True
-        fltdirx_flipped = str(header_flat['IMGDIRX'])
-    else:
-        header_fltdirx_exists = False
-        fltdirx_flipped = 'NO'
-    
-    print(f"Flat field shape is {flat.shape}")
-    # correction based on science data - see if flat and science are both flipped or not
-    flat = compare_IMGDIRX(flat,header_imgdirx_exists,imgdirx_flipped,header_fltdirx_exists,fltdirx_flipped)
     
     flat = np.moveaxis(flat, 0,-1) #so that it is [y,x,24]
     flat = flat.reshape(2048,2048,6,4) #separate 24 images, into 6 wavelengths, with each 4 pol states
     flat = np.moveaxis(flat, 2,-1)
     
-    print(flat.shape)
-
-    _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True) #get flat continuum position
-
-    print(f"The continuum position of the flat field is at {cpos_f} index position")
-    
-    #--------
-    # test if the science and flat have continuum at same position
-    #--------
-
-    flat = compare_cpos(flat,cpos_f,cpos_arr[0]) 
+    print("Flat field shape: ", flat.shape)
 
     flat_pmp_temp = str(header_flat['HPMPTSP1'])
 
@@ -163,7 +136,7 @@ def load_and_process_flat(flat_f, accum_scaling, bit_conversion, scale_data, hea
     return flat, flat_pmp_temp, header_flat
 
 
-def load_dark(dark_f) -> np.ndarray:
+def load_dark(dark_f, accum_scaling = True, bit_conversion = True, scale_data = True) -> np.ndarray:
     """Load dark field - for use in notebooks
 
     Parameters
@@ -182,7 +155,13 @@ def load_dark(dark_f) -> np.ndarray:
     start_time = time.perf_counter()
 
     try:
-        dark,_ = get_data(dark_f)
+
+        if dark_f[-18:] == '0022210004.fits.gz':
+                dark,header_dark = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = False, scale_data = False)
+        elif dark_f[-19:] == '0022210004_000.fits':
+            dark,header_dark = get_data(dark_f,scaling = accum_scaling, bit_convert_scale = bit_conversion,scale_data = False)
+        else:
+            dark,header_dark = get_data(dark_f, scaling = accum_scaling, bit_convert_scale = bit_conversion, scale_data = scale_data)
 
         dark_shape = dark.shape
 
@@ -208,7 +187,7 @@ def load_dark(dark_f) -> np.ndarray:
         printc(f"------------ Load darks time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
-        return dark
+        return dark, header_dark
 
     except Exception:
         printc("ERROR, Unable to open and process darks file: {}",dark_f,color=bcolors.FAIL)
@@ -554,8 +533,8 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
     adapted from SPGPylibs
     """
     def _get_v1_index1(x):
-        index1, v1 = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
-        return  v1, index1
+        index1, _ = min(enumerate([abs(i) for i in x]), key=itemgetter(1))
+        return  x[index1], index1
     
     if prefilter_voltages is None:
         # OLD prefilter voltages
@@ -630,6 +609,7 @@ def prefilter_correction(data,wave_axis_arr,prefilter,prefilter_voltages = None,
             data[:,:,:,wv,scan] /= imprefilter[...,np.newaxis]
             
     return data
+
 
 def apply_field_stop(data, rows, cols, header_imgdirx_exists, imgdirx_flipped) -> np.ndarray:
     """Apply field stop to input data
@@ -1295,7 +1275,7 @@ def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_na
     hdr_int = create_intermediate_hdr(data_int, hdr_interm, history_str, f'{root_scan_name}_{suffix}.fits', **kwargs)
 
     with fits.open(scan) as hdu_list:
-        print(f"Writing intermediate file as: {root_scan_name}_{suffix}.fits")
+        print(f"Writing intermediate file as: {root_scan_name}{suffix}.fits")
         hdu_list[0].data = data_int.astype(np.float32)
         hdu_list[0].header = hdr_int #update the calibration keywords
         hdu_list.writeto(out_dir + root_scan_name + f'_{suffix}.fits', overwrite=True)

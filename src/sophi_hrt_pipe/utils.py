@@ -358,6 +358,25 @@ def check_cpos(cpos_arr):
         exit()
 
 
+def get_cpos_f(flat_f):
+    """gets the continuum position of the flat field and print to console
+    
+    Parameters
+    ----------
+    flat_f : str
+        flat field file path
+
+    Returns
+    -------
+    cpos _f: int
+        continuum position
+    """
+    _, _, _, cpos_f = fits_get_sampling(flat_f,verbose = True) #get flat continuum position
+    print(f"The continuum position of the flat field is at {cpos_f} index position")
+
+    return cpos_f
+
+
 def compare_cpos(flat,cpos,cpos_ref):
     """checks if flat continuum same as data, if not try to move flat around - this assumes that there was a mistake with the continuum position in the flat
 
