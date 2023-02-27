@@ -78,5 +78,7 @@ dependencies:
   - xz=5.2.5=h7b6447c_0
   - zlib=1.2.11=h7b6447c_3
   - zstd=1.4.5=h9ceee32_0
+  - opencv-python==4.7.0.68
+  - Cython==0.29.33
 prefix: /home/sinjan/.conda/envs/hrt_pipeline_env
 

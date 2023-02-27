@@ -103,11 +103,11 @@ Then start the notebook <br>
 
 ##############################################################
 
-\*\***(DEPRECATED)**\*\* 5. Download files - see **Download Input Files** Section 
+ 5. Download files - see **Download Input Files** Section (now deprecated)
 
-6. Generate json files with the science, dark and flat you desire to reduce, ensure that all keywords from in the example are used (for limb images you must know the limb in the FOV - can only reduce multiple limb files at the same runtime if all the same limb in FOV)
+6. Generate json files with the science, dark and flat you desire to reduce, ensure that all keywords from in the example are used (can only reduce multiple limb files at the same runtime if all the same limb in FOV)
 
-7. Make sure the correct input.json file is given to `hrt_pipe` in ```run.py```
+7. Make sure the correct input.json file is given to `phihrt_pipe` in ```run.py```
 
 8. Execute ```run.py```
 
@@ -121,40 +121,6 @@ Any and all steps can be turned on or off as you wish using the keywords in the 
 
 See `/input_jsons/create_input_json.py` for example to create json file
 
-## **Download Input Files** \*\***(DEPRECATED)**\*\*
-
-\*\* In input.json file, cant insert directly .fits.gz files from the PHI database \*\*
-
-This needs the 'dataproc' environment - see **Setup**
-
-EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg.de/services/proton/phi/imgdb/
-
-Suggested filters for HRT science data: 
-- **Keyword Detector = 'HRT'** <br >
-- **Filename\* like \*L1_phi-hrt-ilam_date\***
-        
-To download via the command line (eg: if you want to save the files on a server and not locally)
-```
-wget --user yourusername --password yourpassword file_web_address
-gunzip file.gz
-```
-Gunzip used to unpack the .gz to the file you want  <br>
-
-Can also use `/download/download_from_db.py` to perform multi download from database:
-
-Instructions:
-  1. From the database find the files you wish to download
-  2. Copy the 'Download File List' that the database will generate
-  3. Paste into the `file_names.txt` file
-  4. Create a `.env` file with your MPS Windows login: <br> 
-      ```text=
-      USER_NAME =
-      PHIDATAPASSWORD =
-      ```  
-  5. Set the target download folder in the `download_from_db.py` file
-  6. Run the file (will require dotenv python module to be installed - included in `hrt_pipeline_env`) 
-
-OR : use `download_files.py` to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
 ## **Output**
 
 #### **Stokes File**
@@ -231,10 +197,43 @@ First Index:
 
   Shape: [Y,X] <br>
   Demodulated science data
- 
+
+## **Download Input Files** \*\***(DEPRECATED)**\*\*
+
+\*\* In input.json file, cant insert directly .fits.gz files from the PHI database \*\*
+
+This needs the 'dataproc' environment - see **Setup**
+
+EITHER: download from the PHI Image Database (recommended): https://www2.mps.mpg.de/services/proton/phi/imgdb/
+
+Suggested filters for HRT science data: 
+- **Keyword Detector = 'HRT'** <br >
+- **Filename\* like \*L1_phi-hrt-ilam_date\***
+        
+To download via the command line (eg: if you want to save the files on a server and not locally)
+```
+wget --user yourusername --password yourpassword file_web_address
+gunzip file.gz
+```
+Gunzip used to unpack the .gz to the file you want  <br>
+
+Can also use `/download/download_from_db.py` to perform multi download from database:
+
+Instructions:
+  1. From the database find the files you wish to download
+  2. Copy the 'Download File List' that the database will generate
+  3. Paste into the `file_names.txt` file
+  4. Create a `.env` file with your MPS Windows login: <br> 
+      ```text=
+      USER_NAME =
+      PHIDATAPASSWORD =
+      ```  
+  5. Set the target download folder in the `download_from_db.py` file
+  6. Run the file (will require dotenv python module to be installed - included in `hrt_pipeline_env`) 
+
+OR : use `download_files.py` to download images from the attic repository: https://www2.mps.mpg.de/services/proton/phi/fm/attic/
+
 ***
-
-
 ### **Authors**: <br>
 
 Jonas Sinjan - Max Planck Institute for Solar System Research, Goettingen, Germany
