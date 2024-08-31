@@ -1,5 +1,7 @@
 # **SO/PHI-HRT PIPELINE**
 
+This repository is now depracated and no longer maintained. Please find the latest version at github.com/dcalc. 
+
 Reduction software for SO/PHI-HRT instrument on the ESA Solar Orbiter
 
 ![](https://img.shields.io/badge/License-MIT-green) 
