@@ -1760,6 +1760,7 @@ def image_register(ref,im,subpixel=True,deriv=False,d=50):
                 else:
                     mask = np.ones(ss,dtype=bool); d = ss[0]//2
                 g, A = _gauss2dfit(r,mask)
+                break
             except RuntimeError as e:
                 print(f"Issue with gaussian fitting using mask with radius {d1}\nTrying new value...")
                 if d1 == dd[-1]:
