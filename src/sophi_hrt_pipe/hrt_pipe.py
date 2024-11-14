@@ -188,6 +188,10 @@ def phihrt_pipe(input_json_file):
         
         # rte = input_dict['rte']
         out_intermediate = input_dict['out_intermediate']  #20211116
+        if 'out_synthesis' in input_dict:
+            out_synthesis = input_dict['out_synthesis']
+        else:
+            out_synthesis = False
         # pymilos_opt = input_dict['pymilos']
         
         RTE_options = input_dict["RTE"]
@@ -295,7 +299,9 @@ def phihrt_pipe(input_json_file):
             newKey = 'WAVELNTH' # new implementation
             hdr_arr[scan].set(newKey, 6173.341, '[Angstrom] Characteristic wavelength', after=previousKey)
             previousKey = newKey
-            
+            newKey = 'WAVEUNIT' # new implementation
+            hdr_arr[scan].set(newKey, 'angstrom', 'Physical units of the wavelengths', after=previousKey)
+            previousKey = newKey
             for i in range(6):
                 newKey = 'WAVELN'+str(int(i)+1).rjust(2,'0')
                 hdr_arr[scan].set(newKey, round(wave_axis_arr[scan][i],3), '[Angstrom] Wavelength '+str(int(i)+1).rjust(2,'0'), after=previousKey)
@@ -1045,11 +1051,14 @@ def phihrt_pipe(input_json_file):
             # dat, _ = demod_hrt(data[...,scan],pmp_temp,modulate=True)
             if cpos_arr[scan] == 5: # set continuum in the first wavelength for the deconvolution
                 data[...,scan] = np.roll(data[...,scan], 1, axis = -1)
-            restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), 
-                                             mask=mask, gamma2=0.02, low_f=0.8, aberr_cor=PSFaberr, cavity=cavity[rows,cols])
+            
             if cavity_c:
+                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), 
+                                             mask=mask, gamma2=0.02, low_f=0.8, aberr_cor=PSFaberr, cavity=cavity[rows,cols])
                 res_stokes, coefs, cavity = restore_results
             else:
+                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), 
+                                             mask=mask, gamma2=0.02, low_f=0.8, aberr_cor=PSFaberr, cavity=None)
                 res_stokes, coefs = restore_results
                 cavity = None
 
@@ -1089,14 +1098,19 @@ def phihrt_pipe(input_json_file):
         printc('-->>>>>>> Set Median to 0',color=bcolors.OKGREEN)
         for scan in range(data_shape[-1]):
             maski = limb_mask[...,scan] * AR_mask[...,scan]
-            for l in range(data_shape[3]):
+            for l in range(data.shape[3]):
                     PQm = np.median(data[maski>0,1,l,scan])
                     PUm = np.median(data[maski>0,2,l,scan])
                     PVm = np.median(data[maski>0,3,l,scan])
-
+                    
                     data[:,:,1,l,scan] -= PQm
                     data[:,:,2,l,scan] -= PUm
                     data[:,:,3,l,scan] -= PVm
+
+                    # print('Median (wl,p) = ({:d},1): {:.2e}. After correction: {:.2e}'.format(l,PQm,np.median(data[maski>0,1,l,scan])))
+                    # print('Median (wl,p) = ({:d},2): {:.2e}. After correction: {:.2e}'.format(l,PUm,np.median(data[maski>0,2,l,scan])))
+                    # print('Median (wl,p) = ({:d},3): {:.2e}. After correction: {:.2e}'.format(l,PVm,np.median(data[maski>0,3,l,scan])))
+                    # print('')
                     
     #-----------------
     # WRITE OUT STOKES VECTOR
@@ -1174,7 +1188,19 @@ def phihrt_pipe(input_json_file):
                 tmp = data_not_deconvolved[:,:,:,:,count]
                 tmp = np.moveaxis(tmp, [-1,-2], [0,1])
                 write_out_intermediate(tmp, hdr_interm, history_str, scan, root_scan_name, file_suffix, vrs, out_dir, bunit = 'I_CONT', btype = 'STOKES')
-
+                
+                if cavity_c:
+                    new_cavity_f = out_dir + cavity_f.split('/')[-1].replace('cavity','cavityPSF').replace('V02','V'+hdr_interm['PHIDATID'])
+                    print('Writing deconvolved cavity file')
+                    with fits.open(cavity_f) as hdr_cavity:
+                        hdr_cavity[0].data = cavity
+                        hdr_cavity[0].header['PXBEG1'] = hdr_interm['PXBEG1']
+                        hdr_cavity[0].header['PXBEG2'] = hdr_interm['PXBEG2']
+                        hdr_cavity[0].header['PXEND1'] = hdr_interm['PXEND1']
+                        hdr_cavity[0].header['PXEND2'] = hdr_interm['PXEND2']
+                        hdr_cavity[0].header['HISTORY'] = 'Cavity deconvolved with PSF associated to '+scan
+                        hdr_cavity.writeto(new_cavity_f,overwrite=True)
+                        
     else:
         print(" ")
         printc('-->>>>>>> No intermediate files requested',color=bcolors.WARNING)
@@ -1272,7 +1298,7 @@ def phihrt_pipe(input_json_file):
 
         generate_l2(data_f, hdr_arr, wave_axis_arr, cpos_arr, 
                     data, mask, imgdirx_flipped, out_rte_filename, out_dir, 
-                    cavity, rows, cols, vrs,
+                    cavity, rows, cols, vrs, out_synthesis,
                     **RTE_options)
                     
         # if pymilos_opt:
