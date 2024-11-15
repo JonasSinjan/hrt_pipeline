@@ -808,7 +808,10 @@ def phihrt_pipe(input_json_file):
         for scan in range(data_shape[-1]):
            
             try:
-                limb_temp, sly, slx, side, limb_percent_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],percent=True)
+                AR_temp = ARmasking(data[...,scan], field_stop[rows,cols], cpos = cpos_arr[scan]) # for ellipse limb fit
+                limb_temp, sly, slx, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True)
+                
+                # limb_temp, sly, slx, side, limb_percent_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],percent=True)
                 
                 if limb_temp is not None:
                     #get region of pixels for norm, which are for certain on disc

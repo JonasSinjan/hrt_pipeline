@@ -1054,6 +1054,229 @@ def limb_fitting(img, hdr, field_stop, verbose=True, percent=False, fit_results=
 
     return output
 
+#### New Limb fitting ###
+def double_gaus(x,a0,x0,sigma0,a1,x1,sigma1):
+    """return Gauss function
+
+    Parameters
+    ----------
+    x : array
+        x values
+    a0 : float
+        gaussian nr.1 amplitude
+    x0 : float
+        gaussian nr.1 mean x value
+    sigma0 : float
+        gaussian nr.1 standard deviation
+    a1 : float
+        gaussian nr.2 amplitude
+    x1 : float
+        gaussian nr.2 mean x value
+    sigma1 : float
+        gaussian nr.2 standard deviation
+
+    Returns
+    -------
+    Double Gauss Function : array
+    """
+    return a0*np.exp(-(x-x0)**2/(2*sigma0**2)) + a1*np.exp(-(x-x1)**2/(2*sigma1**2))
+
+def double_gaussian_fit(a,show=True):
+    """Gaussian fit for data 'a' from np.histogram or plt.hist
+
+    Parameters
+    ----------
+    a : array
+        output from np.histogram or plt.hist
+    show : bool, optional
+        show plot of fit, by default True
+    
+    Returns
+    -------
+    p : array
+        fitted coefficients for Double Gaussian function
+    """
+    xx=a[1][:-1] + (a[1][1]-a[1][0])/2
+    y=a[0][:]
+    # p0 = np.ones(6)
+    xx1 = xx[:xx.size//2]; xx2 = xx[xx.size//2:]
+    y1 = y[:y.size//2]; y2 = y[y.size//2:]
+    p0=[max(y1),sum(xx1*y1)/sum(y1),np.sqrt(sum(y1 * (xx1 - sum(xx1*y1)/sum(y1))**2) / sum(y1)),max(y2),sum(xx2*y2)/sum(y2),np.sqrt(sum(y2 * (xx2 - sum(xx2*y2)/sum(y2))**2) / sum(y2))] #weighted avg of bins for avg and sigma inital values
+    # p0[0]=y1[find_nearest(xx1,p0[1])-5:find_nearest(xx1,p0[1])+5].mean() #find init guess for ampltiude of gauss func
+    # p0[3]=y2[find_nearest(xx2,p0[1])-5:find_nearest(xx2,p0[1])+5].mean() #find init guess for ampltiude of gauss func
+    
+    try:
+        p,cov=spo.curve_fit(double_gaus,xx,y,p0=p0)
+        if show:
+            lbl = '{:.2e} $\pm$ {:.2e}\n{:.2e} $\pm$ {:.2e}'.format(p[1],p[2],p[4],p[5])
+            plt.plot(xx,double_gaus(xx,*p),'r--', label=lbl)
+            plt.legend(fontsize=9)
+        return p
+    except:
+        printc("Gaussian fit failed: return initial guess",color=bcolors.WARNING)
+        return p0
+    
+def elliptical_mask(shape,p):
+    """
+    Ellipse mask
+
+    Parameters
+    ----------
+    shape : tuple
+            shape of the mask
+    p : list
+        [a,b,h,k,A] - ellipse axes (x,y), centers (x,y) and angle
+
+    Returns
+    -------
+    mask: numpy.ndarray
+          Boolean elliptical mask with 1 inside the ellipse and 0 outside
+    """    
+    a,b,h,k,A = p
+    x,y = np.meshgrid(np.arange(shape[1]),np.arange(shape[0]))
+    mask = np.zeros(shape)
+    mask[((x-h)*np.cos(A)+(y-k)*np.sin(A))**2/a**2+((x-h)*np.sin(A)-(y-k)*np.cos(A))**2/b**2 <= 1] = 1
+
+    return mask
+
+def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit_results=False, debug=False):
+    """Fits limb to the image using least squares method.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Image to fit limb to.
+    hdr : astropy.io.fits.header.Header
+        header of fits file
+    field_stop : array
+        field stop array
+    verbose : bool, optional
+        Print limb fitting results, by default True
+    percent : bool, optional
+        return mask with 96% of the readius, by default False
+    fit_results : bool, optional
+        return results of the circular fit, by default False
+    debug: bool, optional
+        if True, return dictionary with all the variables, by default False
+    Returns
+    -------
+    mask100: numpy.ndarray
+        masked array (ie off disc region) with 100% of the radius
+    sly: slice
+        slice in y direction to be used for normalisation (ie good pixels on disc)
+    slx: slice
+        slice in x direction to be used for normalisation (ie good pixels on disc)
+    side: str
+        limb side
+    mask96: numpy.ndarray
+        masked array (ie off disc region) with 96% of the radius (only if percent = True)
+    p: scipy.optimize._optimize.OptimizeResult
+        Result of the least sqaure ellipse fit
+    """
+
+    def _residuals(p,x,y):
+        """
+        Finding the residuals of the fit
+
+        Parameters
+        ----------
+        p : list
+            [a,b,h,k,A] - ellipse axes (x,y), centers (x,y) and angle
+        x : float
+            test x coordinate
+        y : float
+            test y coordinate
+
+        Returns
+        -------
+        residual = ((x-h)*np.cos(A)+(y-k)*np.sin(A))**2/a**2 + (-(x-h)*np.sin(A)+(y-k)*np.cos(A))**2/b**2 - 1
+        """
+
+        a,b,h,k,A = p
+        residual = ((x-h)*np.cos(A)+(y-k)*np.sin(A))**2/a**2 + (-(x-h)*np.sin(A)+(y-k)*np.cos(A))**2/b**2 - 1
+
+        return residual
+
+    def _image_derivative(d):
+        """Calculates the image derivative in x and y using a 3x3 kernel
+
+        Parameters
+        ----------
+        d : numpy.ndarray
+            image to calculate derivative of
+
+        Returns
+        -------
+        SX : numpy.ndarray
+            derivative in x direction
+        SY : numpy.ndarray
+            derivative in y direction
+        """
+        import numpy as np
+        from scipy.signal import convolve
+        kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
+        ky = np.asarray([[1,1,1], [0,0,0], [-1,-1,-1]])
+
+        kx=kx/3.
+        ky=ky/3.
+
+        SX = convolve(d, kx,mode='same')
+        SY = convolve(d, ky,mode='same')
+
+        return SX, SY
+
+    from scipy.optimize import least_squares
+    from scipy.ndimage import binary_erosion, binary_dilation
+
+    side, center, Rpix, sly, slx, finder_small = limb_side_finder(img,hdr,verbose=verbose,outfinder=True)
+    s = 5
+
+    hi = np.histogram(img[s:-s,s:-s][AR_mask[s:-s,s:-s]>0].flatten(),bins=100);
+    gres = double_gaussian_fit(hi,False)
+    
+    if side == '' and min(gres[1],gres[4]) < max(gres[1],gres[4])/3: # sometimes south pole limb is not found, so extra condition on fit
+        output = [None,sly,slx,side]
+        
+        if percent:
+            output += [None]
+        if fit_results:
+            output += [None]    
+
+        return output
+
+    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+    thr = xx[find_nearest(xx,min(gres[1],gres[4]))+np.argmin(hi[0][find_nearest(xx,min(gres[1],gres[4])):find_nearest(xx,max(gres[1],gres[4]))])]
+
+    limb_mask = img[s:-s,s:-s]>thr;
+    
+    # dilation and erosion to remove any possible zeros coming from umbrae
+    # border_value=1 in erosion to avoid black edges
+    limb_mask = binary_erosion(binary_dilation(limb_mask,[[0,1,0],[1,1,1],[0,1,0]],iterations=20),[[0,1,0],[1,1,1],[0,1,0]],iterations=20,border_value=1)
+    
+    # erosion of field stop to avoid edges from there
+    limb_edge = image_derivative(limb_mask)*binary_erosion(field_stop,[[0,1,0],[1,1,1],[0,1,0]],iterations=20)[s:-s,s:-s]
+    yi, xi = np.where(limb_edge>0.9)
+
+    p = least_squares(_residuals,x0 = [Rpix,Rpix,center[0],center[1],0], args=(xi,yi),
+                              bounds = ([Rpix-100,Rpix-100,center[0]-300,center[1]-300,-np.pi/2],[Rpix+100,Rpix+100,center[0]+300,center[1]+300,np.pi/2]))
+
+    mask100 = elliptical_mask(img.shape,p.x)
+    mask96 = elliptical_mask(img.shape,[p.x[0]*.96,p.x[1]*.96,p.x[2],p.x[3],p.x[4]])
+
+    output = [sly,slx,side]
+
+    output = [mask100] + output
+    
+    if debug:
+        return {'mask100':mask100,'mask96':mask96,'hi':hi,'gres':gres,'thr':thr,'xx':xx,'limb_mask':limb_mask,'limb_edge':limb_edge,'yi':yi,'xi':xi,'p':p}
+    if percent:
+        output += [mask96]
+    if fit_results:
+        output += [p]    
+
+    return output
+######
+
 def fft_shift(img,shift):
     """Shift an image in the Fourier domain and return the shifted image (non fourier domain)
 
