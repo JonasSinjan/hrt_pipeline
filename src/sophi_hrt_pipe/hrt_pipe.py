@@ -111,7 +111,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.8.7 August 29th 2024'
+    version = 'V1.9.0 November 22nd 2024'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -173,8 +173,18 @@ def phihrt_pipe(input_json_file):
         ItoQUV = input_dict['ItoQUV']
         CTmode = input_dict['CTmode']
         VtoQU = input_dict['VtoQU']
-        PSFstokes = input_dict['PSFstokes']  
-        PSFaberr = input_dict['PSFaberr']  
+        if isinstance(input_dict['PSFstokes'],bool) and isinstance(input_dict['PSFaberr'],bool):
+            PSFstokes = {'deconvolution':input_dict['PSFstokes'],
+                         'aberration_correction':input_dict['PSFaberr'],
+                         'gamma2':0.02,
+                         'low_f':0.8,
+                         'roi':False}
+        else:
+            PSFstokes = input_dict['PSFstokes']
+            for k,v in zip(['low_f','gamma2','aberration_correction','roi'],[0.8,0.02,True,False])  :
+                if k not in PSFstokes.keys():
+                    PSFstokes[k] = v
+        # PSFaberr = input_dict['PSFaberr']  
 
         if 'ghost_c' in input_dict:
             ghost_c = input_dict['ghost_c']  #20211116
@@ -740,8 +750,14 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> Polarimetric Frames Registration (--> ISS OFF)',color=bcolors.OKGREEN)
         #find central region, on disc, for the registration region
-        limb_side, _, _, sly, slx = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
+        # limb_side, _, _, sly, slx = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
         
+        # added here to have the high contrast slices
+        AR_temp = ARmasking(data[...,0], field_stop[rows,cols], cpos = cpos_arr[0]) # for ellipse limb fit
+        _, sly, slx, _ = limb_ellipse(data[:,:,0,cpos_arr[0],0], hdr_arr[0],field_stop[rows,cols],AR_temp,high_contrast=True)
+        
+        del AR_temp
+        ####
         if fs_c:
             field_stop = ~binary_dilation(field_stop==0,generate_binary_structure(2,2), iterations=3)
             field_stop = np.where(field_stop > 0,1,0)
@@ -809,7 +825,7 @@ def phihrt_pipe(input_json_file):
            
             try:
                 AR_temp = ARmasking(data[...,scan], field_stop[rows,cols], cpos = cpos_arr[scan]) # for ellipse limb fit
-                limb_temp, sly, slx, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True)
+                limb_temp, sly, slx, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=True)
                 
                 # limb_temp, sly, slx, side, limb_percent_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],percent=True)
                 
@@ -942,7 +958,7 @@ def phihrt_pipe(input_json_file):
         printc(f"------------- I -> Q,U,V cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        if (not iss_off or not PSFstokes) and fs_c:
+        if (not iss_off or not PSFstokes['deconvolution']) and fs_c:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
     else:
@@ -982,7 +998,7 @@ def phihrt_pipe(input_json_file):
             printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
         
-        if (not iss_off or not PSFstokes) and fs_c:
+        if (not iss_off or not PSFstokes['deconvolution']) and fs_c:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
     else:
@@ -1002,9 +1018,9 @@ def phihrt_pipe(input_json_file):
         
         start_time = time.perf_counter()
         
-        data, hdr_arr = wavelength_registration(data, cpos_arr, sly, slx, hdr_arr)
+        data, hdr_arr = wavelength_registration(data, cpos_arr, sly, slx, hdr_arr, deconv=PSFstokes['deconvolution'])
         
-        if not PSFstokes:
+        if not PSFstokes['deconvolution']:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
@@ -1019,7 +1035,7 @@ def phihrt_pipe(input_json_file):
     # PSF DECONVOLUTION ON STOKES
     #-----------------
 
-    if PSFstokes:
+    if PSFstokes['deconvolution']:
 
         if out_intermediate:
             data_not_deconvolved = data.copy()
@@ -1038,7 +1054,7 @@ def phihrt_pipe(input_json_file):
             ## Fran's code
             mask = np.ones((data_size[0],data_size[1]))
             if norm_stokes:
-                if limb:
+                if limb and ~PSFstokes['roi']:
                     mask = limb_mask[...,scan]
             if fs_c:
                 mask = mask*field_stop[rows,cols]
@@ -1049,19 +1065,24 @@ def phihrt_pipe(input_json_file):
             if np.sum(mask==0) == 0:
                 mask = None
             
-
+            if PSFstokes['roi']:
+                psfy, psfx = sly, slx
+            else:
+                psfy, psfx = slice(0,data.shape[0]), slice(0,data.shape[1])
             # deconvolution on modulated data
             # dat, _ = demod_hrt(data[...,scan],pmp_temp,modulate=True)
             if cpos_arr[scan] == 5: # set continuum in the first wavelength for the deconvolution
                 data[...,scan] = np.roll(data[...,scan], 1, axis = -1)
             
             if cavity_c:
-                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), 
-                                             mask=mask, gamma2=0.02, low_f=0.8, aberr_cor=PSFaberr, cavity=cavity[rows,cols])
+                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), mask=mask, sly=psfy, slx=psfx,
+                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'], 
+                                             cavity=cavity[rows,cols])
                 res_stokes, coefs, cavity = restore_results
             else:
-                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), 
-                                             mask=mask, gamma2=0.02, low_f=0.8, aberr_cor=PSFaberr, cavity=None)
+                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), mask=mask, sly=psfy, slx=psfx,
+                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'], 
+                                             cavity=None)
                 res_stokes, coefs = restore_results
                 cavity = None
 
@@ -1070,7 +1091,7 @@ def phihrt_pipe(input_json_file):
             # res_stokes, _ = demod_hrt(res_stokes,pmp_temp)
 
             data[...,scan] = res_stokes
-            hdr_arr[scan]['CAL_PSF'] = 'lofdahl PSF deconv; gamma2=0.02; low_f=0.8; aberration: '+str(PSFaberr)
+            hdr_arr[scan]['CAL_PSF'] = 'lofdahl PSF deconv; gamma2={0:f}; low_f={1:f}; aberration: {2:}'.format(PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'])
             ##
             
             hdr_arr[scan]['CAL_ZER'] = str(list(np.round(coefs,5)))

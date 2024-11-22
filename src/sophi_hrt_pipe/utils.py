@@ -1139,7 +1139,98 @@ def elliptical_mask(shape,p):
 
     return mask
 
-def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit_results=False, debug=False):
+def fit_plane(data, mask=None, order=1):
+
+    """
+    Fit 2D plane to data. Will be replazed by a global one (comming from had-hoc branch) at some point.
+    """
+    def _polyfit2d(a,XY,order):
+        from scipy.optimize import curve_fit
+        sz = a.shape
+        try:
+            X,Y = XY
+        except:
+            X,Y = np.meshgrid(np.arange(sz[1])-sz[1]//2,np.arange(sz[0])-sz[0]//2)
+        fit_func = lambda x, *p : poly2d(order,x,*p)
+        
+        try:
+            X = X[~X.mask]; Y = Y[~Y.mask]; a = a[~a.mask]
+        except:
+            pass
+        N = np.arange(1,order+2).sum()
+        popt, pcov = curve_fit(fit_func, (X,Y), a.ravel(),p0=np.ones(N))
+        
+        return popt#, np.reshape(poly2d(order,(X,Y), *popt), sz),
+
+    def poly2d(m, X, *p):
+        x,y = X
+        z = np.zeros(x.shape)
+        n = 0
+        for k in range(1,m+1):
+            for i in range(k+1):
+                z += x**(k-i) * y**i * p[n]
+                n += 1
+        z += p[-1]
+        return z.ravel()
+    
+    yd, xd = data.shape
+    x = np.arange(xd)
+    y = np.arange(yd)
+    X, Y = np.meshgrid(x, y)
+
+    if mask is not None:
+        X_masked = X[mask]
+        Y_masked = Y[mask]
+        Z_masked = data[mask]
+    else:
+        X_masked = X
+        Y_masked = Y
+        Z_masked = data
+
+    p = _polyfit2d(Z_masked.flatten(),(X_masked.flatten(),Y_masked.flatten()),order)
+    P = np.reshape(poly2d(order,(X,Y), *p), (yd,xd))
+
+    return (P, p)
+
+def subROIconstrast(img, img_mask, windowSize, windowSeparation):
+    """Align the mod (pol) states 2,3,4 with state 1 for a given wavelength
+    loop through all wavelengths
+
+    Parameters
+    ----------
+    img: ndarray
+        2D input image array
+    img_mask: boolean ndarray
+        mask that defines where to compute the contrast
+    windowSize: int
+        half size of the sub regions where to compute the contrast
+    windowSeparation: int
+        sepration between the center of the sub regions where to compute the contrast
+    
+    Returns
+    -------
+    contrast: ndarray
+        values of the contrast (all zeros except for the pixels corresponding to the center of the sub regions)
+
+    """
+
+    data_size = img.shape
+    contrast = np.zeros((img.shape))
+    # shift_raw = np.zeros((2,pn*wln))
+
+    for i in range(windowSize*2,data_size[0]-windowSize*1,windowSeparation):
+        for j in range(windowSize*2,data_size[1]-windowSize*1,windowSeparation):
+            # print(f'({i}/{data_size[0]}, {j}/{data_size[1]})')#\r',end='')
+            roi = (slice(i-windowSize,i+windowSize),slice(j-windowSize,j+windowSize))
+            if img_mask[roi].sum() == 4*windowSize**2:
+                temp = img[roi].copy()
+                # detrend
+                temp /= fit_plane(temp.copy(),order=5)[0]
+                contrast[i,j] = np.nanstd(temp)/np.nanmean(temp)
+            
+    return contrast
+
+def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit_results=False, high_contrast = True, debug=False):
     """Fits limb to the image using least squares method.
 
     Parameters
@@ -1156,6 +1247,8 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
         return mask with 96% of the readius, by default False
     fit_results : bool, optional
         return results of the circular fit, by default False
+    high_contrast : bool, optional
+        if true it returns slices from the region with higher contrast instead of those from limb_side_finder, by default True
     debug: bool, optional
         if True, return dictionary with all the variables, by default False
     Returns
@@ -1229,6 +1322,7 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
     from scipy.ndimage import binary_erosion, binary_dilation
 
     side, center, Rpix, sly, slx, finder_small = limb_side_finder(img,hdr,verbose=verbose,outfinder=True)
+    
     s = 5
 
     hi = np.histogram(img[s:-s,s:-s][AR_mask[s:-s,s:-s]>0].flatten(),bins=100);
@@ -1261,7 +1355,17 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
                               bounds = ([Rpix-100,Rpix-100,center[0]-300,center[1]-300,-np.pi/2],[Rpix+100,Rpix+100,center[0]+300,center[1]+300,np.pi/2]))
 
     mask100 = elliptical_mask(img.shape,p.x)
+    mask98 = elliptical_mask(img.shape,[p.x[0]*.98,p.x[1]*.98,p.x[2],p.x[3],p.x[4]])
     mask96 = elliptical_mask(img.shape,[p.x[0]*.96,p.x[1]*.96,p.x[2],p.x[3],p.x[4]])
+    
+    if high_contrast:
+        if hdr['DSUN_AU'] < 0.4:
+            windowSize = 384
+        windowSize = 256
+        contrast256 = subROIconstrast(img.copy(), (field_stop*mask98)>0, windowSize, windowSize)
+        i,j = np.unravel_index(np.argmax(contrast256),contrast256.shape)
+        sly,slx = slice(i-windowSize,i+windowSize), slice(j-windowSize,j+windowSize)
+        print('\nHigh contrast slices: ',sly,slx,'\n')
 
     output = [sly,slx,side]
 
@@ -1275,7 +1379,7 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
         output += [p]    
 
     return output
-######
+    ######
 
 def fft_shift(img,shift):
     """Shift an image in the Fourier domain and return the shifted image (non fourier domain)

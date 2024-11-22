@@ -8,6 +8,7 @@ from tqdm import tqdm
 from photutils import CircularAperture
 from scipy.fftpack import fftshift, ifftshift, fft2, ifft2
 import sys
+import cv2
 
 #PHI parameters
 telescope='HRT' #'FDT' or 'HRT'
@@ -75,28 +76,28 @@ def corr(f,g,norma=False):
         return c
 
 def apod(nx,ny,perc):
-   """
-   Apodization window of size nx x ny. The input parameter
-   perc accounts for the percentage of the window that is apodized
-   """
-   nx = int(nx)
-   ny = int(ny)
+    """
+    Apodization window of size nx x ny. The input parameter
+    perc accounts for the percentage of the window that is apodized
+    """
+    nx = int(nx)
+    ny = int(ny)
 
-   wx = np.ones(nx)
-   wy = np.ones(ny)
+    wx = np.ones(nx)
+    wy = np.ones(ny)
 
-   nxw = int(perc*nx/100.)
-   nyw = int(perc*ny/100.)
+    nxw = int(perc*nx/100.)
+    nyw = int(perc*ny/100.)
 
-   wi_x = 0.5*(1.-np.cos(np.pi*np.arange(0,nxw,1)/nxw))
-   wi_y = 0.5*(1.-np.cos(np.pi*np.arange(0,nxw,1)/nxw))
-   wx[0:nxw] = wi_x
-   wx[nx-nxw:nx]= wi_x[::-1]
-   wy[0:nyw] = wi_y
-   wy[ny-nyw:ny]= wi_x[::-1]
+    wi_x = 0.5*(1.-np.cos(np.pi*np.arange(0,nxw,1)/nxw))
+    wi_y = 0.5*(1.-np.cos(np.pi*np.arange(0,nxw,1)/nxw))
+    wx[0:nxw] = wi_x
+    wx[nx-nxw:nx]= wi_x[::-1]
+    wy[0:nyw] = wi_y
+    wy[ny-nyw:ny]= wi_x[::-1]
 
-   win = np.outer(wx,wy)
-   return win
+    win = np.outer(wx,wy)
+    return win
 
 def FTpad(IM,Nout):
     """
@@ -571,13 +572,13 @@ def Qfactor(Hk,nuc,N,gamma=gamma1,reg=0.1):
     np.seterr(divide='ignore')
     #For the effect of gamma2 (reg) to increase with the frequency in the way
     #described in Martinez Pillet (2011), Sect. 9.2)
-    if reg>0:
-        nx=Hk.shape[1]
-        ny=Hk.shape[0]
-        x = (np.arange(0,nx) - np.floor(nx/2))/nuc
-        y = (np.arange(0,ny) - np.floor(ny/2))/nuc
+    nx=Hk.shape[1]
+    ny=Hk.shape[0]
+    x = (np.arange(0,nx) - np.floor(nx/2))/nuc
+    y = (np.arange(0,ny) - np.floor(ny/2))/nuc
 
-        [X,Y]=np.meshgrid(x,y)
+    [X,Y]=np.meshgrid(x,y)
+    if reg>0:
         Q=1/np.sqrt(np.sum(gamma*np.abs(Hk)**2,axis=2)+reg*np.sqrt(X**2+Y**2)) #Linear
         #Q=1/np.sqrt(np.sum(gamma*np.abs(Hk)**2,axis=2)+reg*(X**2+Y**2)/nuc**2) #Quadratic
         #Q=1/np.sqrt(np.sum(gamma*np.abs(Hk)**2,axis=2)+reg*np.sqrt(np.sqrt(X**2+Y**2)/nuc)) #Sqrt
@@ -800,19 +801,20 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
     #Restoration
     Q=Qfactor(Hk,gamma=gamma,reg=reg,nuc=nuc,N=N)
 
-    if type(noise) is str:
+    if isinstance(noise,str):
         if noise=='default':
             noise_filt=filter_sch(Q,Ok,Hk,gamma=gamma,nuc=nuc,N=N,low_f=low_f)
         else:
             print('WARNING. Only default is accepted as a string input. It will run anyway.')
             noise_filt=filter_sch(Q,Ok,Hk,gamma=gamma,nuc=nuc,N=N,low_f=low_f)
     else:
-        noise_filt=noise
+        noise_filt=noise.copy()
 
     #if gamma[1]==0 and N==1536: #For FDT images
     #    noise_filt=noise_filt*cir_aperture(R=nuc-200,N=N,ct=0)
 
     Nima=Ok.shape[2]
+    Ok_before_noise = Ok.copy()
     for i in range(0,Nima):
         #Filtering in Fourier domain
         Ok[:,:,i]=noise_filt*Ok[:,:,i]
@@ -839,6 +841,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
     o_restored=N**2*o.real
     object=o_restored+susf
     return object,susf,noise_filt
+    # return locals()
 
 def is_notebook() -> bool:
     """
@@ -857,7 +860,7 @@ def is_notebook() -> bool:
     except (NameError,ImportError):
         return False      # Probably standard Python interpreter
 
-def stokes_restoration(stokes_data,coefs,rest='lofdahl', gamma2=0.1,denoise=False,
+def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048),rest='lofdahl', gamma2=0.1,denoise=False,
                        wind_opt=True, low_f=0.1,num_iter=10,aberr_cor=False,padding=True,cavity=None):
     """
     This function restores a cube of Stokes data from a given set of
@@ -880,6 +883,8 @@ def stokes_restoration(stokes_data,coefs,rest='lofdahl', gamma2=0.1,denoise=Fals
         cavity
     """
     size = stokes_data[:,:,0,0].shape[0]
+    size_roi = stokes_data[sly,slx,0,0].shape[0]
+    
     # if size < 2048:
     #     edge_mask = np.zeros((size,size))
     #     edge_mask[3:-3,3:-3] = 1
@@ -887,8 +892,10 @@ def stokes_restoration(stokes_data,coefs,rest='lofdahl', gamma2=0.1,denoise=Fals
     #     edge_mask = np.ones((size,size))
     if padding:
         pad_width = int(size*10/(100-10*2))
+        if size != size_roi: pad_width_roi = int(size_roi*10/(100-10*2))
     else:
         pad_width = int(0)
+        if size != size_roi: pad_width_roi = int(0)
     res_stokes = np.zeros((size+pad_width*2,size+pad_width*2,4,6))
 
 
@@ -902,10 +909,12 @@ def stokes_restoration(stokes_data,coefs,rest='lofdahl', gamma2=0.1,denoise=Fals
             #Padding and restoration
             # if modulation is True:
             #     im0=intensity_data[:,:,i,j]
-            # elif modulation is False:    
+            # elif modulation is False:   
+            
             im0 = stokes_data[:,:,i,j] #* edge_mask
             im0 = np.pad(im0, pad_width=((pad_width, pad_width), (pad_width, pad_width)),\
                           mode='symmetric')
+            
 
                     
             #Denoising 
@@ -918,12 +927,21 @@ def stokes_restoration(stokes_data,coefs,rest='lofdahl', gamma2=0.1,denoise=Fals
             if rest=='lofdahl':
                 if i==0 and j==0:#Optimum filter computed only for Stokes I at cont.
                     noise='default'#Löfdahl & Scharmer's (1994) optimum filter 
+                    # noise filter from smaller region
+                    # small roi
+                    if size != size_roi:
+                        print('-----------> Noise filter from smaller region:',sly,slx)
+                        im0_roi = stokes_data[sly,slx,i,j] #* edge_mask
+                        im0_roi = np.pad(im0_roi, pad_width=((pad_width_roi, pad_width_roi), (pad_width_roi, pad_width_roi)),\
+                                      mode='symmetric')
+                        noise=object_estimate(im0_roi,coefs,0,reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor)[2]
+                        noise = cv2.resize(noise.astype('float32'),im0.shape,interpolation=cv2.INTER_LANCZOS4)
                 else:
                     noise=noise_filt #To use always the same noise_filt (I at continuum)   
                 
                 #Restoration using mean power of noise at I_cont
                 res_stokes[:,:,i,j],susf,noise_filt=object_estimate(im0,coefs,0,
-                    reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor)
+                        reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor)
                 
             # not used in SO/PHI-HRT
             # elif rest=='unsupervised_wiener' or rest=='lucy-richardson':
@@ -952,7 +970,6 @@ def stokes_restoration(stokes_data,coefs,rest='lofdahl', gamma2=0.1,denoise=Fals
     # if modulation is True:
     #     #Demodulate data
     #     res_stokes=demod_hrt_fran() @ res_stokes
-
     #We extract only the subfield we are interested in
     res_stokes = res_stokes[pad_width:res_stokes.shape[0]-pad_width,pad_width:res_stokes.shape[1]-pad_width] #* edge_mask[:,:,np.newaxis,np.newaxis]
 
@@ -1003,7 +1020,9 @@ def edge_masking(stokes, mask, cavity=None):
     
     return stokes_edge, cavity
 
-def fran_restore(stokes_data, tobs, mask=None, rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, padding=True, cavity=None):
+
+
+def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, padding=True, cavity=None):
     #Input parameters
     # mask=None # mask of the field_stop and limb
     # rest='lofdahl' #'lofdahl','lucy-richardson'or 'unsupervised_wiener'. Type of restoration (Here only lofdahl is implemented)
@@ -1044,25 +1063,6 @@ def fran_restore(stokes_data, tobs, mask=None, rest='lofdahl', gamma2 = 0.1, low
     coefs = [Z[k][idx] for k in Z.keys()]
 
     #Zernike coefficients (in radians), starting from Z1 (offset)
-    # coefs= [0.0,0.0,0.0,
-    #     2.5384410288410995,
-    #     0.10884970414084948,
-    #     0.5778766523678903,
-    #     0.17499516023395728,
-    #     -0.22788919399655982,
-    #     -0.10533576475415085,
-    #     1.7010925728045585,
-    #     1.3308455704245563,
-    #     0.023446694681437074,
-    #     -0.0667308907394535,
-    #     -0.05345526313091036,
-    #     0.03671330897504666,
-    #     -0.05111485547951494,
-    #     0.02619538247956514,
-    #     0.12905269063257063,
-    #     -0.015503522073734656,
-    #     0.16477602560109075,
-    #     -0.07481142465157851]
     coefs=np.array(coefs) #Convert into numpy array
 
     print('Zernike coefficients from PD dataset acquired on',dates[idx])
@@ -1083,7 +1083,11 @@ def fran_restore(stokes_data, tobs, mask=None, rest='lofdahl', gamma2 = 0.1, low
         stokes_data_edge = stokes_data.copy()
 
 
-    res_stokes, res_cavity=stokes_restoration(stokes_data_edge,coefs,rest=rest, gamma2=gamma2,
+    # res_stokes, res_cavity=stokes_restoration(stokes_data_edge,coefs,sly=sly,slx=slx,rest=rest, gamma2=gamma2,
+    #                                 denoise=denoise,
+    #                                 wind_opt=wind_opt,low_f=low_f,
+    #                                 num_iter=num_iter, aberr_cor=aberr_cor,padding=padding, cavity=cavity)
+    res_stokes, res_cavity = stokes_restoration(stokes_data_edge,coefs,sly=sly,slx=slx,rest=rest, gamma2=gamma2,
                                     denoise=denoise,
                                     wind_opt=wind_opt,low_f=low_f,
                                     num_iter=num_iter, aberr_cor=aberr_cor,padding=padding, cavity=cavity)

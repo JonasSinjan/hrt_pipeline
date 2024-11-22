@@ -1716,7 +1716,7 @@ def polarimetric_registration(data, sly, slx, hdr_arr):
     return data, hdr_arr
     
 
-def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
+def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr, derivative = True, deconv=False):
     """Align the wavelengths, from the Stokes I image, (after demodulation), using cv2.warpAffine
 
     Parameters
@@ -1731,7 +1731,11 @@ def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
         slice in x direction
     hdr_arr: ndarray
         header array
-    
+    derivative: bool
+        if True, the spatial derivative of the images is used in the correlation (Default: True)
+    deconv: bool
+        if True, array is deconvolved before the correlation (Default: False)
+
     Returns
     -------
     data: ndarray
@@ -1744,34 +1748,51 @@ def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
     wln = 6
     
     if cpos_arr[0] == 5:
-        l_i = [0,1,3,4,2] # shift wl
+        l_i =    [0,1,3,4,2] # shift wl
+        refl_i = [5,0,1,5,3]
         cwl = 2
     else:
-        l_i = [1,2,4,5,3] # shift wl
+        l_i =    [1,2,4,5,3] # shift wl
+        refl_i = [0,1,2,0,4]
         cwl = 3
     
-    old_data = data.copy()
-
+    new_data = data.copy()
+        
     data_shape = data.shape
     data_size = data_shape[:2]
-    
+    if derivative:
+        im_der = lambda x: image_derivative(x)
+    else:
+        im_der = lambda x: x
+
     for scan in range(data_shape[-1]):
         shift_stk = np.zeros((2,wln-1))
-        ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
-        
+        if deconv:
+            from sophi_hrt_pipe.PSF import fran_restore
+            dat = data[sly.start-5:sly.stop+5,slx.start-5:slx.stop+5,:,:,scan].copy()
+            # old_data, _ = fran_restore(dat, datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']),
+            #                             mask=np.ones((dat.shape[0],dat.shape[1])), gamma2=0.02, low_f=0.8, aberr_cor=False)
+            old_data, _ = fran_restore(dat, datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), sly=slice(0,dat.shape[0]), slx=slice(0,dat.shape[1]),
+                                        mask=np.ones((dat.shape[0],dat.shape[1])), gamma2=0, low_f=0.1, aberr_cor=False)
+            sly, slx = slice(5,sly.stop-sly.start+5), slice(5,slx.stop-slx.start+5)
+        else:
+            old_data = data[...,scan].copy()
+
         for i,l in enumerate(l_i):
-            temp = image_derivative(old_data[:,:,0,l,scan])[sly,slx]
+
+            ref = im_der(old_data[:,:,0,refl_i[i]].copy())[sly,slx]
+            temp = im_der(old_data[:,:,0,l])[sly,slx]
             it = 0
             s = [1,1]
-            if l == cwl:
-                temp = image_derivative(np.abs(old_data[:,:,0,l,scan]))[sly,slx]
-                ref = image_derivative(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
+            # if l == cwl:
+            #     temp = im_der(np.abs(old_data[:,:,0,l,scan]))[sly,slx]
+            #     ref = im_der(np.abs((data[:,:,0,l-1,scan] + data[:,:,0,l+1,scan]) / 2))[sly,slx]
             
             while np.any(np.abs(s)>.5e-2):#for it in range(iterations):
                 sr, sc, r = SPG_shifts_FFT(np.asarray([ref,temp]))
                 s = [sr[1],sc[1]]
                 shift_stk[:,i] = [shift_stk[0,i]+s[0],shift_stk[1,i]+s[1]]
-                temp = image_derivative(fft_shift(old_data[:,:,0,l,scan].copy(), shift_stk[:,i]))[sly,slx]
+                temp = im_der(fft_shift(old_data[:,:,0,l].copy(), shift_stk[:,i]))[sly,slx]
 
                 it += 1
                 if it == 10:
@@ -1780,17 +1801,18 @@ def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr):
             
             for ss in range(pn):
                 Mtrans = np.float32([[1,0,shift_stk[1,i]],[0,1,shift_stk[0,i]]])
-                data[:,:,ss,l,scan]  = cv2.warpAffine(old_data[:,:,ss,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
+                new_data[:,:,ss,l,scan]  = cv2.warpAffine(data[:,:,ss,l,scan].copy().astype(np.float32), Mtrans, data_size[::-1], flags=cv2.INTER_LANCZOS4)
+            
+            old_data[:,:,ss,l]  = cv2.warpAffine(old_data[:,:,0,l].copy().astype(np.float32), Mtrans, (old_data.shape[0],old_data.shape[1]), flags=cv2.INTER_LANCZOS4)
 
-            if l == cwl:
-                ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
+            # if l == cwl:
+            #     ref = image_derivative(old_data[:,:,0,cpos_arr[0],scan])[sly,slx]
         
         hdr_arr[scan]['CAL_WREG'] = 'y: '+str([round(shift_stk[0,i],3) for i in range(wln-1)]) + ', x: '+str([round(shift_stk[1,i],3) for i in range(wln-1)])
     
     del old_data
 
-    return data, hdr_arr
-    
+    return new_data, hdr_arr    
 
 def create_intermediate_hdr(data, hdr_interm, history_str, file_name, **kwargs):
     """add basic keywords to the intermediate file header
