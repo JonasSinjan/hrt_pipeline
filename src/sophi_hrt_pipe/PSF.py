@@ -4,7 +4,7 @@ PSF deconvolution provided by Francisco Javier Bailén (IAA)
 
 import numpy as np
 import datetime
-from tqdm import tqdm
+# from tqdm import tqdm
 from photutils import CircularAperture
 from scipy.fftpack import fftshift, ifftshift, fft2, ifft2
 import sys
@@ -903,8 +903,10 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
     #     intensity_data=mod_hrt() @ stokes_data
     print('Restoration method:',rest)
     k=-1
-    for i in tqdm(range(4),disable=is_notebook()):
-        for j in tqdm(range(6),disable=is_notebook()):
+    # for i in tqdm(range(4),disable=is_notebook()):
+    #     for j in tqdm(range(6),disable=is_notebook()):
+    for i in range(4):
+        for j in range(6):
             k+=1
             #Padding and restoration
             # if modulation is True:
@@ -1022,7 +1024,7 @@ def edge_masking(stokes, mask, cavity=None):
 
 
 
-def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, padding=True, cavity=None):
+def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, padding=True, cavity=None, PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv'):
     #Input parameters
     # mask=None # mask of the field_stop and limb
     # rest='lofdahl' #'lofdahl','lucy-richardson'or 'unsupervised_wiener'. Type of restoration (Here only lofdahl is implemented)
@@ -1037,6 +1039,7 @@ def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(
     # aberr_corr=False # if True, convolution with Airy disk is applied
     # padding=True # if True, Padding is applied
     # cavity=None # if cavity array is given, then it is deconvolved
+    # PD_f='/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv' look-up table for the Zernike values
 
     #Restoration parameters
     wind_opt=True #True to apodize the image
@@ -1048,8 +1051,7 @@ def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(
     # yf=600
 
     import csv
-    file_name = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv'
-    f = open(file_name,'r')
+    f = open(PD_f,'r')
     reader = csv.reader(f,delimiter=',')
     Z = {}
     for row in reader:

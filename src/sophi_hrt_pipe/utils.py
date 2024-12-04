@@ -2241,22 +2241,31 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
     
     client = drms.Client(email=jsoc_email, verbose=True) 
 
-    if ht['BTYPE'] == 'BLOS':
-        keys = client.query('hmi.m_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                           (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=2)
-    elif ht['BTYPE'] == 'VLOS':
-        keys = client.query('hmi.v_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                           (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=2)
-    else:
-        keys = client.query('hmi.ic_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                           (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=2)
-
-    lt = (np.mean(keys['DSUN_OBS'])*u.m - ht['DSUN_OBS']*u.m)/c
+    lt = np.nan
+    n = 0
+    while np.isnan(lt):
+        n += 2
+        if ht['BTYPE'] == 'BLOS':
+            keys = client.query('hmi.m_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+        elif ht['BTYPE'] == 'VLOS':
+            keys = client.query('hmi.v_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+        else:
+            keys = client.query('hmi.ic_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+        keys = keys[keys['T_OBS'] != 'MISSING']
+        if np.size(keys['T_OBS']) > 0:
+            lt = (np.nanmean(keys['DSUN_OBS'])*u.m - ht['DSUN_OBS']*u.m)/c
+        else:
+            print('adding 60s margin')
+            dcad += datetime.timedelta(seconds=60)
+        
     dltt = datetime.timedelta(seconds=lt.value) # difference in light travel time S/C-SDO
-    
-    
-    T_OBS = [np.abs((datetime.datetime.strptime(t,'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds()) for t in keys['T_OBS']]
-    ind = np.argmin(T_OBS)
+
+
+    T_OBS = [(ind,np.abs((datetime.datetime.strptime(t,'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds())) for ind, t in zip(keys.index,keys['T_OBS'])]
+    ind = T_OBS[np.argmin([t[1] for t in T_OBS])][0]
 
     if ht['BTYPE'] == 'BLOS':
         name_h = 'hmi.m_'+cad+'s['+keys['T_REC'][ind]+']{Magnetogram}'
