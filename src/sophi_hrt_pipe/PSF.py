@@ -500,7 +500,7 @@ def select_tiptilt(a,i,K):
     a1=np.concatenate((firsta,a[(2*K+1):])) #0 is for the offset term
     return a1
 
-def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True):
+def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False):
     """
     This function calculates the OTFs of a circular aperture for  incident
     wavefronts with aberrations given by a set of Zernike coefficients.
@@ -532,6 +532,8 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True):
             norma=norma_otf
             #norma=np.max(np.abs(otf)[:])
             otf=otf/norma #Normalization of the OTF
+            if not ideal:
+                otf = add_straylight_to_otf(otf)
         else:
             norma=1
         otf=otf[...,np.newaxis]#To create a 3rd dummy axis    
@@ -559,6 +561,39 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True):
             else:
                 norma[i]=1
     return otf,norma
+
+def add_straylight_to_otf(otf):
+    """input otf must be normalised"""
+    print('Hello!')
+    A1   = 1       # weight for PD-MTF
+    A2   = 0       # weight for near-field straylight
+    A3   = 0.1     # weight for far-field straylight
+    A4   = 0       # global straylight
+    B2   = 1       # standard dev. for near-field straylight
+    B3   = 300    # standard dev. for far-field straylight
+    
+    A = sum([A1,A2,A3,A4]) #re-normalise so sum(weights) = 1
+    A1 /= A
+    A2 /= A
+    A3 /= A
+    
+    IMSCALE = 0.5
+    
+    w = otf.shape[0]
+    freqscale = 1./(w*IMSCALE)
+    x = np.arange(w)
+    y = np.arange(w)
+    
+    X,Y = np.meshgrid(x,y)
+    X = X*freqscale
+    Y = Y*freqscale
+    XC = X[int(w/2)-1,int(w/2)-1]
+    YC = Y[int(w/2)-1,int(w/2)-1]
+    R = (X-XC)**2 + (Y-YC)**2
+    
+    otf_new = A1*otf + A3*np.exp(-2*np.pi**2*(B3)**2*R)
+
+    return otf_new
 
 def Qfactor(Hk,nuc,N,gamma=gamma1,reg=0.1):
     """
@@ -832,7 +867,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
 
     #Apply MTF of ideal telescope
     if aberr_cor:
-        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt)
+        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,ideal=True)
         O=Hk_th[...,0]*O
 
     Oshift=np.fft.fftshift(O)
