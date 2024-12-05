@@ -174,17 +174,18 @@ def phihrt_pipe(input_json_file):
         CTmode = input_dict['CTmode']
         VtoQU = input_dict['VtoQU']
         
-        if isinstance(input_dict['PSFstokes'],bool) and isinstance(input_dict['PSFaberr'],bool):
+        if isinstance(input_dict['PSFstokes'],bool) and isinstance(input_dict['PSFaberr'],bool) and isinstance(input_dict['PSFstraylight'],bool):
             PSFstokes = {'PD_f': "/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",
                          'deconvolution':input_dict['PSFstokes'],
                          'aberration_correction':input_dict['PSFaberr'],
+                         'straylight_correction':input_dict['PSFstraylight'],
                          'gamma2':0.02,
                          'low_f':0.8,
                          'roi':False,
                          'method':'lofdahl'}
         else:
             PSFstokes = input_dict['PSFstokes']
-            for k,v in zip(['PD_f','low_f','gamma2','aberration_correction','roi','method'],["/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",0.8,0.02,True,False,'lofdahl'])  :
+            for k,v in zip(['PD_f','low_f','gamma2','aberration_correction','straylight_correction','roi','method'],["/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",0.8,0.02,True,True,False,'lofdahl']):
                 if k not in PSFstokes.keys():
                     PSFstokes[k] = v
         # PSFaberr = input_dict['PSFaberr']  
@@ -1079,12 +1080,13 @@ def phihrt_pipe(input_json_file):
             
             if cavity_c:
                 restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), rest=PSFstokes['method'], mask=mask, sly=psfy, slx=psfx,
-                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'], 
+                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'], straylight_corr=PSFstokes['straylight_correction'],
                                              cavity=cavity[rows,cols], PD_f = PSFstokes['PD_f'])
                 res_stokes, coefs, cavity = restore_results
             else:
                 restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), rest=PSFstokes['method'], mask=mask, sly=psfy, slx=psfx,
-                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'], 
+                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'],
+                                             straylight_corr=PSFstokes['straylight_correction'], 
                                              cavity=None, PD_f = PSFstokes['PD_f'])
                 res_stokes, coefs = restore_results
                 cavity = None
@@ -1094,7 +1096,7 @@ def phihrt_pipe(input_json_file):
             # res_stokes, _ = demod_hrt(res_stokes,pmp_temp)
 
             data[...,scan] = res_stokes
-            hdr_arr[scan]['CAL_PSF'] = '{0:s} PSF deconv; gamma2={1:f}; low_f={2:f}; aberration: {3:}'.format(PSFstokes['method'],PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'])
+            hdr_arr[scan]['CAL_PSF'] = '{0:s} PSF deconv; gamma2={1:f}; low_f={2:f}; aberration: {3:}'.format(PSFstokes['method'],PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'],PSFstokes['straylight_correction'])
             ##
             
             hdr_arr[scan]['CAL_ZER'] = str(list(np.round(coefs,5)))
