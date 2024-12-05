@@ -500,7 +500,7 @@ def select_tiptilt(a,i,K):
     a1=np.concatenate((firsta,a[(2*K+1):])) #0 is for the offset term
     return a1
 
-def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False):
+def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False,straylight_corr=True):
     """
     This function calculates the OTFs of a circular aperture for  incident
     wavefronts with aberrations given by a set of Zernike coefficients.
@@ -532,7 +532,7 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False):
             norma=norma_otf
             #norma=np.max(np.abs(otf)[:])
             otf=otf/norma #Normalization of the OTF
-            if not ideal:
+            if not ideal or not straylight_corr:
                 otf = add_straylight_to_otf(otf)
         else:
             norma=1
@@ -784,7 +784,7 @@ def meritl(e,cut=None):
     return L
 
 def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=False,
-                    noise='default',aberr_cor=False):
+                    noise='default',aberr_cor=False,straylight_corr=False):
     """
     This function restores an image or an array of images employing a given
     set of Zernike coefficients.
@@ -831,7 +831,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
                 gamma=[1,0] #To account only for the 1st image
 
     #OTFs
-    Hk,normhk=OTF(a,a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt)
+    Hk,normhk=OTF(a,a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,straylight_corr=straylight_corr)
     
     #Restoration
     Q=Qfactor(Hk,gamma=gamma,reg=reg,nuc=nuc,N=N)
@@ -867,7 +867,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
 
     #Apply MTF of ideal telescope
     if aberr_cor:
-        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,ideal=True)
+        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,ideal=True,straylight_corr=False)
         O=Hk_th[...,0]*O
 
     Oshift=np.fft.fftshift(O)
@@ -896,7 +896,7 @@ def is_notebook() -> bool:
         return False      # Probably standard Python interpreter
 
 def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048),rest='lofdahl', gamma2=0.1,denoise=False,
-                       wind_opt=True, low_f=0.1,num_iter=10,aberr_cor=False,padding=True,cavity=None):
+                       wind_opt=True, low_f=0.1,num_iter=10,aberr_cor=False,straylight_corr=False,padding=True,cavity=None):
     """
     This function restores a cube of Stokes data from a given set of
     Zernike coefficients.
@@ -971,7 +971,7 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
                         im0_roi = stokes_data[sly,slx,i,j] #* edge_mask
                         im0_roi = np.pad(im0_roi, pad_width=((pad_width_roi, pad_width_roi), (pad_width_roi, pad_width_roi)),\
                                       mode='symmetric')
-                        noise=object_estimate(im0_roi,coefs,0,reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor)[2]
+                        noise=object_estimate(im0_roi,coefs,0,reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor,straylight_corr=straylight_corr)[2]
                         noise = cv2.resize(noise.astype('float32'),im0.shape,interpolation=cv2.INTER_LANCZOS4)
                 else:
                     noise=noise_filt #To use always the same noise_filt (I at continuum)   
@@ -1059,7 +1059,7 @@ def edge_masking(stokes, mask, cavity=None):
 
 
 
-def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, padding=True, cavity=None, PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv'):
+def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, straylight_corr=False, padding=True, cavity=None, PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv'):
     #Input parameters
     # mask=None # mask of the field_stop and limb
     # rest='lofdahl' #'lofdahl','lucy-richardson'or 'unsupervised_wiener'. Type of restoration (Here only lofdahl is implemented)
@@ -1127,7 +1127,7 @@ def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(
     res_stokes, res_cavity = stokes_restoration(stokes_data_edge,coefs,sly=sly,slx=slx,rest=rest, gamma2=gamma2,
                                     denoise=denoise,
                                     wind_opt=wind_opt,low_f=low_f,
-                                    num_iter=num_iter, aberr_cor=aberr_cor,padding=padding, cavity=cavity)
+                                    num_iter=num_iter, aberr_cor=aberr_cor, straylight_corr=straylight_corr,padding=padding, cavity=cavity)
     
     if mask is not None:
         res_stokes[mask==0] = stokes_data[mask==0]
