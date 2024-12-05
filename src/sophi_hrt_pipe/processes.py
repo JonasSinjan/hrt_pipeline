@@ -593,7 +593,7 @@ def prefilter_correctionNew(data,wave_axis_arr,rows,cols,Tetalon=66,imgdirx_flip
         data[...,scan] /= prefilter
     return data
 
-def prefilter_correction(data,wave_axis_arr,prefilter,Tetalon=0,prefilter_voltages = None, TemperatureCorrection=True, TemperatureConstant = 40.323e-3, shift = None):
+def prefilter_correction(data,wave_axis_arr,prefilter,Tetalon=0,prefilter_voltages = None, TemperatureCorrection=True, TemperatureConstant = 40.1225e-3, shift = None):
     """Apply prefilter correction to input data
 
     Parameters
@@ -1904,7 +1904,7 @@ def write_out_intermediate(data_int, hdr_interm, history_str, scan, root_scan_na
         hdu_list.writeto(out_dir + f'{suffix}_V{version}_{root_scan_name}.fits', overwrite=True)
 
         
-def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, TemperatureCorrection = False, TemperatureConstant = 36.46e-3, level = 'CAL2', version = 'V01', out_dir = None):   
+def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, TemperatureCorrection = True, TemperatureConstant = 40.1225e-3, level = 'CAL2', version = 'V01', out_dir = None):   
     # from sophi_hrt_pipe.processes import apply_field_stop, hot_pixel_mask
     PD, h = get_data(data_f,True,True,True)
     
@@ -1955,7 +1955,7 @@ def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, Temp
         fakePD = np.zeros((data_size[0],data_size[1],4,nfocus,1)); fakePD[:,:,0,:,0] = np.moveaxis(PD.copy(),0,-1);
         # voltagesData_arr = [np.asarray([Volt,Volt,Volt,Volt,Volt,Volt])]
         wlData_arr = [np.ones(nfocus)*wl]
-        fakePD = prefilter_correction(fakePD,wlData_arr,prefilter[rows,cols],None,TemperatureCorrection,TemperatureConstant)
+        fakePD = prefilter_correction(fakePD,wlData_arr,prefilter[rows,cols],Tetalon=Tfg,TemperatureCorrection=TemperatureCorrection,TemperatureConstant=TemperatureConstant,shift=None)
         PD = np.squeeze(np.moveaxis(fakePD[:,:,0,:,0],2,0))
         
     
@@ -1980,8 +1980,8 @@ def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, Temp
             F = F/F[slice(0,2048),slice(0,2048)].mean(axis=(0,1))[np.newaxis,np.newaxis]
 
         if prefilter_f is not None:
-            F = prefilter_correction(F[...,np.newaxis],[wave_flat],prefilter,None,TemperatureCorrection,TemperatureConstant)[...,0]
-            
+            TFfg = hF['FGOV1PT1']
+            F = prefilter_correction(F[...,np.newaxis],[wave_flat],prefilter,Tetalon=TFfg,TemperatureCorrection=TemperatureCorrection,TemperatureConstant=TemperatureConstant,shift=None)[...,0]
         PD = PD / F[np.newaxis,rows,cols,0,cpos_f]
     
     field_stop_loc = os.path.realpath(__file__)
@@ -2045,7 +2045,7 @@ def PDProcessing(data_f, flat_f, dark_f, norm_f = True, prefilter_f = None, Temp
         h.comments['NAXIS2'] = 'number of pixels on the y axis'
         
         with fits.open(data_f) as hdr:
-            hdr[0].data = PD
+            hdr[0].data = PD.astype('float32')
             hdr[0].header = h
             
             hdr.writeto(out_dir+name, overwrite=True)
@@ -2135,7 +2135,7 @@ def SCGravitationalRedshift(hdr):
     
     return vg
 
-def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True, TemperatureConstant = 36.46e-3,prefilter_f=None,solar_rotation=True):
+def CavityMapComputation(filen,out_name=None,nc=32,TemperatureCorrection=True, TemperatureConstant = 40.1225e-3,prefilter_f=None,solar_rotation=True):
     """
     Cavity Map computation from flat field.
     This function returns the Cavity errors in \AA at each polarimetric modulation.
