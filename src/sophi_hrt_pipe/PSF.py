@@ -532,8 +532,10 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False,straylight_cor
             norma=norma_otf
             #norma=np.max(np.abs(otf)[:])
             otf=otf/norma #Normalization of the OTF
-            if not ideal or not straylight_corr:
-                otf = add_straylight_to_otf(otf)
+            
+            if not ideal: #ideal MTF cannot have straylight correction
+                if straylight_corr:
+                    otf = add_straylight_to_otf(otf)
         else:
             norma=1
         otf=otf[...,np.newaxis]#To create a 3rd dummy axis    
