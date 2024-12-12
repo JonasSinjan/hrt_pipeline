@@ -835,7 +835,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
                 gamma=[1,0] #To account only for the 1st image
 
     #OTFs
-    Hk,normhk=OTF(a,a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,straylight_corr=straylight_corr)
+    Hk,normhk=OTF(a,a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,ideal=False,straylight_corr=straylight_corr)
     
     #Restoration
     Q=Qfactor(Hk,gamma=gamma,reg=reg,nuc=nuc,N=N)
