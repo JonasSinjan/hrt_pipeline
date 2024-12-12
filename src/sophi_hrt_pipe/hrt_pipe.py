@@ -111,7 +111,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.9.0 November 22nd 2024'
+    version = 'V1.9.1 December 12th 2024'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -174,6 +174,9 @@ def phihrt_pipe(input_json_file):
         CTmode = input_dict['CTmode']
         VtoQU = input_dict['VtoQU']
         
+        if 'PSFstraylight' not in input_dict:
+            input_dict['PSFstraylight'] = False
+
         if isinstance(input_dict['PSFstokes'],bool) and isinstance(input_dict['PSFaberr'],bool) and isinstance(input_dict['PSFstraylight'],bool):
             PSFstokes = {'PD_f': "/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",
                          'deconvolution':input_dict['PSFstokes'],
@@ -185,7 +188,8 @@ def phihrt_pipe(input_json_file):
                          'method':'lofdahl'}
         else:
             PSFstokes = input_dict['PSFstokes']
-            for k,v in zip(['PD_f','low_f','gamma2','aberration_correction','straylight_correction','roi','method'],["/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",0.8,0.02,True,True,False,'lofdahl']):
+            for k,v in zip(['PD_f','low_f','gamma2','aberration_correction','straylight_correction','roi','method'],
+                           ["/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",0.8,0.02,True,False,False,'lofdahl']):
                 if k not in PSFstokes.keys():
                     PSFstokes[k] = v
         # PSFaberr = input_dict['PSFaberr']  
@@ -646,11 +650,8 @@ def phihrt_pipe(input_json_file):
         try:
             data = flat_correction(data,flat,flat_states,cpos_arr,flat_pmp_temp,rows,cols)
             
-            DID_flat = header_flat['PHIDATID']
+            # DID_flat = header_flat['PHIDATID']
             
-            for hdr in hdr_arr:
-                hdr['CAL_FLAT'] = DID_flat
-                hdr['CAL_FNUM'] = flat_states
             if out_intermediate:
                 data_flatc = data.copy()
             
@@ -660,7 +661,8 @@ def phihrt_pipe(input_json_file):
                 filename = flat_f
             
             for hdr in hdr_arr:
-                hdr['CAL_FLAT'] = filename#DID_flat  - not the FILENAME keyword, in case we are trying with extra cleaned flats
+                hdr['CAL_FLAT'] = filename
+                hdr['CAL_FNUM'] = flat_states
 
             printc('--------------------------------------------------------------',bcolors.OKGREEN)
             printc(f"------------- Flat Field correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
@@ -1057,22 +1059,22 @@ def phihrt_pipe(input_json_file):
 
             ## Fran's code
             mask = np.ones((data_size[0],data_size[1]))
-            if norm_stokes:
-                if limb and ~PSFstokes['roi']:
-                    mask = limb_mask[...,scan]
-            if fs_c:
-                mask = mask*field_stop[rows,cols]
+            if PSFstokes['roi']:
+                psfy, psfx = sly, slx
+            else:
+                if norm_stokes:
+                    if limb:# and ~PSFstokes['roi']:
+                        mask = limb_mask[...,scan]
+                if fs_c:
+                    mask = mask*field_stop[rows,cols]
+                psfy, psfx = slice(0,data.shape[0]), slice(0,data.shape[1])
 
             if iss_off:
                 mask = binary_erosion(mask>0,generate_binary_structure(2,2), iterations=3)
             
             if np.sum(mask==0) == 0:
                 mask = None
-            
-            if PSFstokes['roi']:
-                psfy, psfx = sly, slx
-            else:
-                psfy, psfx = slice(0,data.shape[0]), slice(0,data.shape[1])
+                
             # deconvolution on modulated data
             # dat, _ = demod_hrt(data[...,scan],pmp_temp,modulate=True)
             if cpos_arr[scan] == 5: # set continuum in the first wavelength for the deconvolution
@@ -1096,7 +1098,7 @@ def phihrt_pipe(input_json_file):
             # res_stokes, _ = demod_hrt(res_stokes,pmp_temp)
 
             data[...,scan] = res_stokes
-            hdr_arr[scan]['CAL_PSF'] = '{0:s} PSF deconv; gamma2={1:f}; low_f={2:f}; aberration: {3:}'.format(PSFstokes['method'],PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'],PSFstokes['straylight_correction'])
+            hdr_arr[scan]['CAL_PSF'] = '{0:s} PSF deconv; gamma2={1:f}; low_f={2:f}; aberration: {3:}; straylight: {4:}'.format(PSFstokes['method'],PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'],PSFstokes['straylight_correction'])
             ##
             
             hdr_arr[scan]['CAL_ZER'] = str(list(np.round(coefs,5)))
@@ -1352,7 +1354,7 @@ def phihrt_pipe(input_json_file):
         # dt = datetime.datetime.fromtimestamp(overall_time)
         # runtime = dt.strftime("%d_%m_%YT%H_%M_%S")
 
-        json.dump(input_dict, open(out_dir + f"config_file_{start_proc}.json", "w"))
+        json.dump(input_dict, open(out_dir + f"config_file_{start_proc}_{hdr_arr[0]['PHIDATID']}_V{vrs}.json", "w"))
         
     print(" ")
     printc('--------------------------------------------------------------',color=bcolors.OKGREEN)

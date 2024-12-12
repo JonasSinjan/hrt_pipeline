@@ -33,6 +33,16 @@ Delta_x=10e-6 #Size of the pixel [m]
 # if gamma2!=0:
 #     print('WARNING: gamma2 equal to %g'%gamma2)
 
+def image_constants(N,wvl=617.3341e-9,fnum=29.4643,Delta_x=10e-6):
+    nuc=1/(wvl*fnum) #Critical frequency (m^(-1))
+    inc_nu=1/(N*Delta_x)
+    R=(1/2)*nuc/inc_nu #Pupil radius [pixel]
+    nuc=2*R #critical frequency (pixels)
+    nuc-=1
+    ap=aperture(N,R,cobs=0)
+    RHO,THETA=sampling2(N=N,R=R)
+    return RHO, THETA, ap, nuc, R
+
 def fourier2(f,s=None):
     """
     This function calculates the Direct Fast Fourier Transform of an
@@ -500,7 +510,7 @@ def select_tiptilt(a,i,K):
     a1=np.concatenate((firsta,a[(2*K+1):])) #0 is for the offset term
     return a1
 
-def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False,straylight_corr=True):
+def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,straylight_corr=True):
     """
     This function calculates the OTFs of a circular aperture for  incident
     wavefronts with aberrations given by a set of Zernike coefficients.
@@ -532,7 +542,7 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False,straylight_cor
             norma=norma_otf
             #norma=np.max(np.abs(otf)[:])
             otf=otf/norma #Normalization of the OTF
-            if not ideal or not straylight_corr:
+            if straylight_corr:
                 otf = add_straylight_to_otf(otf)
         else:
             norma=1
@@ -564,7 +574,7 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,ideal=False,straylight_cor
 
 def add_straylight_to_otf(otf):
     """input otf must be normalised"""
-    print('Hello!')
+    print('Straylight correction')
     A1   = 1       # weight for PD-MTF
     A2   = 0       # weight for near-field straylight
     A3   = 0.1     # weight for far-field straylight
@@ -814,13 +824,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
     """
     #Pupil sampling according to image size
     N=ima.shape[0]
-    nuc=1/(wvl*fnum) #Critical frequency (m^(-1))
-    inc_nu=1/(N*Delta_x)
-    R=(1/2)*nuc/inc_nu #Pupil radius [pixel]
-    nuc=2*R #critical frequency (pixels)
-    nuc-=1
-    ap=aperture(N,R,cobs=cobs)
-    RHO,THETA=sampling2(N=N,R=R)
+    RHO, THETA, ap, nuc, _ = image_constants(N,wvl,fnum,Delta_x)
 
     #Fourier transform images
     Ok, gamma, wind, susf=prepare_PD(ima,nuc=nuc,N=N,wind=wind)
@@ -867,8 +871,75 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
 
     #Apply MTF of ideal telescope
     if aberr_cor:
-        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,ideal=True,straylight_corr=False)
+        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,straylight_corr=False)
         O=Hk_th[...,0]*O
+
+    Oshift=np.fft.fftshift(O)
+    o=np.fft.ifft2(Oshift)
+    #o=np.fft.fftshift(o)
+    o_restored=N**2*o.real
+    object=o_restored+susf
+    return object,susf,noise_filt
+    # return locals()
+
+def object_estimate_short(ima,Hk,Q,nuc,wind=True,low_f=0.2,noise='default',Hk_th=None):
+    """
+    This function restores an image or an array of images employing a given
+    set of Zernike coefficients.
+    Inputs:
+        ima: 2D array with the image to be restored or 3D array with PD
+            images at different focus positions.
+        a: array containing the set of Zernike coefficients in Noll's order    
+        a_d: 0 if 'ima' is a 2D array or Numpy array with the list of
+            focus positions if 'ima' is a 3D array
+        reg: regularization parameter (also gamma2). Default: 0.1
+        wind: True or False. True to apodize the image an False otherwise.
+        cobs: central obscuration of the telescope (0 if off-axis).
+        cut: number of pixels to be excluded near the edges of the image (to
+            compute the merit function).
+        low_f: low limit of the noise filter, as defined in 'filter_sch'         
+        tiptilt: True or False. If True, the first Zernike coefficients refer to
+            the Tip/Tilt term of each of the images. False by Default because
+            the Tip/Tilt terms usually vary a lot along the image and images are
+            aligned with subpixel accuracy by a cross-correlation technique in
+            'prepare_PD'
+        noise: 'default' to be computed as filt_scharmer. Otherwise, this variable
+            should contain a 2x2 array with the filter.
+    Output:
+        object: restored image
+        susf: offset defined in 'prepare_PD' 
+        noise_filt: noise filter applied to deconvolve the images        
+    """
+    #Pupil sampling according to image size
+    
+    #Fourier transform images
+    N = max(ima.shape)
+    Ok, gamma, wind, susf=prepare_PD(ima,nuc=nuc,N=N,wind=wind)
+
+    if isinstance(noise,str):
+        if noise=='default':
+            noise_filt=filter_sch(Q,Ok,Hk,gamma=gamma,nuc=nuc,N=N,low_f=low_f)
+        else:
+            print('WARNING. Only default is accepted as a string input. It will run anyway.')
+            noise_filt=filter_sch(Q,Ok,Hk,gamma=gamma,nuc=nuc,N=N,low_f=low_f)
+    else:
+        noise_filt=noise.copy()
+
+    #if gamma[1]==0 and N==1536: #For FDT images
+    #    noise_filt=noise_filt*cir_aperture(R=nuc-200,N=N,ct=0)
+
+    Nima=Ok.shape[2]
+    Ok_before_noise = Ok.copy()
+    for i in range(0,Nima):
+        #Filtering in Fourier domain
+        Ok[:,:,i]=noise_filt*Ok[:,:,i]
+
+    #Restoration
+    O=Ffactor(Q,Ok,Hk,gamma=gamma)
+
+    #Apply MTF of ideal telescope
+    if Hk_th is not None:
+        O=Hk_th.copy()[...,0]*O
 
     Oshift=np.fft.fftshift(O)
     o=np.fft.ifft2(Oshift)
@@ -963,9 +1034,22 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
             #Restoration
             if rest=='lofdahl':
                 if i==0 and j==0:#Optimum filter computed only for Stokes I at cont.
+                    
+                    # quantities that are constant in restoration (for object_estimate_short)
+                    N=im0.shape[0]
+                    RHO, THETA, ap, nuc, _ = image_constants(N,wvl,fnum,Delta_x)
+                    #OTFs
+                    Hk,_ = OTF(coefs,0,RHO,THETA,ap,norm=True,K=1,tiptilt=True,straylight_corr=straylight_corr)
+                    if aberr_cor:
+                        Hk_th,_ = OTF(np.zeros(coefs.shape),0,RHO,THETA,ap,norm=True,K=1,tiptilt=True,straylight_corr=False)
+                    else:
+                        Hk_th = None
+                    #Restoration
+                    Q = Qfactor(Hk,gamma=1,reg=gamma2,nuc=nuc,N=N) # gamma is 1 in restoration only
+                    ## 
+
                     noise='default'#Löfdahl & Scharmer's (1994) optimum filter 
                     # noise filter from smaller region
-                    # small roi
                     if size != size_roi:
                         print('-----------> Noise filter from smaller region:',sly,slx)
                         im0_roi = stokes_data[sly,slx,i,j] #* edge_mask
@@ -977,8 +1061,11 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
                     noise=noise_filt #To use always the same noise_filt (I at continuum)   
                 
                 #Restoration using mean power of noise at I_cont
-                res_stokes[:,:,i,j],susf,noise_filt=object_estimate(im0,coefs,0,
-                        reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor)
+                
+                res_stokes[:,:,i,j],_,noise_filt=object_estimate_short(im0,Hk=Hk.copy(),Q=Q.copy(),nuc=nuc,wind=True,low_f=low_f,noise=noise,Hk_th=Hk_th)
+                
+                # res_stokes[:,:,i,j],susf,noise_filt=object_estimate(im0,coefs,0,
+                #         reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor,straylight_corr=straylight_corr)
                 
             # not used in SO/PHI-HRT
             # elif rest=='unsupervised_wiener' or rest=='lucy-richardson':
@@ -1017,8 +1104,9 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
                         mode='symmetric')
         if rest=='lofdahl':
             noise=noise_filt
-        res_cavity,susf,noise_filt=object_estimate(im0,coefs,0,
-                        reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor)
+        # res_cavity,susf,noise_filt=object_estimate(im0,coefs,0,
+        #                 reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor,straylight_corr=straylight_corr)
+        res_cavity,_,noise_filt=object_estimate_short(im0,Hk.copy(),Q.copy(),nuc,wind=True,low_f=low_f,noise=noise,Hk_th=Hk_th)
         res_cavity = res_cavity[pad_width:res_cavity.shape[0]-pad_width,pad_width:res_cavity.shape[1]-pad_width]
     else:
         res_cavity = None
@@ -1057,7 +1145,33 @@ def edge_masking(stokes, mask, cavity=None):
     
     return stokes_edge, cavity
 
+def extract_coefs(tobs,PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv', radians = True, verbose = True):
+    import csv
+    if isinstance(tobs,str):
+        tobs = datetime.datetime.fromisoformat(tobs)
+    if radians:
+        converter = 2*np.pi
+    else:
+        converter = 1
+    f = open(PD_f,'r')
+    reader = csv.reader(f,delimiter=',')
+    Z = {}
+    for row in reader:
+        if row[0] == 'Date':
+            dates = [datetime.datetime.strptime(r,'%d-%m-%y') for r in row[1:]]
+        elif 'Z' in row[0]:
+            Z[row[0]] = np.asarray([float(z) * converter for z in row[1:]]) # *2*npi to convert to radians
 
+    idx = np.argmin([abs(tobs - t) for t in dates])
+
+    coefs = [Z[k][idx] for k in Z.keys()]
+
+    #Zernike coefficients (in radians), starting from Z1 (offset)
+    coefs=np.array(coefs) #Convert into numpy array
+    if verbose:
+        print('Zernike coefficients from PD dataset acquired on',dates[idx])
+        print(np.round(coefs,5))
+    return coefs
 
 def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, straylight_corr=False, padding=True, cavity=None, PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv'):
     #Input parameters
@@ -1079,54 +1193,22 @@ def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(
     #Restoration parameters
     wind_opt=True #True to apodize the image
 
-    #Subregion to be shown for plots
-    # x0=400
-    # xf=800
-    # y0=200
-    # yf=600
+    coefs=extract_coefs(tobs,PD_f)
 
-    import csv
-    f = open(PD_f,'r')
-    reader = csv.reader(f,delimiter=',')
-    Z = {}
-    for row in reader:
-        if row[0] == 'Date':
-            dates = [datetime.datetime.strptime(r,'%d-%m-%y') for r in row[1:]]
-        elif 'Z' in row[0]:
-            Z[row[0]] = np.asarray([float(z) * 2*np.pi for z in row[1:]]) # *2*npi to convert to radians
-
-    idx = np.argmin([abs(tobs - t) for t in dates])
-
-    coefs = [Z[k][idx] for k in Z.keys()]
-
-    #Zernike coefficients (in radians), starting from Z1 (offset)
-    coefs=np.array(coefs) #Convert into numpy array
-
-    print('Zernike coefficients from PD dataset acquired on',dates[idx])
-    print(np.round(coefs,5))
     if aberr_cor:
         print('Aberration correction is ON')
-
-    #Read image and shift the axes
-    # ima=pdf.read_image(ffolder+'/'+fname,ext=ext)
-    # ima=np.moveaxis(ima,-2,0)
-    # ima=np.moveaxis(ima,-1,1)
-    # ima=np.moveaxis(ima,2,3)
-    # stokes_data=ima
 
     if mask is not None:
         stokes_data_edge, cavity = edge_masking(stokes_data, mask, cavity)
     else:
         stokes_data_edge = stokes_data.copy()
 
-
     # res_stokes, res_cavity=stokes_restoration(stokes_data_edge,coefs,sly=sly,slx=slx,rest=rest, gamma2=gamma2,
     #                                 denoise=denoise,
     #                                 wind_opt=wind_opt,low_f=low_f,
     #                                 num_iter=num_iter, aberr_cor=aberr_cor,padding=padding, cavity=cavity)
     res_stokes, res_cavity = stokes_restoration(stokes_data_edge,coefs,sly=sly,slx=slx,rest=rest, gamma2=gamma2,
-                                    denoise=denoise,
-                                    wind_opt=wind_opt,low_f=low_f,
+                                    denoise=denoise, wind_opt=wind_opt,low_f=low_f,
                                     num_iter=num_iter, aberr_cor=aberr_cor, straylight_corr=straylight_corr,padding=padding, cavity=cavity)
     
     if mask is not None:

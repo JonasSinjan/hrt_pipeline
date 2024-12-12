@@ -2378,7 +2378,7 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undisto
             und_phi = phi
         phi_map = sunpy.map.Map((und_phi,h_phi))
     else:
-        phi = np.pad(phi,[(start_row,2048-(start_row+phi.shape[0])),(start_col,2048-(start_row+phi.shape[1]))])
+        phi = np.pad(phi,[(start_row,2048-(start_row+phi.shape[0])),(start_col,2048-(start_col+phi.shape[1]))])
         h_phi['NAXIS1'] = 2048; h_phi['NAXIS2'] = 2048
         h_phi['PXBEG1'] = 1; h_phi['PXBEG2'] = 1; h_phi['PXEND1'] = 2048; h_phi['PXEND2'] = 2048; 
         h_phi['CRPIX1'] += start_col; h_phi['CRPIX2'] += start_row
