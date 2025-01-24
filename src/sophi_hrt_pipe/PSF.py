@@ -534,18 +534,28 @@ def OTF(a,a_d,RHO,THETA,ap,norm=None,K=2,tiptilt=True,straylight_corr=True):
     """
     #If a_d is a number or a vector containing the aberrations of the PD plate
     if isinstance(a_d, (float,int)) or len(a_d)>K:
-        #Pupil
-        p=pupil(a,a_d,RHO,THETA,ap)
-        #OTF
-        norma_otf,otf=corr(p,p,norma=True)
-        if norm==True:
-            norma=norma_otf
-            #norma=np.max(np.abs(otf)[:])
-            otf=otf/norma #Normalization of the OTF
-            if straylight_corr:
-                otf = add_straylight_to_otf(otf)
-        else:
-            norma=1
+        
+        norma = 1
+        if np.ndim(a) == 1: # Zernike coeffs given as input
+            #Pupil
+            p=pupil(a,a_d,RHO,THETA,ap)
+            #OTF
+            norma_otf,otf=corr(p,p,norma=True)
+            if norm==True:
+                norma=norma_otf
+                #norma=np.max(np.abs(otf)[:])
+                otf=otf/norma #Normalization of the OTF
+        elif np.ndim(a) == 2: # PSF given as input
+            # PSF to OTF
+            otf = ifftshift(fft2(a))
+            if norm==True:
+                norma = fftshift(otf)[0,0]
+                otf=otf/norma
+            
+
+        if straylight_corr:
+            otf = add_straylight_to_otf(otf)
+        
         otf=otf[...,np.newaxis]#To create a 3rd dummy axis    
     #If a_d is an array containing K diversities
     elif len(a_d)==K:
@@ -577,7 +587,7 @@ def add_straylight_to_otf(otf):
     print('Straylight correction')
     A1   = 1       # weight for PD-MTF
     A2   = 0       # weight for near-field straylight
-    A3   = 0.1     # weight for far-field straylight
+    A3   = 0.11     # weight for far-field straylight
     A4   = 0       # global straylight
     B2   = 1       # standard dev. for near-field straylight
     B3   = 300    # standard dev. for far-field straylight
@@ -597,11 +607,18 @@ def add_straylight_to_otf(otf):
     X,Y = np.meshgrid(x,y)
     X = X*freqscale
     Y = Y*freqscale
-    XC = X[int(w/2)-1,int(w/2)-1]
-    YC = Y[int(w/2)-1,int(w/2)-1]
+    XC = X[int(w/2),int(w/2)]
+    YC = Y[int(w/2),int(w/2)]
     R = (X-XC)**2 + (Y-YC)**2
     
-    otf_new = A1*otf + A3*np.exp(-2*np.pi**2*(B3)**2*R)
+    # otf_new = A1*mtf + A3*np.exp(-2*np.pi**2*(B3)**2*R)
+    
+    mtf = np.abs(otf)
+    phtf = np.angle(otf)
+    sl = A3*np.exp(-2*np.pi**2*(B3)**2*R)
+    sl[sl < 1e-45] = 0 # similar to idl
+    mtf_new = A1*mtf + sl
+    otf_new = mtf_new * np.exp(1j*phtf)
 
     return otf_new
 
@@ -871,12 +888,13 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
 
     #Apply MTF of ideal telescope
     if aberr_cor:
-        Hk_th,_ = OTF(np.zeros(a.shape),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,straylight_corr=False)
+        Hk_th,_ = OTF(np.zeros(20),a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,straylight_corr=False)
         O=Hk_th[...,0]*O
 
     Oshift=np.fft.fftshift(O)
     o=np.fft.ifft2(Oshift)
-    #o=np.fft.fftshift(o)
+    if np.ndim(a) == 2:
+        o=np.fft.fftshift(o)
     o_restored=N**2*o.real
     object=o_restored+susf
     return object,susf,noise_filt
@@ -1004,6 +1022,8 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
         if size != size_roi: pad_width_roi = int(0)
     res_stokes = np.zeros((size+pad_width*2,size+pad_width*2,4,6))
 
+    if np.ndim(coefs) == 2:
+        assert coefs.shape[0] == size+pad_width*2, f'PSF must have the shape of the padded image, which is ({size+pad_width*2},{size+pad_width*2}). Adieu'
 
     # if modulation is True:
     #     intensity_data=mod_hrt() @ stokes_data
@@ -1041,7 +1061,7 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
                     #OTFs
                     Hk,_ = OTF(coefs,0,RHO,THETA,ap,norm=True,K=1,tiptilt=True,straylight_corr=straylight_corr)
                     if aberr_cor:
-                        Hk_th,_ = OTF(np.zeros(coefs.shape),0,RHO,THETA,ap,norm=True,K=1,tiptilt=True,straylight_corr=False)
+                        Hk_th,_ = OTF(np.zeros(20),0,RHO,THETA,ap,norm=True,K=1,tiptilt=True,straylight_corr=False)
                     else:
                         Hk_th = None
                     #Restoration
@@ -1063,7 +1083,8 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
                 #Restoration using mean power of noise at I_cont
                 
                 res_stokes[:,:,i,j],_,noise_filt=object_estimate_short(im0,Hk=Hk.copy(),Q=Q.copy(),nuc=nuc,wind=True,low_f=low_f,noise=noise,Hk_th=Hk_th)
-                
+                if np.ndim(coefs) == 2:
+                    res_stokes[:,:,i,j] = fftshift(res_stokes[:,:,i,j])
                 # res_stokes[:,:,i,j],susf,noise_filt=object_estimate(im0,coefs,0,
                 #         reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor,straylight_corr=straylight_corr)
                 
@@ -1107,6 +1128,8 @@ def stokes_restoration(stokes_data,coefs,sly = slice(0,2048), slx = slice(0,2048
         # res_cavity,susf,noise_filt=object_estimate(im0,coefs,0,
         #                 reg=gamma2,wind=wind_opt,low_f=low_f,noise=noise,aberr_cor=aberr_cor,straylight_corr=straylight_corr)
         res_cavity,_,noise_filt=object_estimate_short(im0,Hk.copy(),Q.copy(),nuc,wind=True,low_f=low_f,noise=noise,Hk_th=Hk_th)
+        if np.ndim(coefs) == 2:
+            res_cavity = fftshift(res_cavity)
         res_cavity = res_cavity[pad_width:res_cavity.shape[0]-pad_width,pad_width:res_cavity.shape[1]-pad_width]
     else:
         res_cavity = None
@@ -1173,7 +1196,7 @@ def extract_coefs(tobs,PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_res
         print(np.round(coefs,5))
     return coefs
 
-def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, straylight_corr=False, padding=True, cavity=None, PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv'):
+def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(0,2048), rest='lofdahl', gamma2 = 0.1, low_f=0.1, denoise=False, num_iter=10, aberr_cor = False, straylight_corr=False, padding=True, cavity=None, PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv', PSF=None):
     #Input parameters
     # mask=None # mask of the field_stop and limb
     # rest='lofdahl' #'lofdahl','lucy-richardson'or 'unsupervised_wiener'. Type of restoration (Here only lofdahl is implemented)
@@ -1189,11 +1212,15 @@ def fran_restore(stokes_data, tobs, mask=None, sly = slice(0,2048), slx = slice(
     # padding=True # if True, Padding is applied
     # cavity=None # if cavity array is given, then it is deconvolved
     # PD_f='/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv' look-up table for the Zernike values
-
+    # PSF=None # if PSF is given, then it is used for the restoration instead of the Zernike coefficients
     #Restoration parameters
     wind_opt=True #True to apodize the image
 
-    coefs=extract_coefs(tobs,PD_f)
+    if PSF is None:
+        coefs=extract_coefs(tobs,PD_f)
+    else:
+        print('PSF is given, no Zernike coefficients from look-up table are used')
+        coefs = PSF
 
     if aberr_cor:
         print('Aberration correction is ON')

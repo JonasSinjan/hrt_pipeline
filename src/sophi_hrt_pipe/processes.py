@@ -800,8 +800,7 @@ def crosstalk_2D_ItoQUV(data: np.ndarray,
                      mode: str = 'standard',
                      divisions: int = 16,
                      ind_wave: bool = False,
-                     continuum_pos: int = 0,
-                     VtoQU: bool = False):
+                     continuum_pos: int = 0):
     """
     crosstalk_ItoQUV calculates the cross-talk from Stokes $I$ to Stokes $Q$, $U$, and $V$.
 
@@ -839,8 +838,7 @@ def crosstalk_2D_ItoQUV(data: np.ndarray,
     :type ind_wave: bool, optional
     :param continuum_pos: If ind_wave, this keyword is mandatory and contains the position of the continuum. defaults to 0.
     :type continuum_pos: int, optional
-    :param VtoQU: If True, it applies the retarder matrix when 'jaeggli' method is performed. defaults to False
-    :type VtoQU: bool, optional
+    
     :return: cross-talk parameters
     :rtype: List of np.ndarray
     """
@@ -857,10 +855,10 @@ def crosstalk_2D_ItoQUV(data: np.ndarray,
         # check two conditions:
         # 1) mask should be > 0 and intensity above lower_threshold
 
-        if mask_set:
-            idx = (xI != 0)
-        else:
-            idx = (xI != 0) & (xI > (lower_threshold/100. * norma))
+        # if mask_set:
+        #     idx = (xI != 0)
+        # else:
+        idx = (xI != 0) & (xI > (lower_threshold/100. * norma))
 
         xI = xI[idx]
         yQ = yQ[idx]
@@ -963,10 +961,11 @@ def crosstalk_2D_ItoQUV(data: np.ndarray,
         if mask.ndim != 2:
             printc('Input mask shall have 2 dimensions but it is of ',mask.ndim,' dimensions',color=bcolors.FAIL)
             ValueError("Check dimensions of input mask into crosstalk_ItoQUV")
-        mask_set = True
+        # mask_set = True
     else:
-        mask = np.zeros((yd,xd),dtype=bool)
-        mask[int(yd//2-yd//4):int(yd//2+yd//4),int(xd//2-xd//4):int(xd//2+xd//4)]
+        mask = np.ones((yd,xd),dtype=bool)
+        # mask[int(yd//2-yd//4):int(yd//2+yd//4),int(xd//2-xd//4):int(xd//2+xd//4)]
+        # mask_set = False
 
     # threshold = 0.5
     # lower_threshold = 40.
@@ -1098,7 +1097,6 @@ def crosstalk_2D_ItoQUV(data: np.ndarray,
 
         return cQ, cU, cV, sfitQ, sfitU, sfitV, corrected_data
     
-    elif mode == 'jaeggli':
         def _polmodel1(D,theta,chi):
             dH = D*np.cos(chi)*np.sin(theta)
             d45 = D*np.sin(chi)*np.sin(theta)
@@ -1539,8 +1537,8 @@ def crosstalk_auto_VtoQU(data_demod,cpos,wl,roi=np.ones((2048,2048)),verbose=0,n
         if True, plot results
     npoints: int
         number of points to use for fitting
-    limit: float
-        limit for Stokes I to be considered for fitting
+    nlevel: float
+        limit for Stokes V to be considered for fitting
 
     Returns
     -------

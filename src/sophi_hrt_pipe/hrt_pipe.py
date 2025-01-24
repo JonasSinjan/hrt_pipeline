@@ -111,7 +111,7 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
-    version = 'V1.9.1 December 12th 2024'
+    version = 'V1.9.2 January 24th 2025'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
@@ -174,6 +174,11 @@ def phihrt_pipe(input_json_file):
         CTmode = input_dict['CTmode']
         VtoQU = input_dict['VtoQU']
         
+        if 'set_median_to_zero' not in input_dict:
+            set_median_to_zero = True
+        else:
+            set_median_to_zero = input_dict['set_median_to_zero']
+
         if 'PSFstraylight' not in input_dict:
             input_dict['PSFstraylight'] = False
 
@@ -759,10 +764,10 @@ def phihrt_pipe(input_json_file):
         # limb_side, _, _, sly, slx = limb_side_finder(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)])
         
         # added here to have the high contrast slices
-        AR_temp = ARmasking(data[...,0], field_stop[rows,cols], cpos = cpos_arr[0]) # for ellipse limb fit
-        _, sly, slx, _ = limb_ellipse(data[:,:,0,cpos_arr[0],0], hdr_arr[0],field_stop[rows,cols],AR_temp,high_contrast=True)
+        # AR_temp = ARmasking(demod_hrt(data[...,0].copy(),pmp_temp,False)[0], field_stop[rows,cols], cpos = cpos_arr[0]) # for ellipse limb fit
+        _, sly, slx, _ = limb_ellipse(data[:,:,0,cpos_arr[0],0], hdr_arr[0],field_stop[rows,cols],field_stop[rows,cols],high_contrast=True)
         
-        del AR_temp
+        # del AR_temp
         ####
         if fs_c:
             field_stop = ~binary_dilation(field_stop==0,generate_binary_structure(2,2), iterations=3)
@@ -831,7 +836,10 @@ def phihrt_pipe(input_json_file):
            
             try:
                 AR_temp = ARmasking(data[...,scan], field_stop[rows,cols], cpos = cpos_arr[scan]) # for ellipse limb fit
-                limb_temp, sly, slx, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=True)
+                if iss_off: # no need to re-run the high contrast ROI search
+                    limb_temp, _, _, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=False)
+                else:
+                    limb_temp, sly, slx, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=True)
                 
                 # limb_temp, sly, slx, side, limb_percent_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],percent=True)
                 
@@ -930,14 +938,12 @@ def phihrt_pipe(input_json_file):
             # else: #20211116
             #     ctalk_params = crosstalk_auto_ItoQUV(data[...,scan],cpos_arr[scan],cpos_arr[scan],roi=Ic_mask[...,scan]) #20211116
             
-            cQ, cU, cV, sfitQ, sfitU, sfitV, data[...,scan] = crosstalk_2D_ItoQUV(data[...,scan],
-                                                                                  False,
-                                                                                  limb_percent_mask[...,scan],
+            cQ, cU, cV, sfitQ, sfitU, sfitV, data[...,scan] = crosstalk_2D_ItoQUV(data[...,scan].copy(),
+                                                                                  mask=limb_percent_mask[:,:,scan],
                                                                                   mode=CTmode,
                                                                                   threshold = .5,
                                                                                   divisions = 16,
-                                                                                  norma = 2,
-                                                                                  VtoQU = VtoQU)
+                                                                                  norma = 1)
             # CTparams[...,scan] = ctalk_params
             
             # scan_hdr['CAL_CRT0'] = round(ctalk_params[slope,q],4) #I-Q slope
@@ -972,40 +978,38 @@ def phihrt_pipe(input_json_file):
         printc('-->>>>>>> No ItoQUV mode',color=bcolors.WARNING)
 
     if VtoQU:
-        if CTmode == 'jaeggli':
-            printc('-->>>>>>> Cross-talk correction V to Q,U already applied',color=bcolors.OKGREEN)
-        else:        
-            print(" ")
-            printc('-->>>>>>> Cross-talk correction V to Q,U ',color=bcolors.OKGREEN)
-
-            start_time = time.perf_counter()
-
-            slope, offset = 0, 1
-            q, u = 0, 1
-            CTparams = np.zeros((2,2,number_of_scans))
-            
-            for scan, scan_hdr in enumerate(hdr_arr):
-                printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
-                if ghost_c: #20211116
-                    ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=np.asarray(Ic_mask[...,scan]*field_stop_ghost[rows,cols],dtype=bool),nlevel=0.3) #20211116
-                else: #20211116
-                    ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,6),slice(0,6),roi=Ic_mask[...,scan],nlevel=0.3) #20211116
                 
-                CTparams[...,scan] = ctalk_params
-                #wrong keywords for CT parameters: fixed on 2022-10-07
-                scan_hdr['CAL_CRT6'] = round(ctalk_params[slope,q],4) #V-Q slope
-                scan_hdr['CAL_CRT8'] = round(ctalk_params[slope,u],4) #V-U slope
-                scan_hdr['CAL_CRT7'] = round(ctalk_params[offset,q],4) #V-Q offset
-                scan_hdr['CAL_CRT9'] = round(ctalk_params[offset,u],4) #V-U offset
-                    
-            data = CT_VtoQU(data, CTparams)
-            
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
-            printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
-            printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        print(" ")
+        printc('-->>>>>>> Cross-talk correction V to Q,U ',color=bcolors.OKGREEN)
+
+        start_time = time.perf_counter()
+
+        slope, offset = 0, 1
+        q, u = 0, 1
+        CTparams = np.zeros((2,2,number_of_scans))
         
-        if (not iss_off or not PSFstokes['deconvolution']) and fs_c:
-            data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
+        for scan, scan_hdr in enumerate(hdr_arr):
+            printc(f'  ---- >>>>> CT parameters computation of data scan number: {scan} .... ',color=bcolors.OKGREEN)
+            if ghost_c:
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,data.shape[3]),slice(0,data.shape[3]),roi=np.asarray(field_stop[rows,cols]*field_stop_ghost[rows,cols],dtype=bool),nlevel=0.3)
+            else:
+                ctalk_params = crosstalk_auto_VtoQU(data[...,scan],slice(0,data.shape[3]),slice(0,data.shape[3]),roi=field_stop[rows,cols],nlevel=0.3)
+            
+            CTparams[...,scan] = ctalk_params
+            #wrong keywords for CT parameters: fixed on 2022-10-07
+            scan_hdr['CAL_CRT6'] = round(ctalk_params[slope,q],4) #V-Q slope
+            scan_hdr['CAL_CRT8'] = round(ctalk_params[slope,u],4) #V-U slope
+            scan_hdr['CAL_CRT7'] = round(ctalk_params[offset,q],4) #V-Q offset
+            scan_hdr['CAL_CRT9'] = round(ctalk_params[offset,u],4) #V-U offset
+                
+        data = CT_VtoQU(data, CTparams)
+        
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+        printc(f"------------- V -> Q,U cross talk correction time: {np.round(time.perf_counter() - start_time,3)} seconds ",bcolors.OKGREEN)
+        printc('--------------------------------------------------------------',bcolors.OKGREEN)
+    
+    if (not iss_off or not PSFstokes['deconvolution']) and fs_c:
+        data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
 
     else:
         print(" ")
@@ -1124,7 +1128,7 @@ def phihrt_pipe(input_json_file):
     # SET MEDIAN TO ZERO
     #-----------------
 
-    if norm_stokes:
+    if norm_stokes and set_median_to_zero:
         print(" ")
         printc('-->>>>>>> Set Median to 0',color=bcolors.OKGREEN)
         for scan in range(data_shape[-1]):
@@ -1213,7 +1217,7 @@ def phihrt_pipe(input_json_file):
                 tmp = np.moveaxis(tmp, [-1,-2], [0,1])
                 write_out_intermediate(tmp, hdr_interm, history_str, scan, root_scan_name, file_suffix, vrs, out_dir, bunit = 'I_CONT', btype = 'STOKES')
 
-            if PSFstokes:
+            if PSFstokes['deconvolution']:
                 history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}. PSF deconvolution: {True}"
                 file_suffix = 'stokes_noPSF'
                 tmp = data_not_deconvolved[:,:,:,:,count]

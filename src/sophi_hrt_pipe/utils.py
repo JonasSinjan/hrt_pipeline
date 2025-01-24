@@ -1081,16 +1081,17 @@ def double_gaus(x,a0,x0,sigma0,a1,x1,sigma1):
     """
     return a0*np.exp(-(x-x0)**2/(2*sigma0**2)) + a1*np.exp(-(x-x1)**2/(2*sigma1**2))
 
-def double_gaussian_fit(a,show=True):
-    """Gaussian fit for data 'a' from np.histogram or plt.hist
-
+def double_gaussian_fit(a,show=True,covariance=False):
+    """Two Gaussian fit for data 'a' from np.histogram or plt.hist
+    The gaussian must be complitely separated and on opposite sides of the distribution
     Parameters
     ----------
     a : array
         output from np.histogram or plt.hist
     show : bool, optional
         show plot of fit, by default True
-    
+    covariance: bool, optional
+        if True, reutn the covariance matrix (Default: False)
     Returns
     -------
     p : array
@@ -1111,7 +1112,10 @@ def double_gaussian_fit(a,show=True):
             lbl = '{:.2e} $\pm$ {:.2e}\n{:.2e} $\pm$ {:.2e}'.format(p[1],p[2],p[4],p[5])
             plt.plot(xx,double_gaus(xx,*p),'r--', label=lbl)
             plt.legend(fontsize=9)
-        return p
+        if covariance:
+            return p,cov
+        else:
+            return p
     except:
         printc("Gaussian fit failed: return initial guess",color=bcolors.WARNING)
         return p0
@@ -1218,9 +1222,9 @@ def subROIconstrast(img, img_mask, windowSize, windowSeparation):
     contrast = np.zeros((img.shape))
     # shift_raw = np.zeros((2,pn*wln))
 
-    for i in range(windowSize*2,data_size[0]-windowSize*1,windowSeparation):
-        for j in range(windowSize*2,data_size[1]-windowSize*1,windowSeparation):
-            # print(f'({i}/{data_size[0]}, {j}/{data_size[1]})')#\r',end='')
+    for i in list(range(int(50),int(data_size[0]-50),windowSeparation))+list(range(int(data_size[0]-50),int(50),-windowSeparation)):
+        for j in list(range(int(50),int(data_size[1]-50),windowSeparation))+list(range(int(data_size[1]-50),int(50),-windowSeparation)):
+             # print(f'({i}/{data_size[0]}, {j}/{data_size[1]})')#\r',end='')
             roi = (slice(i-windowSize,i+windowSize),slice(j-windowSize,j+windowSize))
             if img_mask[roi].sum() == 4*windowSize**2:
                 temp = img[roi].copy()
@@ -1290,45 +1294,17 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
 
         return residual
 
-    def _image_derivative(d):
-        """Calculates the image derivative in x and y using a 3x3 kernel
-
-        Parameters
-        ----------
-        d : numpy.ndarray
-            image to calculate derivative of
-
-        Returns
-        -------
-        SX : numpy.ndarray
-            derivative in x direction
-        SY : numpy.ndarray
-            derivative in y direction
-        """
-        import numpy as np
-        from scipy.signal import convolve
-        kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
-        ky = np.asarray([[1,1,1], [0,0,0], [-1,-1,-1]])
-
-        kx=kx/3.
-        ky=ky/3.
-
-        SX = convolve(d, kx,mode='same')
-        SY = convolve(d, ky,mode='same')
-
-        return SX, SY
-
     from scipy.optimize import least_squares
     from scipy.ndimage import binary_erosion, binary_dilation
 
-    side, center, Rpix, sly, slx, finder_small = limb_side_finder(img,hdr,verbose=verbose,outfinder=True)
+    side, center, Rpix, sly, slx = limb_side_finder(img,hdr,verbose=verbose,outfinder=False)
     
     s = 5
 
     hi = np.histogram(img[s:-s,s:-s][AR_mask[s:-s,s:-s]>0].flatten(),bins=100);
-    gres = double_gaussian_fit(hi,False)
+    gres, cov = double_gaussian_fit(hi,False,True)
     
-    if side == '' and min(gres[1],gres[4]) < max(gres[1],gres[4])/3: # sometimes south pole limb is not found, so extra condition on fit
+    if side == '' and (np.any((np.sqrt(np.diagonal(cov))/gres)[:3] > 10) or np.any(np.isnan(cov))): # sometimes south pole limb is not found, so extra condition on fit
         output = [None,sly,slx,side]
         
         if percent:
@@ -1359,8 +1335,9 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
     mask96 = elliptical_mask(img.shape,[p.x[0]*.96,p.x[1]*.96,p.x[2],p.x[3],p.x[4]])
     
     if high_contrast:
-        if hdr['DSUN_AU'] < 0.4:
-            windowSize = 384
+        # if hdr['DSUN_AU'] < 0.4:
+        #     windowSize = 384
+        # else:
         windowSize = 256
         contrast256 = subROIconstrast(img.copy(), (field_stop*mask98)>0, windowSize, windowSize)
         i,j = np.unravel_index(np.argmax(contrast256),contrast256.shape)
