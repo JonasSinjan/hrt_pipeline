@@ -794,7 +794,7 @@ def circular_mask(h, w, center, radius):
     mask = dist_from_center <= radius
     return mask
 
-def limb_side_finder(img, hdr,verbose=True,outfinder=False):
+def limb_side_finder(img, hdr,verbose=True):
     """find the limb in the image
 
     Parameters
@@ -805,8 +805,6 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
         header of the fits file
     verbose : bool, optional
         print the limb side, by default True
-    outfinder : bool, optional
-        return the finder array, by default False
     
     Returns
     -------
@@ -820,44 +818,69 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
         slice in y direction to be used for normalisation
     slx: slice
         slice in x direction to be used for normalisation
-    finder: 2D array
-        finder array, optional, only returned if outfinder is True
     """
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
-    # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
     center = center_coord(hdr)[:2] - 1
-    limb_wcs = circular_mask(hdr['PXEND2']-hdr['PXBEG2']+1,
-                             hdr['PXEND1']-hdr['PXBEG1']+1,center,Rpix)
+    # limb_wcs = circular_mask(hdr['PXEND2']-hdr['PXBEG2']+1,
+    #                          hdr['PXEND1']-hdr['PXBEG1']+1,center,Rpix)
     
-    f = 16
-    fract = int(limb_wcs.shape[0]//f)
+    mus = mu_angle(hdr,np.asarray([[0,0],
+                       [hdr['NAXIS1'],0],
+                       [hdr['NAXIS1'],hdr['NAXIS2']],
+                       [0,hdr['NAXIS2']]],
+                      dtype=float).T
+                    )
     
-    finder = np.zeros((f,f))
-    for i in range(f):
-        for j in range(f):
-            finder[i,j] = np.sum(~limb_wcs[fract*i:fract*(i+1),fract*j:fract*(j+1)])
+    if np.any(np.isnan(mus)) or np.any(mus <= 0.2):
+        x0 = hdr['NAXIS1']/2 - center[0]
+        y0 = hdr['NAXIS2']/2 - center[1]
+        angle = np.arctan(y0/x0) * 180/np.pi
 
-    sides = dict(E=0,N=0,W=0,S=0)
+        if x0 < 0 and y0 >= 0:
+            angle += 180
+        elif x0 < 0 and y0 < 0:
+            angle +=180
+        elif x0 >= 0 and y0 < 0:
+            angle += 360
 
-    sides['E'] = np.sum(finder[:,0:int(f//3-1)])
-    sides['W'] = np.sum(finder[:,f-int(f//3-1):])
-    sides['S'] = np.sum(finder[0:int(f//3-1)])
-    sides['N'] = np.sum(finder[f-int(f//3-1):])
-    finder_original = finder.copy()
-    
-    finder[:int(f//3-1),:int(f//6)] = 0
-    finder[:int(f//3-1),-int(f//3-1):] = 0
-    finder[-int(f//3-1):,:int(f//3-1)] = 0
-    finder[-int(f//3-1):,-int(f//3-1):] = 0
-
-    if np.any(finder) > 0:
-        side = max(sides,key=sides.get)
+        limbs = ['W','NW','N','NE','E','SE','S','SW','W']
+        limb_idx = find_nearest(np.arange(0,361,45),angle)
+        side = limbs[limb_idx]
         if verbose:
             print('Limb side:',side)
     else:
         side = ''
         if verbose:
             print('Limb is not in the FoV according to WCS keywords')
+    # f = 16
+    # fract = int(limb_wcs.shape[0]//f)
+    
+    # finder = np.zeros((f,f))
+    # for i in range(f):
+    #     for j in range(f):
+    #         finder[i,j] = np.sum(~limb_wcs[fract*i:fract*(i+1),fract*j:fract*(j+1)])
+
+    # sides = dict(E=0,N=0,W=0,S=0)
+
+    # sides['E'] = np.sum(finder[:,0:int(f//3-1)])
+    # sides['W'] = np.sum(finder[:,f-int(f//3-1):])
+    # sides['S'] = np.sum(finder[0:int(f//3-1)])
+    # sides['N'] = np.sum(finder[f-int(f//3-1):])
+    # finder_original = finder.copy()
+    
+    # finder[:int(f//3-1),:int(f//6)] = 0
+    # finder[:int(f//3-1),-int(f//3-1):] = 0
+    # finder[-int(f//3-1):,:int(f//3-1)] = 0
+    # finder[-int(f//3-1):,-int(f//3-1):] = 0
+
+    # if np.any(finder) > 0:
+    #     side = max(sides,key=sides.get)
+    #     if verbose:
+    #         print('Limb side:',side)
+    # else:
+    #     side = ''
+    #     if verbose:
+    #         print('Limb is not in the FoV according to WCS keywords')
     
     ds = 256
     if hdr['DSUN_AU'] < 0.4:
@@ -882,10 +905,7 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
     else:
         slx = slice(0,img.shape[1])
     
-    if outfinder:
-        return side, center, Rpix, sly, slx, finder_original
-    else:
-        return side, center, Rpix, sly, slx
+    return side, center, Rpix, sly, slx
 
 
 def limb_fitting(img, hdr, field_stop, verbose=True, percent=False, fit_results=False):
@@ -1297,14 +1317,23 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
     from scipy.optimize import least_squares
     from scipy.ndimage import binary_erosion, binary_dilation
 
-    side, center, Rpix, sly, slx = limb_side_finder(img,hdr,verbose=verbose,outfinder=False)
-    
+    side, center, Rpix, sly, slx = limb_side_finder(img,hdr,verbose=verbose)
+    if side == '': # margin on side in limb_side_finder
+        output = [None,sly,slx,side]
+        
+        if percent:
+            output += [None]
+        if fit_results:
+            output += [None]    
+
+        return output
+
     s = 5
 
     hi = np.histogram(img[s:-s,s:-s][AR_mask[s:-s,s:-s]>0].flatten(),bins=100);
     gres, cov = double_gaussian_fit(hi,False,True)
     
-    if side == '' and (np.any((np.sqrt(np.diagonal(cov))/gres)[:3] > 10) or np.any(np.isnan(cov))): # sometimes south pole limb is not found, so extra condition on fit
+    if (np.any((np.sqrt(np.diagonal(cov))/gres)[:3] > 10) or np.any(np.isnan(cov))): # sometimes south pole limb is not found, so extra condition on fit
         output = [None,sly,slx,side]
         
         if percent:
@@ -3049,7 +3078,23 @@ def dataset_colorbar(ax,im,location="top",label=None,xy=None,fontsize=9):
 
     return cax
 
-def show_image_array(arr, hdr, grayscales, row_labels=None, 
+def bmag_cmap():
+    """
+    Create a colormap for the BMAG
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib import colormaps
+    cmap = colormaps['tab20c']
+    addition = cmap(np.linspace(0,1,20))[-4:]
+    cmap = colormaps['tab20b']
+    tab24 = np.append(cmap(np.linspace(0,1,20)),addition,axis=0)
+    del addition, cmap
+    tab24 = LinearSegmentedColormap.from_list('tab24',tab24,N=24)
+
+    return tab24
+
+
+def show_image_array(arr, hdr, grayscales, panel_sz=3.3, row_labels=None, 
                      column_labels=None, titles=None,
                      fig_title=None, ax_order=None):
     """Show array images of shape (rows, columns, X, Y).
@@ -3061,17 +3106,17 @@ def show_image_array(arr, hdr, grayscales, row_labels=None,
 
     import itertools
 
-    panel_sz = 3.3
-    rows, columns = arr.shape[0:2]
+    # panel_sz = 3.3
+    nl, ns, ny, nx = arr.shape
     _, _, _, sly, slx = limb_side_finder(arr[0,0],hdr,False)
     # fig_width, fig_height = plt.gcf().get_size_inches()
     # print(fig_width, fig_height)    
 
     fig, axs = plt.subplots(
-        rows, columns,
+        ns, nl,
         sharex=True, sharey=True,
         subplot_kw=dict(aspect=1),
-        figsize=(columns * panel_sz, rows * panel_sz),
+        figsize=(nl * panel_sz, ns * panel_sz),
         layout='constrained',
         # gridspec_kw={'hspace': 0, 'wspace': 0},
         # **kwargs
@@ -3082,23 +3127,23 @@ def show_image_array(arr, hdr, grayscales, row_labels=None,
         axs = axs.flatten()
         axs = [axs[i] for i in ax_order]
 
-    axs = np.reshape(axs, (rows, columns))
+    axs = np.reshape(axs, (ns, nl))
 
     # plt.subplots_adjust(top=0.92)
 
-    for i, j in itertools.product(range(rows), range(columns)):
+    for i, j in itertools.product(range(nl), range(ns)):
         im = arr[i, j, :, :]
 
         mean = im[sly,slx].mean()
 
-        ax = axs[i, j]
+        ax = axs[j, i]
         
         # Print color scale range
-        im = axs[i, j].imshow(im, cmap='gray', clim=grayscales[i],interpolation=None)
+        im = ax.imshow(im, cmap='gray', clim=grayscales[j],interpolation=None)
         if i == 0:
-            ax.text(0.05, 0.94, f'{grayscales[i][0]:.1f} - {grayscales[i][1]:.1f}', transform=ax.transAxes, color='white')
+            ax.text(0.05, 0.94, f'{grayscales[j][0]:.1f} - {grayscales[j][1]:.1f}', transform=ax.transAxes, color='white')
         else:
-            ax.text(0.05, 0.94, f'{grayscales[i][0]:.3f} - {grayscales[i][1]:.3f}', transform=ax.transAxes, color='white')
+            ax.text(0.05, 0.94, f'{grayscales[j][0]:.3f} - {grayscales[j][1]:.3f}', transform=ax.transAxes, color='white')
         # ax.text(0.05, 0.94, f'{grayscales[i][0]:.1f} - {grayscales[i][1]:.1f}', transform=ax.transAxes, color='white')
         # else:
         #     im = axs[i, j].imshow(im, cmap='gray', vmin=mean+grayscales[i][0], vmax=mean+grayscales[i][1],interpolation=None)
@@ -3124,7 +3169,7 @@ def show_image_array(arr, hdr, grayscales, row_labels=None,
 
     return fig
 
-def plot_l2_pdf(path,did,version=None):
+def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stokes=True):
     """
     Generate standard plots for pipeline results
     """
@@ -3194,8 +3239,9 @@ def plot_l2_pdf(path,did,version=None):
 
     if version == '*':
         version = 'V'+h['VERSION']
-    save_file = os.path.join(path, f'{did}_{version}.pdf')
-    p = PdfPages(save_file)
+    if save_output:
+        save_file = os.path.join(path, f'{did}_{version}.pdf')
+        p = PdfPages(save_file)
 
     # # -----------------------------------------------------------------------------
     # # Plot inversion results
@@ -3242,7 +3288,7 @@ def plot_l2_pdf(path,did,version=None):
 
     # B
     ax = axs[1, 1]
-    im = ax.imshow(dat['bmag'], cmap='gnuplot_r', vmin=0, vmax=1000,interpolation='none')
+    im = ax.imshow(dat['bmag'], cmap=bmag_cmap(), vmin=0, vmax=3000,interpolation='none')
     dataset_colorbar(ax,im,"right", label='G')
     ax.set_title('Magn. field strength')
 
@@ -3255,177 +3301,183 @@ def plot_l2_pdf(path,did,version=None):
     # Figure title
     timestp = h['FILENAME'].split('_')[-3]
     fig.suptitle(os.path.join(path, f'solo_L2_phi-hrt-*_{timestp}_{version}_{did}.fits'), fontsize=12)
+    
+    if save_output:
+        fig.savefig(p, format='pdf')
+        plt.close(fig)
 
-    fig.savefig(p, format='pdf')
-    plt.close(fig)
+    if plot_noise:
+        panel_sz = 4
+        dpi = 300
+        rows = 2
+        columns = 3
 
-    panel_sz = 4
-    dpi = 300
-    rows = 2
-    columns = 3
+        fig, axs = plt.subplots(
+            rows, columns,
+            subplot_kw={'aspect': 1},
+            figsize=(columns * panel_sz + 2, rows * panel_sz), dpi=dpi,
+            layout='constrained')
 
-    fig, axs = plt.subplots(
-        rows, columns,
-        subplot_kw={'aspect': 1},
-        figsize=(columns * panel_sz + 2, rows * panel_sz), dpi=dpi,
-        layout='constrained')
-
-    # Chisq
-    ax = axs[0,0]
-    im = ax.imshow(dat['chi2'], cmap='turbo', vmin=0, vmax=100,interpolation='none')
-    dataset_colorbar(ax,im,"right")
-    ax.set_title('$\chi^2$')
-
-
-    # Blos Noise
-    values = dat['blos'][sly,slx]
-
-    ax = axs[0,1]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-2e2,2e2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
-
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
+        # Chisq
+        ax = axs[0,0]
+        im = ax.imshow(dat['chi2'], cmap='turbo', vmin=0, vmax=100,interpolation='none')
+        dataset_colorbar(ax,im,"right")
+        ax.set_title('$\chi^2$')
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,10.],eps=1e-4); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"LoS magnetic field NSR")
+        # Blos Noise
+        values = dat['blos'][sly,slx]
 
-    # Blos Transverse
-    values = (dat['bmag']*np.sin(dat['binc']*np.pi/180))[sly,slx]
+        ax = axs[0,1]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-2e2,2e2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
 
-    ax = axs[0,2]
-    hi = ax.hist(values.flatten(), bins=np.linspace(0,10e2,200))
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
-
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,1000.],eps=1e-4); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Transverse magnetic field NSR")
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,10.],eps=1e-4); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"LoS magnetic field NSR")
 
-    # Stokes Q Noise
-    values = stk[cpos,1,sly,slx]
+        # Blos Transverse
+        values = (dat['bmag']*np.sin(dat['binc']*np.pi/180))[sly,slx]
 
-    ax = axs[1,0]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
+        ax = axs[0,2]
+        hi = ax.hist(values.flatten(), bins=np.linspace(0,10e2,200))
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
 
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
-
-
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Stokes Q NSR")
-
-    # Stokes U Noise
-    values = stk[cpos,2,sly,slx]
-
-    ax = axs[1,1]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
-
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Stokes U NSR")
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,1000.],eps=1e-4); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Transverse magnetic field NSR")
 
-    # Stokes V Noise
-    values = stk[cpos,3,sly,slx]
+        # Stokes Q Noise
+        values = stk[cpos,1,sly,slx]
 
-    ax = axs[1,2]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
+        ax = axs[1,0]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
 
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Stokes V NSR")
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Stokes Q NSR")
 
-    fig.savefig(p, format='pdf')
-    plt.close(fig)
+        # Stokes U Noise
+        values = stk[cpos,2,sly,slx]
+
+        ax = axs[1,1]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
+
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+
+
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Stokes U NSR")
+
+        # Stokes V Noise
+        values = stk[cpos,3,sly,slx]
+
+        ax = axs[1,2]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
+
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+
+
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Stokes V NSR")
+
+        if save_output:
+            fig.savefig(p, format='pdf')
+            plt.close(fig)
 
     # # -----------------------------------------------------------------------------
     # # Plot Stokes images
     # # -----------------------------------------------------------------------------
 
-    dat = np.transpose(stk, (1, 0, 2, 3))  # re-arrange Stokes and wavelength axes 
+    if plot_stokes:
+        # dat = np.transpose(stk, (1, 0, 2, 3))  # re-arrange Stokes and wavelength axes from [l,p,y,x] to [p,l,y,x]
 
-    grayscales = [(.3,1.2)] + [(-3e-3,3e-3)]*3 # [1] + [0.01] * 3  # I, Q, U, V
-    row_labels = ['I', 'Q', 'U', 'V']
-    column_labels = ['{:.3f} nm'.format(wave) for wave in wavelengths]
-    title = os.path.basename(datfile) 
+        grayscales = [(.3,1.2)] + [(-3e-3,3e-3)]*3 # [1] + [0.01] * 3  # I, Q, U, V
+        row_labels = ['I', 'Q', 'U', 'V']
+        column_labels = ['{:.3f} nm'.format(wave) for wave in wavelengths]
+        title = os.path.basename(datfile) 
 
-    fig = show_image_array(
-        dat, h, grayscales, row_labels=row_labels,
-        column_labels=column_labels, fig_title=title)
+        fig = show_image_array(
+            stk, h, grayscales, row_labels=row_labels,
+            column_labels=column_labels, fig_title=title)
 
-    fig.savefig(p, format='pdf')
-    plt.close(fig)
-    p.close()
+        if save_output:
+            fig.savefig(p, format='pdf')
+            plt.close(fig)
+    if save_output:
+        p.close()
 

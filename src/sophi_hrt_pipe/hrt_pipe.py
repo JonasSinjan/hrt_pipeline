@@ -4,6 +4,7 @@ from astropy.io import fits
 import time
 import datetime
 import json
+import git
 from numpy.core.numeric import True_
 from scipy.ndimage import binary_dilation, binary_erosion, generate_binary_structure
 
@@ -111,11 +112,16 @@ def phihrt_pipe(input_json_file):
     SPGYlib
 
     '''
+
+    pipeline_dir = os.path.realpath(__file__).split('src/')[0]
+    repo = git.Repo(search_parent_directories=True)
+    sha = repo.head.object.hexsha
     version = 'V1.9.2 January 24th 2025'
 
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
     printc('PHI HRT data reduction software  ',bcolors.OKGREEN)
     printc('Version: '+version,bcolors.OKGREEN)
+    printc('Commit hash: '+sha,bcolors.OKGREEN)
     printc('--------------------------------------------------------------',bcolors.OKGREEN)
 
     #-----------------
@@ -140,81 +146,60 @@ def phihrt_pipe(input_json_file):
             bit_conversion = True
             scale_data = True
         else:
-            scale_data = input_dict['scale_data']
-            accum_scaling = input_dict['accum_scaling']
-            bit_conversion = input_dict['bit_conversion']
+            scale_data = input_dict.pop('scale_data',True)
+            accum_scaling = input_dict.pop('accum_scaling',True)
+            bit_conversion = input_dict.pop('bit_conversion',True)
 
         #reduction
         dark_c = input_dict['dark_c']
         flat_c = input_dict['flat_c']
         prefilter_c = input_dict['prefilter_c']
-        if 'TemperatureCorrection' not in input_dict: #if FG != 61 deg - will correct wavelengths
-            TemperatureCorrection = False
-        else:
-            TemperatureCorrection = input_dict['TemperatureCorrection']
-        if 'TemperatureConstant' not in input_dict:
-            TemperatureConstant = 36.46e-3
-        else:
-            TemperatureConstant = input_dict['TemperatureConstant']
-        norm_f = input_dict['norm_f']
-        clean_f = input_dict['clean_f']
-        if clean_f:
-            sigma = input_dict['sigma']
-            clean_mode = input_dict['clean_mode']
-        flat_states = input_dict['flat_states']
-        if 'fs_c' in input_dict:
-            fs_c = input_dict['fs_c']
-        else:
-            fs_c = True
+        TemperatureCorrection = input_dict.pop('TemperatureCorrection', True)
+        TemperatureConstant = input_dict.pop('TemperatureConstant', 40.1225e-3) # AA/K
+
+        norm_f = input_dict.pop('norm_f',False)
+        clean_f = input_dict.pop('clean_f',False)
+        sigma = input_dict.pop('sigma', 1)
+        clean_mode = input_dict.pop('clean_mode', 'QUV')
+        
+        flat_states = input_dict.pop('flat_states',4)
+        fs_c = input_dict.pop('fs_c', True)
+
         if 'iss_off' in input_dict:
             iss_off = input_dict['iss_off']
-        demod = input_dict['demod']
-        norm_stokes = input_dict['norm_stokes']
-        ItoQUV = input_dict['ItoQUV']
-        CTmode = input_dict['CTmode']
-        VtoQU = input_dict['VtoQU']
+        demod = input_dict.pop('demod',True)
+        norm_stokes = input_dict.pop('norm_stokes',True)
+        ItoQUV = input_dict.pop('ItoQUV',True)
+        CTmode = input_dict.pop('CTmode','surface')
+        VtoQU = input_dict.pop('VtoQU',False)
         
-        if 'set_median_to_zero' not in input_dict:
-            set_median_to_zero = True
-        else:
-            set_median_to_zero = input_dict['set_median_to_zero']
+        set_median_to_zero = input_dict.pop('set_median_to_zero', True)
+        median_cont_only = input_dict.pop('median_cont_only', True)
 
-        if 'PSFstraylight' not in input_dict:
-            input_dict['PSFstraylight'] = False
-
-        if isinstance(input_dict['PSFstokes'],bool) and isinstance(input_dict['PSFaberr'],bool) and isinstance(input_dict['PSFstraylight'],bool):
-            PSFstokes = {'PD_f': "/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",
-                         'deconvolution':input_dict['PSFstokes'],
-                         'aberration_correction':input_dict['PSFaberr'],
-                         'straylight_correction':input_dict['PSFstraylight'],
-                         'gamma2':0.02,
-                         'low_f':0.8,
-                         'roi':False,
-                         'method':'lofdahl'}
+        PSFstokes_default = {'PD_f': pipeline_dir+"csv/PD_result.csv",
+                            'deconvolution':True,
+                            'aberration_correction':True,
+                            'straylight_correction':True,
+                            'gamma2':0.02,
+                            'low_f':0.8,
+                            'roi':False,
+                            'method':'lofdahl'}
+        if isinstance(input_dict['PSFstokes'],dict):
+            PSFstokes = {**PSFstokes_default, **input_dict['PSFstokes']}
+            del PSFstokes_default
         else:
-            PSFstokes = input_dict['PSFstokes']
-            for k,v in zip(['PD_f','low_f','gamma2','aberration_correction','straylight_correction','roi','method'],
-                           ["/data/slam/home/calchetti/hrt_pipeline/csv/PD_result.csv",0.8,0.02,True,False,False,'lofdahl']):
-                if k not in PSFstokes.keys():
-                    PSFstokes[k] = v
-        # PSFaberr = input_dict['PSFaberr']  
+            raise ValueError(f'PSFstokes must be a dictionary like {PSFstokes_default}')
 
-        if 'ghost_c' in input_dict:
-            ghost_c = input_dict['ghost_c']  #20211116
-        else:
-            ghost_c = False
+        ghost_c = input_dict.pop('ghost_c', False)  #20211116
         cavity_c = input_dict['cavity_c']
-        if cavity_c:
-            cavity_f = input_dict['cavity_f']
-        else:
-            cavity_f = None
+        cavity_f = input_dict.pop('cavity_f', None)
         
         # rte = input_dict['rte']
-        out_intermediate = input_dict['out_intermediate']  #20211116
-        if 'out_synthesis' in input_dict:
-            out_synthesis = input_dict['out_synthesis']
-        else:
-            out_synthesis = False
+        out_intermediate = input_dict.pop('out_intermediate',False)
+        out_synthesis = input_dict.pop('out_synthesis', False)
+        out_ancillary = input_dict.pop('out_ancillary', False)
+        out_unreconstructed = input_dict.pop('out_unreconstructed', False)
+
         # pymilos_opt = input_dict['pymilos']
         
         RTE_options = input_dict["RTE"]
@@ -242,29 +227,20 @@ def phihrt_pipe(input_json_file):
 
         #output dir/filenames
         out_dir = input_dict['out_dir']
-        out_stokes_file = input_dict['out_stokes_file']
-        out_stokes_filename = input_dict['out_stokes_filename']
-        out_rte_filename = input_dict['out_rte_filename']
+        out_stokes_file = input_dict.pop('out_stokes_file',True)
+        out_stokes_filename = input_dict.pop('out_stokes_filename',None)
+        out_rte_filename = input_dict.pop('out_rte_filename',None)
 
-        if 'config' not in input_dict:
-            config = True
-        else:
-            config = input_dict['config']
+        config = input_dict.pop('config', True)
 
         #standard harcoded options/backup - do not change
         hot_px_mask = True
         avg_stokes_before_rte = False
-        if 'vers' not in input_dict:
-            # vrs = '01'
-            vrs = start_proc
-        else:
-            vrs = input_dict['vers']
-            if len(vrs) != 2:
-                printc("WARNING: Version string is larger than 2 digits",color=bcolors.WARNING)
+        vrs = input_dict.pop('vers', start_proc)
         #behaviour if clean mode is set to None (null in json)
-        if 'clean_mode' in locals():
-            if clean_mode is None:
-                clean_mode = "V" 
+        # if 'clean_mode' in locals():
+        #     if clean_mode is None:
+        #         clean_mode = "V" 
             
     except Exception as e:
         print(f"Missing key(s) in the input config file: {e}")
@@ -459,6 +435,7 @@ def phihrt_pipe(input_json_file):
 
     for hdr in hdr_arr:
         hdr['VERS_SW'] = version #version of pipeline
+        hdr.set('GIT_SW',sha,'Git commit hash',after='VERS_SW') #git commit
         hdr['VERSION'] = vrs #version of the file V01
         
     hdr_arr = setup_header(hdr_arr)
@@ -837,9 +814,9 @@ def phihrt_pipe(input_json_file):
             try:
                 AR_temp = ARmasking(data[...,scan], field_stop[rows,cols], cpos = cpos_arr[scan]) # for ellipse limb fit
                 if iss_off: # no need to re-run the high contrast ROI search
-                    limb_temp, _, _, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=False)
+                    limb_temp, _, _, side, limb_percent_temp, ellipse_fit = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=False,fit_results=True)
                 else:
-                    limb_temp, sly, slx, side, limb_percent_temp = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=True)
+                    limb_temp, sly, slx, side, limb_percent_temp, ellipse_fit = limb_ellipse(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],AR_temp,percent=True,high_contrast=True,fit_results=True)
                 
                 # limb_temp, sly, slx, side, limb_percent_temp = limb_fitting(data[:,:,0,cpos_arr[0],int(scan)], hdr_arr[int(scan)],field_stop[rows,cols],percent=True)
                 
@@ -856,6 +833,7 @@ def phihrt_pipe(input_json_file):
                     limb_percent_temp = np.where(limb_percent_temp>0,1,0)
                     limb_percent_mask[...,scan] = limb_percent_temp 
                     limb = True
+                    hdr_arr[scan].set('CAL_LIMB','{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(*ellipse_fit.x),'[a,b,h,k,A] - ellipse axes (x,y), centers (x,y) and angle',after='CAL_REAL')
                    
                 else:
                     Ic_temp = np.zeros(data_size)
@@ -961,6 +939,14 @@ def phihrt_pipe(input_json_file):
             scan_hdr['CAL_CRT1'] = round(np.mean(cU[1]),4) #I-Q offset
             scan_hdr['CAL_CRT5'] = round(np.mean(cV[1]),4) #I-V offset
             
+            if CTmode == 'surface':
+                scan_hdr.set('CRT_Q_S','{:.5e}, {:.5e}, {:.5e}'.format(*sfitQ[0][1:]),'I-Q slope surface fit', after='CAL_CRT5')
+                scan_hdr.set('CRT_Q_C','{:.5e}, {:.5e}, {:.5e}'.format(*sfitQ[1][1:]),'I-Q constant surface fit', after='CRT_Q_S')
+                scan_hdr.set('CRT_U_S','{:.5e}, {:.5e}, {:.5e}'.format(*sfitU[0][1:]),'I-U slope surface fit', after='CRT_Q_C')
+                scan_hdr.set('CRT_U_C','{:.5e}, {:.5e}, {:.5e}'.format(*sfitU[1][1:]),'I-U constant surface fit', after='CRT_U_S')
+                scan_hdr.set('CRT_V_S','{:.5e}, {:.5e}, {:.5e}'.format(*sfitV[0][1:]),'I-V slope surface fit', after='CRT_U_C')
+                scan_hdr.set('CRT_V_C','{:.5e}, {:.5e}, {:.5e}'.format(*sfitV[1][1:]),'I-V constant surface fit', after='CRT_V_S')
+                
             scan_hdr['CAL_CRT6'] = 0 #V-Q slope
             scan_hdr['CAL_CRT8'] = 0 #V-U slope
             scan_hdr['CAL_CRT7'] = 0 #V-Q offset
@@ -1047,7 +1033,7 @@ def phihrt_pipe(input_json_file):
 
     if PSFstokes['deconvolution']:
 
-        if out_intermediate:
+        if out_intermediate or out_unreconstructed:
             data_not_deconvolved = data.copy()
         
         start_time = time.perf_counter()
@@ -1102,7 +1088,7 @@ def phihrt_pipe(input_json_file):
             # res_stokes, _ = demod_hrt(res_stokes,pmp_temp)
 
             data[...,scan] = res_stokes
-            hdr_arr[scan]['CAL_PSF'] = '{0:s} PSF deconv; gamma2={1:f}; low_f={2:f}; aberration: {3:}; straylight: {4:}'.format(PSFstokes['method'],PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'],PSFstokes['straylight_correction'])
+            hdr_arr[scan]['CAL_PSF'] = ('{0:s} PSF deconv; gamma2={1:f}; low_f={2:f}; aberration: {3:}; straylight: {4:}'.format(PSFstokes['method'],PSFstokes['gamma2'],PSFstokes['low_f'],PSFstokes['aberration_correction'],PSFstokes['straylight_correction']), 'PSF deconvolution inputs')
             ##
             
             hdr_arr[scan]['CAL_ZER'] = str(list(np.round(coefs,5)))
@@ -1133,20 +1119,42 @@ def phihrt_pipe(input_json_file):
         printc('-->>>>>>> Set Median to 0',color=bcolors.OKGREEN)
         for scan in range(data_shape[-1]):
             maski = limb_mask[...,scan] * AR_mask[...,scan]
-            for l in range(data.shape[3]):
-                    PQm = np.median(data[maski>0,1,l,scan])
-                    PUm = np.median(data[maski>0,2,l,scan])
-                    PVm = np.median(data[maski>0,3,l,scan])
-                    
-                    data[:,:,1,l,scan] -= PQm
-                    data[:,:,2,l,scan] -= PUm
-                    data[:,:,3,l,scan] -= PVm
 
-                    # print('Median (wl,p) = ({:d},1): {:.2e}. After correction: {:.2e}'.format(l,PQm,np.median(data[maski>0,1,l,scan])))
-                    # print('Median (wl,p) = ({:d},2): {:.2e}. After correction: {:.2e}'.format(l,PUm,np.median(data[maski>0,2,l,scan])))
-                    # print('Median (wl,p) = ({:d},3): {:.2e}. After correction: {:.2e}'.format(l,PVm,np.median(data[maski>0,3,l,scan])))
-                    # print('')
+            if median_cont_only:
+                l = cpos_arr[scan]
+                PQm = np.median(data[maski>0,1,l,scan])
+                PUm = np.median(data[maski>0,2,l,scan])
+                PVm = np.median(data[maski>0,3,l,scan])
+                
+                data[:,:,1,:,scan] -= PQm
+                data[:,:,2,:,scan] -= PUm
+                data[:,:,3,:,scan] -= PVm
+
+                hdr_arr[scan].set('MEDIANQ', round(PQm*100,4), 'Median of Stokes Q before removal (%)', after='CAL_SCIP')
+                hdr_arr[scan].set('MEDIANU', round(PUm*100,4), 'Median of Stokes U before removal (%)', after='MEDIANQ')
+                hdr_arr[scan].set('MEDIANV', round(PVm*100,4), 'Median of Stokes V before removal (%)', after='MEDIANU')
+            else:
+
+                PQm = np.zeros(data.shape[3])
+                PUm = np.zeros(data.shape[3])
+                PVm = np.zeros(data.shape[3])
+
+                for l in range(data.shape[3]): # median removed for every wavelength
+                    PQm[l] = np.median(data[maski>0,1,l,scan])
+                    PUm[l] = np.median(data[maski>0,2,l,scan])
+                    PVm[l] = np.median(data[maski>0,3,l,scan])
                     
+                    data[:,:,1,l,scan] -= PQm[l]
+                    data[:,:,2,l,scan] -= PUm[l]
+                    data[:,:,3,l,scan] -= PVm[l]
+
+                hdr_arr[scan].set('MEDIANQ', '{:.2e}, {:.2e}, {:.2e}, {:.2e}, {:.2e}, {:.2e}'.format(*(PQm*100)), 'Median of Stokes Q before removal (%)', after='CAL_SCIP')
+                hdr_arr[scan].set('MEDIANU', '{:.2e}, {:.2e}, {:.2e}, {:.2e}, {:.2e}, {:.2e}'.format(*(PUm*100)), 'Median of Stokes U before removal (%)', after='MEDIANQ')
+                hdr_arr[scan].set('MEDIANV', '{:.2e}, {:.2e}, {:.2e}, {:.2e}, {:.2e}, {:.2e}'.format(*(PVm*100)), 'Median of Stokes V before removal (%)', after='MEDIANU')
+            
+    else:
+        PQm = PUm = PVm = 0
+
     #-----------------
     # WRITE OUT STOKES VECTOR
     #-----------------
@@ -1240,6 +1248,51 @@ def phihrt_pipe(input_json_file):
         print(" ")
         printc('-->>>>>>> No intermediate files requested',color=bcolors.WARNING)
 
+
+    #-----------------
+    # WRITE OUT ANCILLARY [N,y,x] and UNRECONSTRUCTED [wl,pol,y,x]
+    #-----------------
+    if (out_unreconstructed and PSFstokes['deconvolution']) and ~out_intermediate:
+        print(" ")
+        printc('Saving unreconstructed stokes files',color=bcolors.OKGREEN)
+
+        for count, scan in enumerate(data_f):
+            history_str = f"Intermediate. Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}. PSF deconvolution: {True}"
+            file_suffix = 'stokes_noPSF'
+            tmp = data_not_deconvolved[:,:,:,:,count]
+            tmp = np.moveaxis(tmp, [-1,-2], [0,1])
+            write_out_intermediate(tmp, hdr_arr[count], history_str, scan, hdr_arr[count]['PHIDATID'], file_suffix, vrs, out_dir, bunit = 'I_CONT', btype = 'STOKES unrec')
+        
+    if out_ancillary:
+        print(" ")
+        printc('Saving \'ancillary\' file including: \n\tdeconvolved PSF;\n\tActive Regions mask;\n\tLimb mask;\n\tsub ROI.\n',color=bcolors.OKGREEN)
+
+        Nanc = 4
+        for count, scan in enumerate(data_f):
+            anc = np.zeros((Nanc, data_size[0], data_size[1]))
+            if cavity_c and PSFstokes['deconvolution']:
+                anc[0] = cavity
+            anc[1] = AR_mask[...,count]
+            anc[2] = limb_mask[...,count]
+            roi_mask = np.zeros((data_size[0],data_size[1]))
+            roi_mask[sly,slx] = 1
+            anc[3] = roi_mask; del roi_mask
+
+            anc_f= create_output_filenames(scan, hdr_arr[count]['PHIDATID'], version = vrs, gzip = True)[0].replace('stokes','ancillary')
+            hdu_anc = fits.PrimaryHDU(anc.astype(np.float32))
+            hdu_anc.header['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+            hdu_anc.header['FILENAME'] = anc_f
+            hdu_anc.header['LEVEL'] = 'L2'
+            hdu_anc.header['BTYPE'] = 'ANCILLARY'
+            hdu_anc.header['BUNIT'] = 'None'
+            hdu_anc.header['ANCILL1'] = 'Cavity deconvolved with PSF'
+            hdu_anc.header['ANCILL2'] = 'AR mask'
+            hdu_anc.header['ANCILL3'] = 'Limb mask'
+            hdu_anc.header['ANCILL4'] = 'ROI mask'
+            hdu_anc.header['HISTORY'] = f"Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}. PSF deconvolution: {hdr_arr[count]['CAL_PSF']}. Cavity correction: {cavity_c}"
+
+            hdu_anc.writeto(out_dir + anc_f,overwrite=True)
+            del hdu_anc
     #-----------------
     # WRITE OUT STOKES [wl,pol,y,x]
     #-----------------
