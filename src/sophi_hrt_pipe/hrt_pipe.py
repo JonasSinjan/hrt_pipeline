@@ -1014,7 +1014,7 @@ def phihrt_pipe(input_json_file):
         
         start_time = time.perf_counter()
         
-        data, hdr_arr = wavelength_registration(data, cpos_arr, sly, slx, hdr_arr, deconv=PSFstokes['deconvolution'])
+        data, hdr_arr = wavelength_registration(data, cpos_arr, sly, slx, hdr_arr, deconv=PSFstokes)
         
         if not PSFstokes['deconvolution']:
             data *= field_stop[rows,cols, np.newaxis, np.newaxis, np.newaxis]
@@ -1072,9 +1072,11 @@ def phihrt_pipe(input_json_file):
                 data[...,scan] = np.roll(data[...,scan], 1, axis = -1)
             
             if cavity_c:
-                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), rest=PSFstokes['method'], mask=mask, sly=psfy, slx=psfx,
-                                             gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], aberr_cor=PSFstokes['aberration_correction'], straylight_corr=PSFstokes['straylight_correction'],
-                                             cavity=cavity[rows,cols], PD_f = PSFstokes['PD_f'])
+                restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), 
+                                               rest=PSFstokes['method'], mask=mask, sly=psfy, slx=psfx,
+                                               gamma2=PSFstokes['gamma2'], low_f=PSFstokes['low_f'], 
+                                               aberr_cor=PSFstokes['aberration_correction'], straylight_corr=PSFstokes['straylight_correction'],
+                                               cavity=cavity[rows,cols], PD_f = PSFstokes['PD_f'])
                 res_stokes, coefs, cavity = restore_results
             else:
                 restore_results = fran_restore(data[...,scan], datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), rest=PSFstokes['method'], mask=mask, sly=psfy, slx=psfx,

@@ -1765,13 +1765,13 @@ def wavelength_registration(data, cpos_arr, sly, slx, hdr_arr, derivative = True
 
     for scan in range(data_shape[-1]):
         shift_stk = np.zeros((2,wln-1))
-        if deconv:
+        if deconv != False:
             from sophi_hrt_pipe.PSF import fran_restore
             dat = data[sly.start-5:sly.stop+5,slx.start-5:slx.stop+5,:,:,scan].copy()
             # old_data, _ = fran_restore(dat, datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']),
             #                             mask=np.ones((dat.shape[0],dat.shape[1])), gamma2=0.02, low_f=0.8, aberr_cor=False)
             old_data, _ = fran_restore(dat, datetime.datetime.fromisoformat(hdr_arr[scan]['DATE-OBS']), sly=slice(0,dat.shape[0]), slx=slice(0,dat.shape[1]),
-                                        mask=np.ones((dat.shape[0],dat.shape[1])), gamma2=0, low_f=0.1, aberr_cor=False)
+                                        mask=np.ones((dat.shape[0],dat.shape[1])), gamma2=0, low_f=0.1, aberr_cor=False, PD_f=deconv['PD_f'], straylight_corr=deconv['straylight_corr'])
             sly, slx = slice(5,sly.stop-sly.start+5), slice(5,slx.stop-slx.start+5)
         else:
             old_data = data[...,scan].copy()
