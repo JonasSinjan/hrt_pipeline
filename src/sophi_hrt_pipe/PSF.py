@@ -1181,7 +1181,10 @@ def extract_coefs(tobs,PD_f = '/data/slam/home/calchetti/hrt_pipeline/csv/PD_res
     Z = {}
     for row in reader:
         if row[0] == 'Date':
-            dates = [datetime.datetime.strptime(r,'%d-%m-%y') for r in row[1:]]
+            try:
+                dates = [datetime.datetime.fromisoformat(r) for r in row[1:]]
+            except:
+                dates = [datetime.datetime.strptime(r,'%d-%m-%y') for r in row[1:]]
         elif 'Z' in row[0]:
             Z[row[0]] = np.asarray([float(z) * converter for z in row[1:]]) # *2*npi to convert to radians
 

@@ -1051,6 +1051,7 @@ def phihrt_pipe(input_json_file):
             mask = np.ones((data_size[0],data_size[1]))
             if PSFstokes['roi']:
                 psfy, psfx = sly, slx
+                mask = field_stop[rows,cols]
             else:
                 if norm_stokes:
                     if limb:# and ~PSFstokes['roi']:
