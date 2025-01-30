@@ -114,7 +114,7 @@ def phihrt_pipe(input_json_file):
     '''
 
     pipeline_dir = os.path.realpath(__file__).split('src/')[0]
-    repo = git.Repo(search_parent_directories=True)
+    repo = git.Repo(pipeline_dir)
     sha = repo.head.object.hexsha
     version = 'V1.9.2 January 24th 2025'
 
