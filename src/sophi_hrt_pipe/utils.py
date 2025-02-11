@@ -726,7 +726,9 @@ def mu_angle(hdr,coord=None):
                             (hdr['PXEND2']-hdr['PXBEG2'])/2]) - center[:2]
     else:
         coord -= center[:2,np.newaxis]
-    mu = np.sqrt(Rpix**2 - (coord[0]**2 + coord[1]**2)) / Rpix
+    temp = Rpix**2 - (coord[0]**2 + coord[1]**2)
+    temp[temp<0] = np.nan
+    mu = np.sqrt(temp) / Rpix
     
     return mu
 
@@ -794,7 +796,7 @@ def circular_mask(h, w, center, radius):
     mask = dist_from_center <= radius
     return mask
 
-def limb_side_finder(img, hdr,verbose=True,outfinder=False):
+def limb_side_finder(img, hdr,verbose=True):
     """find the limb in the image
 
     Parameters
@@ -805,8 +807,6 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
         header of the fits file
     verbose : bool, optional
         print the limb side, by default True
-    outfinder : bool, optional
-        return the finder array, by default False
     
     Returns
     -------
@@ -820,44 +820,69 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
         slice in y direction to be used for normalisation
     slx: slice
         slice in x direction to be used for normalisation
-    finder: 2D array
-        finder array, optional, only returned if outfinder is True
     """
     Rpix=(hdr['RSUN_ARC']/hdr['CDELT1'])
-    # center=[hdr['CRPIX1']-hdr['CRVAL1']/hdr['CDELT1']-1,hdr['CRPIX2']-hdr['CRVAL2']/hdr['CDELT2']-1]
     center = center_coord(hdr)[:2] - 1
-    limb_wcs = circular_mask(hdr['PXEND2']-hdr['PXBEG2']+1,
-                             hdr['PXEND1']-hdr['PXBEG1']+1,center,Rpix)
+    # limb_wcs = circular_mask(hdr['PXEND2']-hdr['PXBEG2']+1,
+    #                          hdr['PXEND1']-hdr['PXBEG1']+1,center,Rpix)
     
-    f = 16
-    fract = int(limb_wcs.shape[0]//f)
+    mus = mu_angle(hdr,np.asarray([[0,0],
+                       [hdr['NAXIS1'],0],
+                       [hdr['NAXIS1'],hdr['NAXIS2']],
+                       [0,hdr['NAXIS2']]],
+                      dtype=float).T
+                    )
     
-    finder = np.zeros((f,f))
-    for i in range(f):
-        for j in range(f):
-            finder[i,j] = np.sum(~limb_wcs[fract*i:fract*(i+1),fract*j:fract*(j+1)])
+    if np.any(np.isnan(mus)) or np.any(mus <= 0.2):
+        x0 = hdr['NAXIS1']/2 - center[0]
+        y0 = hdr['NAXIS2']/2 - center[1]
+        angle = np.arctan(y0/x0) * 180/np.pi
 
-    sides = dict(E=0,N=0,W=0,S=0)
+        if x0 < 0 and y0 >= 0:
+            angle += 180
+        elif x0 < 0 and y0 < 0:
+            angle +=180
+        elif x0 >= 0 and y0 < 0:
+            angle += 360
 
-    sides['E'] = np.sum(finder[:,0:int(f//3-1)])
-    sides['W'] = np.sum(finder[:,f-int(f//3-1):])
-    sides['S'] = np.sum(finder[0:int(f//3-1)])
-    sides['N'] = np.sum(finder[f-int(f//3-1):])
-    finder_original = finder.copy()
-    
-    finder[:int(f//3-1),:int(f//6)] = 0
-    finder[:int(f//3-1),-int(f//3-1):] = 0
-    finder[-int(f//3-1):,:int(f//3-1)] = 0
-    finder[-int(f//3-1):,-int(f//3-1):] = 0
-
-    if np.any(finder) > 0:
-        side = max(sides,key=sides.get)
+        limbs = ['W','NW','N','NE','E','SE','S','SW','W']
+        limb_idx = find_nearest(np.arange(0,361,45),angle)
+        side = limbs[limb_idx]
         if verbose:
             print('Limb side:',side)
     else:
         side = ''
         if verbose:
             print('Limb is not in the FoV according to WCS keywords')
+    # f = 16
+    # fract = int(limb_wcs.shape[0]//f)
+    
+    # finder = np.zeros((f,f))
+    # for i in range(f):
+    #     for j in range(f):
+    #         finder[i,j] = np.sum(~limb_wcs[fract*i:fract*(i+1),fract*j:fract*(j+1)])
+
+    # sides = dict(E=0,N=0,W=0,S=0)
+
+    # sides['E'] = np.sum(finder[:,0:int(f//3-1)])
+    # sides['W'] = np.sum(finder[:,f-int(f//3-1):])
+    # sides['S'] = np.sum(finder[0:int(f//3-1)])
+    # sides['N'] = np.sum(finder[f-int(f//3-1):])
+    # finder_original = finder.copy()
+    
+    # finder[:int(f//3-1),:int(f//6)] = 0
+    # finder[:int(f//3-1),-int(f//3-1):] = 0
+    # finder[-int(f//3-1):,:int(f//3-1)] = 0
+    # finder[-int(f//3-1):,-int(f//3-1):] = 0
+
+    # if np.any(finder) > 0:
+    #     side = max(sides,key=sides.get)
+    #     if verbose:
+    #         print('Limb side:',side)
+    # else:
+    #     side = ''
+    #     if verbose:
+    #         print('Limb is not in the FoV according to WCS keywords')
     
     ds = 256
     if hdr['DSUN_AU'] < 0.4:
@@ -882,10 +907,7 @@ def limb_side_finder(img, hdr,verbose=True,outfinder=False):
     else:
         slx = slice(0,img.shape[1])
     
-    if outfinder:
-        return side, center, Rpix, sly, slx, finder_original
-    else:
-        return side, center, Rpix, sly, slx
+    return side, center, Rpix, sly, slx
 
 
 def limb_fitting(img, hdr, field_stop, verbose=True, percent=False, fit_results=False):
@@ -1081,16 +1103,17 @@ def double_gaus(x,a0,x0,sigma0,a1,x1,sigma1):
     """
     return a0*np.exp(-(x-x0)**2/(2*sigma0**2)) + a1*np.exp(-(x-x1)**2/(2*sigma1**2))
 
-def double_gaussian_fit(a,show=True):
-    """Gaussian fit for data 'a' from np.histogram or plt.hist
-
+def double_gaussian_fit(a,show=True,covariance=False):
+    """Two Gaussian fit for data 'a' from np.histogram or plt.hist
+    The gaussian must be complitely separated and on opposite sides of the distribution
     Parameters
     ----------
     a : array
         output from np.histogram or plt.hist
     show : bool, optional
         show plot of fit, by default True
-    
+    covariance: bool, optional
+        if True, reutn the covariance matrix (Default: False)
     Returns
     -------
     p : array
@@ -1099,19 +1122,23 @@ def double_gaussian_fit(a,show=True):
     xx=a[1][:-1] + (a[1][1]-a[1][0])/2
     y=a[0][:]
     # p0 = np.ones(6)
-    xx1 = xx[:xx.size//2]; xx2 = xx[xx.size//2:]
-    y1 = y[:y.size//2]; y2 = y[y.size//2:]
+    xx1 = xx[:xx.size//3]; xx2 = xx[xx.size//3:]
+    y1 = y[:y.size//3]; y2 = y[y.size//3:]
     p0=[max(y1),sum(xx1*y1)/sum(y1),np.sqrt(sum(y1 * (xx1 - sum(xx1*y1)/sum(y1))**2) / sum(y1)),max(y2),sum(xx2*y2)/sum(y2),np.sqrt(sum(y2 * (xx2 - sum(xx2*y2)/sum(y2))**2) / sum(y2))] #weighted avg of bins for avg and sigma inital values
     # p0[0]=y1[find_nearest(xx1,p0[1])-5:find_nearest(xx1,p0[1])+5].mean() #find init guess for ampltiude of gauss func
     # p0[3]=y2[find_nearest(xx2,p0[1])-5:find_nearest(xx2,p0[1])+5].mean() #find init guess for ampltiude of gauss func
     
     try:
-        p,cov=spo.curve_fit(double_gaus,xx,y,p0=p0)
+        bounds = ([0,xx1.min(),-xx1.max(),0,xx2.min(),-xx1.max()],[y1.sum(),xx1.max(),xx1.max(),y2.sum(),xx2.max(),xx1.max()])
+        p,cov=spo.curve_fit(double_gaus,xx,y,p0=p0,bounds=bounds)
         if show:
             lbl = '{:.2e} $\pm$ {:.2e}\n{:.2e} $\pm$ {:.2e}'.format(p[1],p[2],p[4],p[5])
             plt.plot(xx,double_gaus(xx,*p),'r--', label=lbl)
             plt.legend(fontsize=9)
-        return p
+        if covariance:
+            return p,cov
+        else:
+            return p
     except:
         printc("Gaussian fit failed: return initial guess",color=bcolors.WARNING)
         return p0
@@ -1218,9 +1245,9 @@ def subROIconstrast(img, img_mask, windowSize, windowSeparation):
     contrast = np.zeros((img.shape))
     # shift_raw = np.zeros((2,pn*wln))
 
-    for i in range(windowSize*2,data_size[0]-windowSize*1,windowSeparation):
-        for j in range(windowSize*2,data_size[1]-windowSize*1,windowSeparation):
-            # print(f'({i}/{data_size[0]}, {j}/{data_size[1]})')#\r',end='')
+    for i in list(range(int(50),int(data_size[0]-50),windowSeparation))+list(range(int(data_size[0]-50),int(50),-windowSeparation)):
+        for j in list(range(int(50),int(data_size[1]-50),windowSeparation))+list(range(int(data_size[1]-50),int(50),-windowSeparation)):
+             # print(f'({i}/{data_size[0]}, {j}/{data_size[1]})')#\r',end='')
             roi = (slice(i-windowSize,i+windowSize),slice(j-windowSize,j+windowSize))
             if img_mask[roi].sum() == 4*windowSize**2:
                 temp = img[roi].copy()
@@ -1290,45 +1317,26 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
 
         return residual
 
-    def _image_derivative(d):
-        """Calculates the image derivative in x and y using a 3x3 kernel
-
-        Parameters
-        ----------
-        d : numpy.ndarray
-            image to calculate derivative of
-
-        Returns
-        -------
-        SX : numpy.ndarray
-            derivative in x direction
-        SY : numpy.ndarray
-            derivative in y direction
-        """
-        import numpy as np
-        from scipy.signal import convolve
-        kx = np.asarray([[1,0,-1], [1,0,-1], [1,0,-1]])
-        ky = np.asarray([[1,1,1], [0,0,0], [-1,-1,-1]])
-
-        kx=kx/3.
-        ky=ky/3.
-
-        SX = convolve(d, kx,mode='same')
-        SY = convolve(d, ky,mode='same')
-
-        return SX, SY
-
     from scipy.optimize import least_squares
     from scipy.ndimage import binary_erosion, binary_dilation
 
-    side, center, Rpix, sly, slx, finder_small = limb_side_finder(img,hdr,verbose=verbose,outfinder=True)
-    
+    side, center, Rpix, sly, slx = limb_side_finder(img,hdr,verbose=verbose)
+    if side == '': # margin on side in limb_side_finder
+        output = [None,sly,slx,side]
+        
+        if percent:
+            output += [None]
+        if fit_results:
+            output += [None]    
+
+        return output
+
     s = 5
 
     hi = np.histogram(img[s:-s,s:-s][AR_mask[s:-s,s:-s]>0].flatten(),bins=100);
-    gres = double_gaussian_fit(hi,False)
+    gres, cov = double_gaussian_fit(hi,False,True)
     
-    if side == '' and min(gres[1],gres[4]) < max(gres[1],gres[4])/3: # sometimes south pole limb is not found, so extra condition on fit
+    if (np.any((np.sqrt(np.diagonal(cov))/gres)[:3] > 10) or np.any(np.isnan(cov))): # sometimes south pole limb is not found, so extra condition on fit
         output = [None,sly,slx,side]
         
         if percent:
@@ -1359,8 +1367,9 @@ def limb_ellipse(img, hdr, field_stop, AR_mask, verbose=True, percent=False, fit
     mask96 = elliptical_mask(img.shape,[p.x[0]*.96,p.x[1]*.96,p.x[2],p.x[3],p.x[4]])
     
     if high_contrast:
-        if hdr['DSUN_AU'] < 0.4:
-            windowSize = 384
+        # if hdr['DSUN_AU'] < 0.4:
+        #     windowSize = 384
+        # else:
         windowSize = 256
         contrast256 = subROIconstrast(img.copy(), (field_stop*mask98)>0, windowSize, windowSize)
         i,j = np.unravel_index(np.argmax(contrast256),contrast256.shape)
@@ -2098,7 +2107,7 @@ def image_register(ref,im,subpixel=True,deriv=False,d=50):
     del FT1, FT2
     return r, shifts
 
-def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
+def remap(ref_map, temp_map, out_shape = (1024,1024), verbose = False):
     """reproject hmi map onto hrt with hrt pixel size and observer coordinates
     
     Parameters
@@ -2123,67 +2132,68 @@ def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
     # plot of the maps
     if verbose:
         plt.figure(figsize=(9,5))
-        plt.subplot(121,projection=hmi_map)
-        hmi_map.plot()
-        hmi_map.draw_limb()
-        top_right = hmi_map.world_to_pixel(hrt_map.top_right_coord)
-        bottom_left = hmi_map.world_to_pixel(hrt_map.bottom_left_coord)
-        hmi_map.draw_quadrangle(np.array([bottom_left.x.value,bottom_left.y.value])*u.pix,
+        plt.subplot(121,projection=temp_map)
+        temp_map.plot()
+        temp_map.draw_limb()
+        top_right = temp_map.world_to_pixel(ref_map.top_right_coord)
+        bottom_left = temp_map.world_to_pixel(ref_map.bottom_left_coord)
+        temp_map.draw_quadrangle(np.array([bottom_left.x.value,bottom_left.y.value])*u.pix,
                           top_right=np.array([top_right.x.value,top_right.y.value])*u.pix, edgecolor='yellow')
 
-        plt.subplot(122,projection=hrt_map)
-        hrt_map.plot()
-        hrt_map.draw_limb()
+        plt.subplot(122,projection=ref_map)
+        ref_map.plot()
+        ref_map.draw_limb()
 
         plt.show()
     
     # define new header for hmi map using hrt observer coordinates
     out_header = sunpy.map.make_fitswcs_header(
         out_shape,
-        hrt_map.reference_coordinate.replicate(rsun=hmi_map.reference_coordinate.rsun),
-        scale=u.Quantity(hrt_map.scale),
-        instrument="HMI",
-        observatory="SDO",
-        wavelength=hmi_map.wavelength
+        ref_map.reference_coordinate.replicate(rsun=temp_map.reference_coordinate.rsun),
+        scale=u.Quantity(ref_map.scale),
+        instrument=temp_map.instrument,
+        observatory=temp_map.observatory,
+        wavelength=temp_map.wavelength
     )
 
-    out_header['dsun_obs'] = hrt_map.coordinate_frame.observer.radius.to(u.m).value
-    out_header['hglt_obs'] = hrt_map.coordinate_frame.observer.lat.value
-    out_header['hgln_obs'] = hrt_map.coordinate_frame.observer.lon.value
-    out_header['crpix1'] = hrt_map.fits_header['CRPIX1']
-    out_header['crpix2'] = hrt_map.fits_header['CRPIX2']
-    out_header['crval1'] = hrt_map.fits_header['CRVAL1']
-    out_header['crval2'] = hrt_map.fits_header['CRVAL2']
+    out_header['dsun_obs'] = ref_map.coordinate_frame.observer.radius.to(u.m).value
+    out_header['hglt_obs'] = ref_map.coordinate_frame.observer.lat.value
+    out_header['hgln_obs'] = ref_map.coordinate_frame.observer.lon.value
+    out_header['detector'] = temp_map.detector
+    out_header['crpix1'] = ref_map.fits_header['CRPIX1']
+    out_header['crpix2'] = ref_map.fits_header['CRPIX2']
+    out_header['crval1'] = ref_map.fits_header['CRVAL1']
+    out_header['crval2'] = ref_map.fits_header['CRVAL2']
     
-    out_header['crota2'] = hrt_map.fits_header['CROTA']
-    out_header['PC1_1'] = hrt_map.fits_header['PC1_1']
-    out_header['PC1_2'] = hrt_map.fits_header['PC1_2']
-    out_header['PC2_1'] = hrt_map.fits_header['PC2_1']
-    out_header['PC2_2'] = hrt_map.fits_header['PC2_2']
+    out_header['crota2'] = ref_map.fits_header['CROTA']
+    out_header['PC1_1'] = ref_map.fits_header['PC1_1']
+    out_header['PC1_2'] = ref_map.fits_header['PC1_2']
+    out_header['PC2_1'] = ref_map.fits_header['PC2_1']
+    out_header['PC2_2'] = ref_map.fits_header['PC2_2']
 
     out_wcs = WCS(out_header)
     
     # reprojection
-    hmi_origin = hmi_map
-    output, footprint = reproject_adaptive(hmi_origin, out_wcs, out_shape,kernel='Hann',boundary_mode='ignore')
-    hmi_map = sunpy.map.Map(output, out_header)
-    hmi_map.plot_settings = hmi_origin.plot_settings
+    temp_origin = temp_map
+    output, footprint = reproject_adaptive(temp_origin, out_wcs, out_shape,kernel='Hann',boundary_mode='ignore')
+    temp_map = sunpy.map.Map(output, out_header)
+    temp_map.plot_settings = temp_origin.plot_settings
 
     # plot reprojected maps
     if verbose:
         fig = plt.figure(figsize=(10,6))
-        ax1 = fig.add_subplot(1, 2, 1, projection=hmi_map)
-        hmi_map.plot(axes=ax1, title='SDO/HMI image as seen from PHI/HRT')
-        hmi_map.draw_limb(color='blue')
-        ax2 = fig.add_subplot(1, 2, 2, projection=hrt_map)
-        hrt_map.plot(axes=ax2)
+        ax1 = fig.add_subplot(1, 2, 1, projection=temp_map)
+        temp_map.plot(axes=ax1, title='SDO/HMI image as seen from PHI/HRT')
+        temp_map.draw_limb(color='blue')
+        ax2 = fig.add_subplot(1, 2, 2, projection=ref_map)
+        ref_map.plot(axes=ax2)
         # Set the HPC grid color to black as the background is white
         ax1.coords[0].grid_lines_kwargs['edgecolor'] = 'k'
         ax1.coords[1].grid_lines_kwargs['edgecolor'] = 'k'
         ax2.coords[0].grid_lines_kwargs['edgecolor'] = 'k'
         ax2.coords[1].grid_lines_kwargs['edgecolor'] = 'k'
     
-    return hmi_map
+    return temp_map
 
 def subregion_selection(ht,start_row,start_col,original_shape,dsmax = 512,edge = 20):
     intcrpix1 = int(round(ht['CRPIX1']))
@@ -2198,7 +2208,7 @@ def subregion_selection(ht,start_row,start_col,original_shape,dsmax = 512,edge =
     
     return sly, slx
 
-def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
+def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45',hmi_path=None):
     """
     Script to download the HMI m_45 or ic_45 cosest in time to the provided SO/PHI observation.
     TAI convention and light travel time are taken into consideration.
@@ -2217,7 +2227,7 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
         if True, the path of the cache directory and of the HMI dataset will return as output (DEFAULT: False)
     """
     
-    import drms
+    import glob, drms
     import sunpy, sunpy.map
     from astropy.constants import c
     
@@ -2225,68 +2235,84 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
         t_obs = datetime.datetime.fromisoformat(t_obs)
     dtai = datetime.timedelta(seconds=37) # datetime.timedelta(seconds=94)
     
-    if type(cad) != str:
-        cad = str(int(cad))
-    if cad == '45':
-        dcad = datetime.timedelta(seconds=35) # half HMI cadence (23) + margin
-    elif cad == '720':
-        dcad = datetime.timedelta(seconds=360+60) # half HMI cadence (23) + margin
+    if hmi_path is not None:
+        hmi_f = sorted(glob.glob(hmi_path+'*.fits'))
+        t_obs_hmi = [datetime.datetime.strptime(fits.getheader(f,1)['T_OBS'],'%Y.%m.%d_%H:%M:%S.%f_TAI') - dtai for f in hmi_f]
+        hmi_f = [x for _, x in sorted(zip(t_obs_hmi, hmi_f))]
+        t_obs_hmi.sort()
+
+        dltt = datetime.timedelta(seconds=(((1*u.AU).to(u.m) - ht['DSUN_OBS']*u.m)/c).value)
+        T_OBS = [np.abs((t - dltt - t_obs).total_seconds()) for t in t_obs_hmi]
+        ind = np.argmin(T_OBS)
+        hmi_file = hmi_f[ind]
+        print('closest HMI file in time is:', hmi_file,'with time difference:',T_OBS[ind],'s')
+        hmi_map = sunpy.map.Map(hmi_file,cache=False)
+        cache_dir = sunpy.data.CACHE_DIR+'/'
+        hmi_name = cache_dir + hmi_file.split("/")[-1]
     else:
-        print('wrong HMI cadence, only 45 and 720 are accepted')
-        return None
-    
-    dltt = datetime.timedelta(seconds=ht['EAR_TDEL']) # difference in light travel time S/C-Earth
 
-    kwlist = ['T_REC','T_OBS','DATE-OBS','CADENCE','DSUN_OBS']
-    
-    client = drms.Client(email=jsoc_email, verbose=True) 
-
-    lt = np.nan
-    n = 0
-    while np.isnan(lt):
-        n += 2
-        if ht['BTYPE'] == 'BLOS':
-            keys = client.query('hmi.m_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
-        elif ht['BTYPE'] == 'VLOS':
-            keys = client.query('hmi.v_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+        if type(cad) != str:
+            cad = str(int(cad))
+        if cad == '45':
+            dcad = datetime.timedelta(seconds=35) # half HMI cadence (23) + margin
+        elif cad == '720':
+            dcad = datetime.timedelta(seconds=360+60) # half HMI cadence (23) + margin
         else:
-            keys = client.query('hmi.ic_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
-        keys = keys[keys['T_OBS'] != 'MISSING']
-        if np.size(keys['T_OBS']) > 0:
-            lt = (np.nanmean(keys['DSUN_OBS'])*u.m - ht['DSUN_OBS']*u.m)/c
-        else:
-            print('adding 60s margin')
-            dcad += datetime.timedelta(seconds=60)
+            print('wrong HMI cadence, only 45 and 720 are accepted')
+            return None
         
-    dltt = datetime.timedelta(seconds=lt.value) # difference in light travel time S/C-SDO
+        dltt = datetime.timedelta(seconds=ht['EAR_TDEL']) # difference in light travel time S/C-Earth
+
+        kwlist = ['T_REC','T_OBS','DATE-OBS','CADENCE','DSUN_OBS']
+        
+        client = drms.Client(email=jsoc_email, verbose=True) 
+
+        lt = np.nan
+        n = 0
+        while np.isnan(lt):
+            n += 2
+            if ht['BTYPE'] == 'BLOS':
+                keys = client.query('hmi.m_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                                (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+            elif ht['BTYPE'] == 'VLOS':
+                keys = client.query('hmi.v_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                                (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+            else:
+                keys = client.query('hmi.ic_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                                (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+            keys = keys[keys['T_OBS'] != 'MISSING']
+            if np.size(keys['T_OBS']) > 0:
+                lt = (np.nanmean(keys['DSUN_OBS'])*u.m - ht['DSUN_OBS']*u.m)/c
+            else:
+                print('adding 60s margin')
+                dcad += datetime.timedelta(seconds=60)
+            
+        dltt = datetime.timedelta(seconds=lt.value) # difference in light travel time S/C-SDO
 
 
-    T_OBS = [(ind,np.abs((datetime.datetime.strptime(t,'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds())) for ind, t in zip(keys.index,keys['T_OBS'])]
-    ind = T_OBS[np.argmin([t[1] for t in T_OBS])][0]
+        T_OBS = [(ind,np.abs((datetime.datetime.strptime(t,'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds())) for ind, t in zip(keys.index,keys['T_OBS'])]
+        ind = T_OBS[np.argmin([t[1] for t in T_OBS])][0]
 
-    if ht['BTYPE'] == 'BLOS':
-        name_h = 'hmi.m_'+cad+'s['+keys['T_REC'][ind]+']{Magnetogram}'
-    elif ht['BTYPE'] == 'VLOS':
-        name_h = 'hmi.v_'+cad+'s['+keys['T_REC'][ind]+']{Dopplergram}'
-    else:
-        name_h = 'hmi.ic_'+cad+'s['+keys['T_REC'][ind]+']{Continuum}'
+        if ht['BTYPE'] == 'BLOS':
+            name_h = 'hmi.m_'+cad+'s['+keys['T_REC'][ind]+']{Magnetogram}'
+        elif ht['BTYPE'] == 'VLOS':
+            name_h = 'hmi.v_'+cad+'s['+keys['T_REC'][ind]+']{Dopplergram}'
+        else:
+            name_h = 'hmi.ic_'+cad+'s['+keys['T_REC'][ind]+']{Continuum}'
 
-    if np.abs((datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds()) > np.ceil(int(cad)/2):
-        print('WARNING: Closer file exists but has not been found.')
-        print(name_h)
-        print('T_OBS:',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
-        print('DATE-AVG:',t_obs)
-        print('')
-    else:
-        print('HMI T_OBS (corrected for TAI and Light travel time):',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
-        print('PHI DATE-AVG:',t_obs)
-    s45 = client.export(name_h,protocol='fits')
-    hmi_map = sunpy.map.Map(s45.urls.url[0],cache=False)
-    cache_dir = sunpy.data.CACHE_DIR+'/'
-    hmi_name = cache_dir + s45.urls.url[0].split("/")[-1]
+        if np.abs((datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds()) > np.ceil(int(cad)/2):
+            print('WARNING: Closer file exists but has not been found.')
+            print(name_h)
+            print('T_OBS:',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
+            print('DATE-AVG:',t_obs)
+            print('')
+        else:
+            print('HMI T_OBS (corrected for TAI and Light travel time):',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
+            print('PHI DATE-AVG:',t_obs)
+        s45 = client.export(name_h,protocol='fits')
+        hmi_map = sunpy.map.Map(s45.urls.url[0],cache=False)
+        cache_dir = sunpy.data.CACHE_DIR+'/'
+        hmi_name = cache_dir + s45.urls.url[0].split("/")[-1]
 
     if verbose:
         hmi_map.peek()
@@ -2296,7 +2322,7 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
         return hmi_map
 
 
-def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undistortion = False, logpol=False, allDID=False,verbose=False, deriv = True, values_only = False, subregion = None, crota_manual_correction = 0.15):
+def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undistortion = False, logpol=False, allDID=False,verbose=False, deriv = True, values_only = False, subregion = None, crota_manual_correction = 0.15, hmi_file = None):
     """This function saves new version of the fits file with updated WCS.
     It works by correlating HRT data on remapped HMI data. 
     This function exports the nearest HMI data from JSOC. [Not downloaded to out_dir]
@@ -2409,7 +2435,15 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undisto
         t_obs = datetime.datetime.fromisoformat(ht['DATE-AVG'])
     
     try:
-        hmi_map, cache_dir, hmi_name = downloadClosestHMI(ht,t_obs,jsoc_email,verbose,True)
+        if hmi_file is None:
+            hmi_map, cache_dir, hmi_name = downloadClosestHMI(ht,t_obs,jsoc_email,verbose,True)
+        else:
+            if os.path.isfile(hmi_file):
+                hmi_map = sunpy.map.Map(hmi_file)
+                hmi_name = hmi_file.split('/')[-1]
+            elif os.path.isdir(hmi_file):
+                hmi_map, cache_dir, hmi_name = downloadClosestHMI(ht,t_obs,jsoc_email,verbose,True, hmi_path=hmi_file)
+
     except Exception as e:
         print("Issue with downloading HMI. The code stops here. Restults obtained so far will be saved. This was the error:")
         print(e)
@@ -2577,7 +2611,7 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undisto
         ax2.coords[0].grid_lines_kwargs['edgecolor'] = 'k'
         ax2.coords[1].grid_lines_kwargs['edgecolor'] = 'k'
     
-    if os.path.isfile(hmi_name):
+    if os.path.isfile(hmi_name) and hmi_file is None:
         os.remove(hmi_name)
         import sqlite3
         # creating file path
@@ -3072,7 +3106,23 @@ def dataset_colorbar(ax,im,location="top",label=None,xy=None,fontsize=9):
 
     return cax
 
-def show_image_array(arr, hdr, grayscales, row_labels=None, 
+def bmag_cmap():
+    """
+    Create a colormap for the BMAG
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib import colormaps
+    cmap = colormaps['tab20c']
+    addition = cmap(np.linspace(0,1,20))[-4:]
+    cmap = colormaps['tab20b']
+    tab24 = np.append(cmap(np.linspace(0,1,20)),addition,axis=0)
+    del addition, cmap
+    tab24 = LinearSegmentedColormap.from_list('tab24',tab24,N=24)
+
+    return tab24
+
+
+def show_image_array(arr, hdr, grayscales, panel_sz=3.3, row_labels=None, 
                      column_labels=None, titles=None,
                      fig_title=None, ax_order=None):
     """Show array images of shape (rows, columns, X, Y).
@@ -3084,17 +3134,17 @@ def show_image_array(arr, hdr, grayscales, row_labels=None,
 
     import itertools
 
-    panel_sz = 3.3
-    rows, columns = arr.shape[0:2]
+    # panel_sz = 3.3
+    nl, ns, ny, nx = arr.shape
     _, _, _, sly, slx = limb_side_finder(arr[0,0],hdr,False)
     # fig_width, fig_height = plt.gcf().get_size_inches()
     # print(fig_width, fig_height)    
 
     fig, axs = plt.subplots(
-        rows, columns,
+        ns, nl,
         sharex=True, sharey=True,
         subplot_kw=dict(aspect=1),
-        figsize=(columns * panel_sz, rows * panel_sz),
+        figsize=(nl * panel_sz, ns * panel_sz),
         layout='constrained',
         # gridspec_kw={'hspace': 0, 'wspace': 0},
         # **kwargs
@@ -3105,23 +3155,23 @@ def show_image_array(arr, hdr, grayscales, row_labels=None,
         axs = axs.flatten()
         axs = [axs[i] for i in ax_order]
 
-    axs = np.reshape(axs, (rows, columns))
+    axs = np.reshape(axs, (ns, nl))
 
     # plt.subplots_adjust(top=0.92)
 
-    for i, j in itertools.product(range(rows), range(columns)):
+    for i, j in itertools.product(range(nl), range(ns)):
         im = arr[i, j, :, :]
 
         mean = im[sly,slx].mean()
 
-        ax = axs[i, j]
+        ax = axs[j, i]
         
         # Print color scale range
-        im = axs[i, j].imshow(im, cmap='gray', clim=grayscales[i],interpolation=None)
+        im = ax.imshow(im, cmap='gray', clim=grayscales[j],interpolation=None)
         if i == 0:
-            ax.text(0.05, 0.94, f'{grayscales[i][0]:.1f} - {grayscales[i][1]:.1f}', transform=ax.transAxes, color='white')
+            ax.text(0.05, 0.94, f'{grayscales[j][0]:.1f} - {grayscales[j][1]:.1f}', transform=ax.transAxes, color='white')
         else:
-            ax.text(0.05, 0.94, f'{grayscales[i][0]:.3f} - {grayscales[i][1]:.3f}', transform=ax.transAxes, color='white')
+            ax.text(0.05, 0.94, f'{grayscales[j][0]:.3f} - {grayscales[j][1]:.3f}', transform=ax.transAxes, color='white')
         # ax.text(0.05, 0.94, f'{grayscales[i][0]:.1f} - {grayscales[i][1]:.1f}', transform=ax.transAxes, color='white')
         # else:
         #     im = axs[i, j].imshow(im, cmap='gray', vmin=mean+grayscales[i][0], vmax=mean+grayscales[i][1],interpolation=None)
@@ -3147,9 +3197,22 @@ def show_image_array(arr, hdr, grayscales, row_labels=None,
 
     return fig
 
-def plot_l2_pdf(path,did,version=None):
+def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stokes=True, **kwargs):
     """
     Generate standard plots for pipeline results
+
+    kwargs = {
+        'icnt_cmap':'gist_heat',
+        'vlos_cmap':cmr.fusion.reversed(),
+        'blos_cmap':hmimag,
+        'binc_cmap':cmr.fusion,
+        'bmag_cmap':bmag_cmap(), # 'gnuplot_r'
+        'bazi_cmap':'hsv',
+        'panel_sz': 4,
+        'dpi': 300,
+        'rows': 2,
+        'columns': 3,
+    }
     """
 
     import matplotlib.pyplot as plt
@@ -3174,9 +3237,25 @@ def plot_l2_pdf(path,did,version=None):
 
     import cmasher as cmr
 
+    
     pipe_dir = os.path.realpath(__file__)
     pipe_dir = pipe_dir.split('src/')[0]
     hmimag = LinearSegmentedColormap.from_list('hmimag', np.loadtxt(pipe_dir+'csv/hmimag.csv',delimiter=','), N=256)
+
+    default_params = {
+        'icnt_cmap':'gist_heat',
+        'vlos_cmap':cmr.fusion.reversed(),
+        'blos_cmap':hmimag,
+        'binc_cmap':cmr.fusion,
+        'bmag_cmap':bmag_cmap(), # 'gnuplot_r'
+        'bazi_cmap':'hsv',
+        'panel_sz': 4,
+        'dpi': 300,
+        'rows': 2,
+        'columns': 3,
+    }
+
+    params = {**default_params, **kwargs}
 
     file_n = os.listdir(path)
     if type(did) != str:
@@ -3217,18 +3296,19 @@ def plot_l2_pdf(path,did,version=None):
 
     if version == '*':
         version = 'V'+h['VERSION']
-    save_file = os.path.join(path, f'{did}_{version}.pdf')
-    p = PdfPages(save_file)
+    if save_output:
+        save_file = os.path.join(path, f'{did}_{version}.pdf')
+        p = PdfPages(save_file)
 
     # # -----------------------------------------------------------------------------
     # # Plot inversion results
     # # -----------------------------------------------------------------------------
 
     # Plot parameters
-    panel_sz = 4
-    dpi = 300
-    rows = 2
-    columns = 3
+    panel_sz = params['panel_sz']
+    dpi = params['dpi']
+    rows = params['rows']
+    columns = params['columns']
 
     fig, axs = plt.subplots(
         rows, columns,
@@ -3239,7 +3319,7 @@ def plot_l2_pdf(path,did,version=None):
 
     # Continuum intensity
     ax = axs[0, 0]
-    im = ax.imshow(dat['icnt'], cmap='gist_heat', vmin=0.2, vmax=1.2,interpolation='none')
+    im = ax.imshow(dat['icnt'], cmap=params['icnt_cmap'], vmin=0.2, vmax=1.2,interpolation='none')
     dataset_colorbar(ax,im,"right")
     ax.set_title('Continuum intensity')
 
@@ -3247,208 +3327,214 @@ def plot_l2_pdf(path,did,version=None):
     ax = axs[0, 1]
     shape = dat['vlos'].shape
     avg = dat['vlos'][int(shape[0]//4):-int(shape[0]//4),int(shape[1]//4):-int(shape[1]//4)].mean()
-    im = ax.imshow(dat['vlos'], cmap=cmr.fusion.reversed(), vmin=-2+avg, vmax=2+avg,interpolation='none')
+    im = ax.imshow(dat['vlos'], cmap=params['vlos_cmap'], vmin=-2+avg, vmax=2+avg,interpolation='none')
     dataset_colorbar(ax,im,"right", label='km/s')
     ax.set_title('LoS velocity')
 
     # BLOS
     ax = axs[0, 2]
-    im = ax.imshow(dat['blos'], cmap=hmimag, vmin=-1500, vmax=1500,interpolation='none')
+    im = ax.imshow(dat['blos'], cmap=params['blos_cmap'], vmin=-1500, vmax=1500,interpolation='none')
     dataset_colorbar(ax,im,"right", label='G')
     ax.set_title('LoS magnetic field')
 
     # B inclination
     ax = axs[1, 0]
-    im = ax.imshow(dat['binc'], cmap=cmr.fusion, vmin=0, vmax=180,interpolation='none')
+    im = ax.imshow(dat['binc'], cmap=params['binc_cmap'], vmin=0, vmax=180,interpolation='none')
     dataset_colorbar(ax,im,"right", label='°')
     ax.set_title('Magn. field inclination')
 
     # B
     ax = axs[1, 1]
-    im = ax.imshow(dat['bmag'], cmap='gnuplot_r', vmin=0, vmax=1000,interpolation='none')
+    im = ax.imshow(dat['bmag'], cmap=params['bmag_cmap'], vmin=0, vmax=3000,interpolation='none')
     dataset_colorbar(ax,im,"right", label='G')
     ax.set_title('Magn. field strength')
 
     # B azimuth
     ax = axs[1, 2]
-    im = ax.imshow(dat['bazi'], cmap='hsv', vmin=0, vmax=180,interpolation='none')
+    im = ax.imshow(dat['bazi'], cmap=params['bazi_cmap'], vmin=0, vmax=180,interpolation='none')
     dataset_colorbar(ax,im,"right", label='°')
     ax.set_title('Magn. field azimuth')
 
     # Figure title
     timestp = h['FILENAME'].split('_')[-3]
     fig.suptitle(os.path.join(path, f'solo_L2_phi-hrt-*_{timestp}_{version}_{did}.fits'), fontsize=12)
+    
+    if save_output:
+        fig.savefig(p, format='pdf')
+        plt.close(fig)
 
-    fig.savefig(p, format='pdf')
-    plt.close(fig)
+    if plot_noise:
+        panel_sz = 4
+        dpi = 300
+        rows = 2
+        columns = 3
 
-    panel_sz = 4
-    dpi = 300
-    rows = 2
-    columns = 3
+        fig, axs = plt.subplots(
+            rows, columns,
+            subplot_kw={'aspect': 1},
+            figsize=(columns * panel_sz + 2, rows * panel_sz), dpi=dpi,
+            layout='constrained')
 
-    fig, axs = plt.subplots(
-        rows, columns,
-        subplot_kw={'aspect': 1},
-        figsize=(columns * panel_sz + 2, rows * panel_sz), dpi=dpi,
-        layout='constrained')
-
-    # Chisq
-    ax = axs[0,0]
-    im = ax.imshow(dat['chi2'], cmap='turbo', vmin=0, vmax=100,interpolation='none')
-    dataset_colorbar(ax,im,"right")
-    ax.set_title('$\chi^2$')
-
-
-    # Blos Noise
-    values = dat['blos'][sly,slx]
-
-    ax = axs[0,1]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-2e2,2e2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
-
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
+        # Chisq
+        ax = axs[0,0]
+        im = ax.imshow(dat['chi2'], cmap='turbo', vmin=0, vmax=100,interpolation='none')
+        dataset_colorbar(ax,im,"right")
+        ax.set_title('$\chi^2$')
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,10.],eps=1e-4); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"LoS magnetic field NSR")
+        # Blos Noise
+        values = dat['blos'][sly,slx]
 
-    # Blos Transverse
-    values = (dat['bmag']*np.sin(dat['binc']*np.pi/180))[sly,slx]
+        ax = axs[0,1]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-2e2,2e2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
 
-    ax = axs[0,2]
-    hi = ax.hist(values.flatten(), bins=np.linspace(0,10e2,200))
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
-
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,1000.],eps=1e-4); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Transverse magnetic field NSR")
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,10.],eps=1e-4); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"LoS magnetic field NSR")
 
-    # Stokes Q Noise
-    values = stk[cpos,1,sly,slx]
+        # Blos Transverse
+        values = (dat['bmag']*np.sin(dat['binc']*np.pi/180))[sly,slx]
 
-    ax = axs[1,0]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
+        ax = axs[0,2]
+        hi = ax.hist(values.flatten(), bins=np.linspace(0,10e2,200))
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
 
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
-
-
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Stokes Q NSR")
-
-    # Stokes U Noise
-    values = stk[cpos,2,sly,slx]
-
-    ax = axs[1,1]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
-
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e} G'
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Stokes U NSR")
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,1000.],eps=1e-4); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e} G")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Transverse magnetic field NSR")
 
-    # Stokes V Noise
-    values = stk[cpos,3,sly,slx]
+        # Stokes Q Noise
+        values = stk[cpos,1,sly,slx]
 
-    ax = axs[1,2]
-    hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
-    tmp = [0,0]
-    tmp[0] = hi[0].astype('float64')
-    tmp[1] = hi[1].astype('float64')
+        ax = axs[1,0]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
 
-    #guassian fit + label
-    pp = gaussian_fit(tmp, show = False)    
-    xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
-    lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
 
 
-    ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
-    try:
-        p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
-        ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
-        # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
-    except:
-        print("Iterative Gauss Fit failed")
-    ax.set_aspect('auto')
-    ax.legend()
-    ax.set_title(f"Stokes V NSR")
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Stokes Q NSR")
 
-    fig.savefig(p, format='pdf')
-    plt.close(fig)
+        # Stokes U Noise
+        values = stk[cpos,2,sly,slx]
+
+        ax = axs[1,1]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
+
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+
+
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Stokes U NSR")
+
+        # Stokes V Noise
+        values = stk[cpos,3,sly,slx]
+
+        ax = axs[1,2]
+        hi = ax.hist(values.flatten(), bins=np.linspace(-1e-2,1e-2,200),)
+        tmp = [0,0]
+        tmp[0] = hi[0].astype('float64')
+        tmp[1] = hi[1].astype('float64')
+
+        #guassian fit + label
+        pp = gaussian_fit(tmp, show = False)    
+        xx=hi[1][:-1] + (hi[1][1]-hi[1][0])/2
+        lbl = f'{pp[1]:.2e} $\pm$ {pp[2]:.2e}'
+
+
+        ax.plot(xx,gaus(xx,*pp),'r--', label=lbl)
+        try:
+            p_iter, hi_iter = iter_noise(values,[1.,0.,.1],eps=1e-6); p_iter[0] = pp[0]
+            ax.plot(xx,gaus(xx,*p_iter),'g-.', label= f"Iter Fit: {p_iter[1]:.2e} $\pm$ {p_iter[2]:.2e}")
+            # ax[1].scatter(0,0, color = 'white', s = 0, label = lbl) #also display the original fit in legend
+        except:
+            print("Iterative Gauss Fit failed")
+        ax.set_aspect('auto')
+        ax.legend()
+        ax.set_title(f"Stokes V NSR")
+
+        if save_output:
+            fig.savefig(p, format='pdf')
+            plt.close(fig)
 
     # # -----------------------------------------------------------------------------
     # # Plot Stokes images
     # # -----------------------------------------------------------------------------
 
-    dat = np.transpose(stk, (1, 0, 2, 3))  # re-arrange Stokes and wavelength axes 
+    if plot_stokes:
+        # dat = np.transpose(stk, (1, 0, 2, 3))  # re-arrange Stokes and wavelength axes from [l,p,y,x] to [p,l,y,x]
 
-    grayscales = [(.3,1.2)] + [(-3e-3,3e-3)]*3 # [1] + [0.01] * 3  # I, Q, U, V
-    row_labels = ['I', 'Q', 'U', 'V']
-    column_labels = ['{:.3f} nm'.format(wave) for wave in wavelengths]
-    title = os.path.basename(datfile) 
+        grayscales = [(.3,1.2)] + [(-3e-3,3e-3)]*3 # [1] + [0.01] * 3  # I, Q, U, V
+        row_labels = ['I', 'Q', 'U', 'V']
+        column_labels = ['{:.3f} nm'.format(wave) for wave in wavelengths]
+        title = os.path.basename(datfile) 
 
-    fig = show_image_array(
-        dat, h, grayscales, row_labels=row_labels,
-        column_labels=column_labels, fig_title=title)
+        fig = show_image_array(
+            stk, h, grayscales, row_labels=row_labels,
+            column_labels=column_labels, fig_title=title)
 
-    fig.savefig(p, format='pdf')
-    plt.close(fig)
-    p.close()
+        if save_output:
+            fig.savefig(p, format='pdf')
+            plt.close(fig)
+    if save_output:
+        p.close()
 
