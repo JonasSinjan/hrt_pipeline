@@ -494,10 +494,10 @@ def generate_l2(data_f, hdr_arr, wve_axis_arr, cpos_arr, data, mask, imgdirx_fli
         rte_invs *= mask[np.newaxis, :, :, scan] #field stop, set outside to 0
 
         hdr_scan['RTE_MOD'] = rte
-        if pymilos:
-            hdr_scan['RTE_SW'] = "pymilos "+pym.__version__
-        else:
-            hdr_scan['RTE_SW'] = "milos "+pym.__version__
+        #if pymilos:
+        #    hdr_scan['RTE_SW'] = "pymilos "+ pym.__version__
+        #else:
+        #    hdr_scan['RTE_SW'] = "milos "+pym.__version__
         if not(options):
             hdr_scan['RTE_ITER'] = str(30)
         else:

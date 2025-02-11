@@ -5,7 +5,7 @@ PSF deconvolution provided by Francisco Javier Bailén (IAA)
 import numpy as np
 import datetime
 # from tqdm import tqdm
-from photutils import CircularAperture
+from photutils.aperture import CircularAperture
 from scipy.fftpack import fftshift, ifftshift, fft2, ifft2
 import sys
 import cv2
@@ -577,7 +577,7 @@ def add_straylight_to_otf(otf):
     print('Straylight correction')
     A1   = 1       # weight for PD-MTF
     A2   = 0       # weight for near-field straylight
-    A3   = 0.1     # weight for far-field straylight
+    A3   = 0.11     # weight for far-field straylight
     A4   = 0       # global straylight
     B2   = 1       # standard dev. for near-field straylight
     B3   = 300    # standard dev. for far-field straylight
@@ -835,7 +835,7 @@ def object_estimate(ima,a,a_d,reg=0.1,wind=True,cobs=0,cut=29,low_f=0.2,tiptilt=
                 gamma=[1,0] #To account only for the 1st image
 
     #OTFs
-    Hk,normhk=OTF(a,a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,ideal=False,straylight_corr=straylight_corr)
+    Hk,normhk=OTF(a,a_d,RHO,THETA,ap,norm=True,K=Ok.shape[2],tiptilt=tiptilt,straylight_corr=straylight_corr)
     
     #Restoration
     Q=Qfactor(Hk,gamma=gamma,reg=reg,nuc=nuc,N=N)

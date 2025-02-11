@@ -16,6 +16,7 @@ cmilos-fits/milos
 cmilos-fits/*.o
 cmilos/milos
 cmilos/*.o
+cmilos_100555/*
 _RTE.npz
 *.npz
 .env
