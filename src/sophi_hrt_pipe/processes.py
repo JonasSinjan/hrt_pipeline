@@ -610,7 +610,8 @@ def prefilter_correction(data,wave_axis_arr,prefilter,Tetalon=0,prefilter_voltag
         apply temperature correction to prefilter data, DEFAULT = False
     TemperatureConstant: float
         value of the temperature tuning constant to be used when TemperatureConstant is True, DEFAULT = 36.46e-3 mA/K
-
+    shift: ndarray or None
+        shift to be applied to the prefilter data pixel by pixel (cavity), DEFAULT = None
     Returns
     -------
     data: ndarray
@@ -648,7 +649,7 @@ def prefilter_correction(data,wave_axis_arr,prefilter,Tetalon=0,prefilter_voltag
         tunning_constant = 0.0003513 # this shouldn't change
         
         ref_wavelength = 6173.341 # this shouldn't change
-        prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength + TemperatureConstant*(Tfg-61) - 0.002 # JH ref
+        prefilter_wave = prefilter_voltages * tunning_constant + ref_wavelength + TemperatureConstant*(Tfg-61)
         # DC 20240612
         prefilter_wave += (Tetalon-66)*34.25e-3 # Temperature shift of the prefilter by TO
         

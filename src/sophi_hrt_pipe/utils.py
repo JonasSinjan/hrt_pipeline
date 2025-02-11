@@ -726,7 +726,9 @@ def mu_angle(hdr,coord=None):
                             (hdr['PXEND2']-hdr['PXBEG2'])/2]) - center[:2]
     else:
         coord -= center[:2,np.newaxis]
-    mu = np.sqrt(Rpix**2 - (coord[0]**2 + coord[1]**2)) / Rpix
+    temp = Rpix**2 - (coord[0]**2 + coord[1]**2)
+    temp[temp<0] = np.nan
+    mu = np.sqrt(temp) / Rpix
     
     return mu
 
@@ -1120,14 +1122,15 @@ def double_gaussian_fit(a,show=True,covariance=False):
     xx=a[1][:-1] + (a[1][1]-a[1][0])/2
     y=a[0][:]
     # p0 = np.ones(6)
-    xx1 = xx[:xx.size//2]; xx2 = xx[xx.size//2:]
-    y1 = y[:y.size//2]; y2 = y[y.size//2:]
+    xx1 = xx[:xx.size//3]; xx2 = xx[xx.size//3:]
+    y1 = y[:y.size//3]; y2 = y[y.size//3:]
     p0=[max(y1),sum(xx1*y1)/sum(y1),np.sqrt(sum(y1 * (xx1 - sum(xx1*y1)/sum(y1))**2) / sum(y1)),max(y2),sum(xx2*y2)/sum(y2),np.sqrt(sum(y2 * (xx2 - sum(xx2*y2)/sum(y2))**2) / sum(y2))] #weighted avg of bins for avg and sigma inital values
     # p0[0]=y1[find_nearest(xx1,p0[1])-5:find_nearest(xx1,p0[1])+5].mean() #find init guess for ampltiude of gauss func
     # p0[3]=y2[find_nearest(xx2,p0[1])-5:find_nearest(xx2,p0[1])+5].mean() #find init guess for ampltiude of gauss func
     
     try:
-        p,cov=spo.curve_fit(double_gaus,xx,y,p0=p0)
+        bounds = ([0,xx1.min(),-xx1.max(),0,xx2.min(),-xx1.max()],[y1.sum(),xx1.max(),xx1.max(),y2.sum(),xx2.max(),xx1.max()])
+        p,cov=spo.curve_fit(double_gaus,xx,y,p0=p0,bounds=bounds)
         if show:
             lbl = '{:.2e} $\pm$ {:.2e}\n{:.2e} $\pm$ {:.2e}'.format(p[1],p[2],p[4],p[5])
             plt.plot(xx,double_gaus(xx,*p),'r--', label=lbl)
@@ -2104,7 +2107,7 @@ def image_register(ref,im,subpixel=True,deriv=False,d=50):
     del FT1, FT2
     return r, shifts
 
-def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
+def remap(ref_map, temp_map, out_shape = (1024,1024), verbose = False):
     """reproject hmi map onto hrt with hrt pixel size and observer coordinates
     
     Parameters
@@ -2129,67 +2132,68 @@ def remap(hrt_map, hmi_map, out_shape = (1024,1024), verbose = False):
     # plot of the maps
     if verbose:
         plt.figure(figsize=(9,5))
-        plt.subplot(121,projection=hmi_map)
-        hmi_map.plot()
-        hmi_map.draw_limb()
-        top_right = hmi_map.world_to_pixel(hrt_map.top_right_coord)
-        bottom_left = hmi_map.world_to_pixel(hrt_map.bottom_left_coord)
-        hmi_map.draw_quadrangle(np.array([bottom_left.x.value,bottom_left.y.value])*u.pix,
+        plt.subplot(121,projection=temp_map)
+        temp_map.plot()
+        temp_map.draw_limb()
+        top_right = temp_map.world_to_pixel(ref_map.top_right_coord)
+        bottom_left = temp_map.world_to_pixel(ref_map.bottom_left_coord)
+        temp_map.draw_quadrangle(np.array([bottom_left.x.value,bottom_left.y.value])*u.pix,
                           top_right=np.array([top_right.x.value,top_right.y.value])*u.pix, edgecolor='yellow')
 
-        plt.subplot(122,projection=hrt_map)
-        hrt_map.plot()
-        hrt_map.draw_limb()
+        plt.subplot(122,projection=ref_map)
+        ref_map.plot()
+        ref_map.draw_limb()
 
         plt.show()
     
     # define new header for hmi map using hrt observer coordinates
     out_header = sunpy.map.make_fitswcs_header(
         out_shape,
-        hrt_map.reference_coordinate.replicate(rsun=hmi_map.reference_coordinate.rsun),
-        scale=u.Quantity(hrt_map.scale),
-        instrument="HMI",
-        observatory="SDO",
-        wavelength=hmi_map.wavelength
+        ref_map.reference_coordinate.replicate(rsun=temp_map.reference_coordinate.rsun),
+        scale=u.Quantity(ref_map.scale),
+        instrument=temp_map.instrument,
+        observatory=temp_map.observatory,
+        wavelength=temp_map.wavelength
     )
 
-    out_header['dsun_obs'] = hrt_map.coordinate_frame.observer.radius.to(u.m).value
-    out_header['hglt_obs'] = hrt_map.coordinate_frame.observer.lat.value
-    out_header['hgln_obs'] = hrt_map.coordinate_frame.observer.lon.value
-    out_header['crpix1'] = hrt_map.fits_header['CRPIX1']
-    out_header['crpix2'] = hrt_map.fits_header['CRPIX2']
-    out_header['crval1'] = hrt_map.fits_header['CRVAL1']
-    out_header['crval2'] = hrt_map.fits_header['CRVAL2']
+    out_header['dsun_obs'] = ref_map.coordinate_frame.observer.radius.to(u.m).value
+    out_header['hglt_obs'] = ref_map.coordinate_frame.observer.lat.value
+    out_header['hgln_obs'] = ref_map.coordinate_frame.observer.lon.value
+    out_header['detector'] = temp_map.detector
+    out_header['crpix1'] = ref_map.fits_header['CRPIX1']
+    out_header['crpix2'] = ref_map.fits_header['CRPIX2']
+    out_header['crval1'] = ref_map.fits_header['CRVAL1']
+    out_header['crval2'] = ref_map.fits_header['CRVAL2']
     
-    out_header['crota2'] = hrt_map.fits_header['CROTA']
-    out_header['PC1_1'] = hrt_map.fits_header['PC1_1']
-    out_header['PC1_2'] = hrt_map.fits_header['PC1_2']
-    out_header['PC2_1'] = hrt_map.fits_header['PC2_1']
-    out_header['PC2_2'] = hrt_map.fits_header['PC2_2']
+    out_header['crota2'] = ref_map.fits_header['CROTA']
+    out_header['PC1_1'] = ref_map.fits_header['PC1_1']
+    out_header['PC1_2'] = ref_map.fits_header['PC1_2']
+    out_header['PC2_1'] = ref_map.fits_header['PC2_1']
+    out_header['PC2_2'] = ref_map.fits_header['PC2_2']
 
     out_wcs = WCS(out_header)
     
     # reprojection
-    hmi_origin = hmi_map
-    output, footprint = reproject_adaptive(hmi_origin, out_wcs, out_shape,kernel='Hann',boundary_mode='ignore')
-    hmi_map = sunpy.map.Map(output, out_header)
-    hmi_map.plot_settings = hmi_origin.plot_settings
+    temp_origin = temp_map
+    output, footprint = reproject_adaptive(temp_origin, out_wcs, out_shape,kernel='Hann',boundary_mode='ignore')
+    temp_map = sunpy.map.Map(output, out_header)
+    temp_map.plot_settings = temp_origin.plot_settings
 
     # plot reprojected maps
     if verbose:
         fig = plt.figure(figsize=(10,6))
-        ax1 = fig.add_subplot(1, 2, 1, projection=hmi_map)
-        hmi_map.plot(axes=ax1, title='SDO/HMI image as seen from PHI/HRT')
-        hmi_map.draw_limb(color='blue')
-        ax2 = fig.add_subplot(1, 2, 2, projection=hrt_map)
-        hrt_map.plot(axes=ax2)
+        ax1 = fig.add_subplot(1, 2, 1, projection=temp_map)
+        temp_map.plot(axes=ax1, title='SDO/HMI image as seen from PHI/HRT')
+        temp_map.draw_limb(color='blue')
+        ax2 = fig.add_subplot(1, 2, 2, projection=ref_map)
+        ref_map.plot(axes=ax2)
         # Set the HPC grid color to black as the background is white
         ax1.coords[0].grid_lines_kwargs['edgecolor'] = 'k'
         ax1.coords[1].grid_lines_kwargs['edgecolor'] = 'k'
         ax2.coords[0].grid_lines_kwargs['edgecolor'] = 'k'
         ax2.coords[1].grid_lines_kwargs['edgecolor'] = 'k'
     
-    return hmi_map
+    return temp_map
 
 def subregion_selection(ht,start_row,start_col,original_shape,dsmax = 512,edge = 20):
     intcrpix1 = int(round(ht['CRPIX1']))
@@ -2204,7 +2208,7 @@ def subregion_selection(ht,start_row,start_col,original_shape,dsmax = 512,edge =
     
     return sly, slx
 
-def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
+def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45',hmi_path=None):
     """
     Script to download the HMI m_45 or ic_45 cosest in time to the provided SO/PHI observation.
     TAI convention and light travel time are taken into consideration.
@@ -2223,7 +2227,7 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
         if True, the path of the cache directory and of the HMI dataset will return as output (DEFAULT: False)
     """
     
-    import drms
+    import glob, drms
     import sunpy, sunpy.map
     from astropy.constants import c
     
@@ -2231,68 +2235,84 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
         t_obs = datetime.datetime.fromisoformat(t_obs)
     dtai = datetime.timedelta(seconds=37) # datetime.timedelta(seconds=94)
     
-    if type(cad) != str:
-        cad = str(int(cad))
-    if cad == '45':
-        dcad = datetime.timedelta(seconds=35) # half HMI cadence (23) + margin
-    elif cad == '720':
-        dcad = datetime.timedelta(seconds=360+60) # half HMI cadence (23) + margin
+    if hmi_path is not None:
+        hmi_f = sorted(glob.glob(hmi_path+'*.fits'))
+        t_obs_hmi = [datetime.datetime.strptime(fits.getheader(f,1)['T_OBS'],'%Y.%m.%d_%H:%M:%S.%f_TAI') - dtai for f in hmi_f]
+        hmi_f = [x for _, x in sorted(zip(t_obs_hmi, hmi_f))]
+        t_obs_hmi.sort()
+
+        dltt = datetime.timedelta(seconds=(((1*u.AU).to(u.m) - ht['DSUN_OBS']*u.m)/c).value)
+        T_OBS = [np.abs((t - dltt - t_obs).total_seconds()) for t in t_obs_hmi]
+        ind = np.argmin(T_OBS)
+        hmi_file = hmi_f[ind]
+        print('closest HMI file in time is:', hmi_file,'with time difference:',T_OBS[ind],'s')
+        hmi_map = sunpy.map.Map(hmi_file,cache=False)
+        cache_dir = sunpy.data.CACHE_DIR+'/'
+        hmi_name = cache_dir + hmi_file.split("/")[-1]
     else:
-        print('wrong HMI cadence, only 45 and 720 are accepted')
-        return None
-    
-    dltt = datetime.timedelta(seconds=ht['EAR_TDEL']) # difference in light travel time S/C-Earth
 
-    kwlist = ['T_REC','T_OBS','DATE-OBS','CADENCE','DSUN_OBS']
-    
-    client = drms.Client(email=jsoc_email, verbose=True) 
-
-    lt = np.nan
-    n = 0
-    while np.isnan(lt):
-        n += 2
-        if ht['BTYPE'] == 'BLOS':
-            keys = client.query('hmi.m_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
-        elif ht['BTYPE'] == 'VLOS':
-            keys = client.query('hmi.v_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+        if type(cad) != str:
+            cad = str(int(cad))
+        if cad == '45':
+            dcad = datetime.timedelta(seconds=35) # half HMI cadence (23) + margin
+        elif cad == '720':
+            dcad = datetime.timedelta(seconds=360+60) # half HMI cadence (23) + margin
         else:
-            keys = client.query('hmi.ic_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
-                            (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
-        keys = keys[keys['T_OBS'] != 'MISSING']
-        if np.size(keys['T_OBS']) > 0:
-            lt = (np.nanmean(keys['DSUN_OBS'])*u.m - ht['DSUN_OBS']*u.m)/c
-        else:
-            print('adding 60s margin')
-            dcad += datetime.timedelta(seconds=60)
+            print('wrong HMI cadence, only 45 and 720 are accepted')
+            return None
         
-    dltt = datetime.timedelta(seconds=lt.value) # difference in light travel time S/C-SDO
+        dltt = datetime.timedelta(seconds=ht['EAR_TDEL']) # difference in light travel time S/C-Earth
+
+        kwlist = ['T_REC','T_OBS','DATE-OBS','CADENCE','DSUN_OBS']
+        
+        client = drms.Client(email=jsoc_email, verbose=True) 
+
+        lt = np.nan
+        n = 0
+        while np.isnan(lt):
+            n += 2
+            if ht['BTYPE'] == 'BLOS':
+                keys = client.query('hmi.m_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                                (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+            elif ht['BTYPE'] == 'VLOS':
+                keys = client.query('hmi.v_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                                (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+            else:
+                keys = client.query('hmi.ic_'+cad+'s['+(t_obs+dtai-dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+'-'+
+                                (t_obs+dtai+dcad+dltt).strftime('%Y.%m.%d_%H:%M:%S')+']',seg=None,key=kwlist,n=n)
+            keys = keys[keys['T_OBS'] != 'MISSING']
+            if np.size(keys['T_OBS']) > 0:
+                lt = (np.nanmean(keys['DSUN_OBS'])*u.m - ht['DSUN_OBS']*u.m)/c
+            else:
+                print('adding 60s margin')
+                dcad += datetime.timedelta(seconds=60)
+            
+        dltt = datetime.timedelta(seconds=lt.value) # difference in light travel time S/C-SDO
 
 
-    T_OBS = [(ind,np.abs((datetime.datetime.strptime(t,'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds())) for ind, t in zip(keys.index,keys['T_OBS'])]
-    ind = T_OBS[np.argmin([t[1] for t in T_OBS])][0]
+        T_OBS = [(ind,np.abs((datetime.datetime.strptime(t,'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds())) for ind, t in zip(keys.index,keys['T_OBS'])]
+        ind = T_OBS[np.argmin([t[1] for t in T_OBS])][0]
 
-    if ht['BTYPE'] == 'BLOS':
-        name_h = 'hmi.m_'+cad+'s['+keys['T_REC'][ind]+']{Magnetogram}'
-    elif ht['BTYPE'] == 'VLOS':
-        name_h = 'hmi.v_'+cad+'s['+keys['T_REC'][ind]+']{Dopplergram}'
-    else:
-        name_h = 'hmi.ic_'+cad+'s['+keys['T_REC'][ind]+']{Continuum}'
+        if ht['BTYPE'] == 'BLOS':
+            name_h = 'hmi.m_'+cad+'s['+keys['T_REC'][ind]+']{Magnetogram}'
+        elif ht['BTYPE'] == 'VLOS':
+            name_h = 'hmi.v_'+cad+'s['+keys['T_REC'][ind]+']{Dopplergram}'
+        else:
+            name_h = 'hmi.ic_'+cad+'s['+keys['T_REC'][ind]+']{Continuum}'
 
-    if np.abs((datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds()) > np.ceil(int(cad)/2):
-        print('WARNING: Closer file exists but has not been found.')
-        print(name_h)
-        print('T_OBS:',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
-        print('DATE-AVG:',t_obs)
-        print('')
-    else:
-        print('HMI T_OBS (corrected for TAI and Light travel time):',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
-        print('PHI DATE-AVG:',t_obs)
-    s45 = client.export(name_h,protocol='fits')
-    hmi_map = sunpy.map.Map(s45.urls.url[0],cache=False)
-    cache_dir = sunpy.data.CACHE_DIR+'/'
-    hmi_name = cache_dir + s45.urls.url[0].split("/")[-1]
+        if np.abs((datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt - t_obs).total_seconds()) > np.ceil(int(cad)/2):
+            print('WARNING: Closer file exists but has not been found.')
+            print(name_h)
+            print('T_OBS:',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
+            print('DATE-AVG:',t_obs)
+            print('')
+        else:
+            print('HMI T_OBS (corrected for TAI and Light travel time):',datetime.datetime.strptime(keys['T_OBS'][ind],'%Y.%m.%d_%H:%M:%S_TAI') - dtai - dltt)
+            print('PHI DATE-AVG:',t_obs)
+        s45 = client.export(name_h,protocol='fits')
+        hmi_map = sunpy.map.Map(s45.urls.url[0],cache=False)
+        cache_dir = sunpy.data.CACHE_DIR+'/'
+        hmi_name = cache_dir + s45.urls.url[0].split("/")[-1]
 
     if verbose:
         hmi_map.peek()
@@ -2302,7 +2322,7 @@ def downloadClosestHMI(ht,t_obs,jsoc_email,verbose=False,path=False,cad='45'):
         return hmi_map
 
 
-def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undistortion = False, logpol=False, allDID=False,verbose=False, deriv = True, values_only = False, subregion = None, crota_manual_correction = 0.15):
+def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undistortion = False, logpol=False, allDID=False,verbose=False, deriv = True, values_only = False, subregion = None, crota_manual_correction = 0.15, hmi_file = None):
     """This function saves new version of the fits file with updated WCS.
     It works by correlating HRT data on remapped HMI data. 
     This function exports the nearest HMI data from JSOC. [Not downloaded to out_dir]
@@ -2415,7 +2435,15 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undisto
         t_obs = datetime.datetime.fromisoformat(ht['DATE-AVG'])
     
     try:
-        hmi_map, cache_dir, hmi_name = downloadClosestHMI(ht,t_obs,jsoc_email,verbose,True)
+        if hmi_file is None:
+            hmi_map, cache_dir, hmi_name = downloadClosestHMI(ht,t_obs,jsoc_email,verbose,True)
+        else:
+            if os.path.isfile(hmi_file):
+                hmi_map = sunpy.map.Map(hmi_file)
+                hmi_name = hmi_file.split('/')[-1]
+            elif os.path.isdir(hmi_file):
+                hmi_map, cache_dir, hmi_name = downloadClosestHMI(ht,t_obs,jsoc_email,verbose,True, hmi_path=hmi_file)
+
     except Exception as e:
         print("Issue with downloading HMI. The code stops here. Restults obtained so far will be saved. This was the error:")
         print(e)
@@ -2583,7 +2611,7 @@ def WCS_correction(file_name,jsoc_email,dir_out='./',remapping = 'remap',undisto
         ax2.coords[0].grid_lines_kwargs['edgecolor'] = 'k'
         ax2.coords[1].grid_lines_kwargs['edgecolor'] = 'k'
     
-    if os.path.isfile(hmi_name):
+    if os.path.isfile(hmi_name) and hmi_file is None:
         os.remove(hmi_name)
         import sqlite3
         # creating file path
@@ -3169,9 +3197,22 @@ def show_image_array(arr, hdr, grayscales, panel_sz=3.3, row_labels=None,
 
     return fig
 
-def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stokes=True):
+def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stokes=True, **kwargs):
     """
     Generate standard plots for pipeline results
+
+    kwargs = {
+        'icnt_cmap':'gist_heat',
+        'vlos_cmap':cmr.fusion.reversed(),
+        'blos_cmap':hmimag,
+        'binc_cmap':cmr.fusion,
+        'bmag_cmap':bmag_cmap(), # 'gnuplot_r'
+        'bazi_cmap':'hsv',
+        'panel_sz': 4,
+        'dpi': 300,
+        'rows': 2,
+        'columns': 3,
+    }
     """
 
     import matplotlib.pyplot as plt
@@ -3196,9 +3237,25 @@ def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stok
 
     import cmasher as cmr
 
+    
     pipe_dir = os.path.realpath(__file__)
     pipe_dir = pipe_dir.split('src/')[0]
     hmimag = LinearSegmentedColormap.from_list('hmimag', np.loadtxt(pipe_dir+'csv/hmimag.csv',delimiter=','), N=256)
+
+    default_params = {
+        'icnt_cmap':'gist_heat',
+        'vlos_cmap':cmr.fusion.reversed(),
+        'blos_cmap':hmimag,
+        'binc_cmap':cmr.fusion,
+        'bmag_cmap':bmag_cmap(), # 'gnuplot_r'
+        'bazi_cmap':'hsv',
+        'panel_sz': 4,
+        'dpi': 300,
+        'rows': 2,
+        'columns': 3,
+    }
+
+    params = {**default_params, **kwargs}
 
     file_n = os.listdir(path)
     if type(did) != str:
@@ -3248,10 +3305,10 @@ def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stok
     # # -----------------------------------------------------------------------------
 
     # Plot parameters
-    panel_sz = 4
-    dpi = 300
-    rows = 2
-    columns = 3
+    panel_sz = params['panel_sz']
+    dpi = params['dpi']
+    rows = params['rows']
+    columns = params['columns']
 
     fig, axs = plt.subplots(
         rows, columns,
@@ -3262,7 +3319,7 @@ def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stok
 
     # Continuum intensity
     ax = axs[0, 0]
-    im = ax.imshow(dat['icnt'], cmap='gist_heat', vmin=0.2, vmax=1.2,interpolation='none')
+    im = ax.imshow(dat['icnt'], cmap=params['icnt_cmap'], vmin=0.2, vmax=1.2,interpolation='none')
     dataset_colorbar(ax,im,"right")
     ax.set_title('Continuum intensity')
 
@@ -3270,31 +3327,31 @@ def plot_l2_pdf(path,did,version=None,save_output=True,plot_noise=True,plot_stok
     ax = axs[0, 1]
     shape = dat['vlos'].shape
     avg = dat['vlos'][int(shape[0]//4):-int(shape[0]//4),int(shape[1]//4):-int(shape[1]//4)].mean()
-    im = ax.imshow(dat['vlos'], cmap=cmr.fusion.reversed(), vmin=-2+avg, vmax=2+avg,interpolation='none')
+    im = ax.imshow(dat['vlos'], cmap=params['vlos_cmap'], vmin=-2+avg, vmax=2+avg,interpolation='none')
     dataset_colorbar(ax,im,"right", label='km/s')
     ax.set_title('LoS velocity')
 
     # BLOS
     ax = axs[0, 2]
-    im = ax.imshow(dat['blos'], cmap=hmimag, vmin=-1500, vmax=1500,interpolation='none')
+    im = ax.imshow(dat['blos'], cmap=params['blos_cmap'], vmin=-1500, vmax=1500,interpolation='none')
     dataset_colorbar(ax,im,"right", label='G')
     ax.set_title('LoS magnetic field')
 
     # B inclination
     ax = axs[1, 0]
-    im = ax.imshow(dat['binc'], cmap=cmr.fusion, vmin=0, vmax=180,interpolation='none')
+    im = ax.imshow(dat['binc'], cmap=params['binc_cmap'], vmin=0, vmax=180,interpolation='none')
     dataset_colorbar(ax,im,"right", label='°')
     ax.set_title('Magn. field inclination')
 
     # B
     ax = axs[1, 1]
-    im = ax.imshow(dat['bmag'], cmap=bmag_cmap(), vmin=0, vmax=3000,interpolation='none')
+    im = ax.imshow(dat['bmag'], cmap=params['bmag_cmap'], vmin=0, vmax=3000,interpolation='none')
     dataset_colorbar(ax,im,"right", label='G')
     ax.set_title('Magn. field strength')
 
     # B azimuth
     ax = axs[1, 2]
-    im = ax.imshow(dat['bazi'], cmap='hsv', vmin=0, vmax=180,interpolation='none')
+    im = ax.imshow(dat['bazi'], cmap=params['bazi_cmap'], vmin=0, vmax=180,interpolation='none')
     dataset_colorbar(ax,im,"right", label='°')
     ax.set_title('Magn. field azimuth')
 

@@ -685,8 +685,8 @@ def phihrt_pipe(input_json_file):
         for hdr in hdr_arr:
             hdr['CAL_PRE'] = prefilter_f
         
-        if out_intermediate:
-            data_PFc = data.copy()  # DC 20211116
+        if out_intermediate and ~hot_px_mask:
+            data_PFc = data.copy()
 
         printc('--------------------------------------------------------------',bcolors.OKGREEN)
         printc(f"------------- Prefilter correction time: {np.round(time.perf_counter() - start_time,3)} seconds",bcolors.OKGREEN)
@@ -722,6 +722,8 @@ def phihrt_pipe(input_json_file):
         data = hot_pixel_mask(data, rows, cols)
         print(" ")
         printc('-->>>>>>> Hot Pixel Mask',color=bcolors.OKGREEN)
+        if out_intermediate and prefilter_c:
+            data_PFc = data.copy()
         
     else:
         printc('-->>>>>>> No hot pixel mask',color=bcolors.WARNING)
@@ -1264,7 +1266,31 @@ def phihrt_pipe(input_json_file):
             file_suffix = 'stokes_noPSF'
             tmp = data_not_deconvolved[:,:,:,:,count]
             tmp = np.moveaxis(tmp, [-1,-2], [0,1])
-            write_out_intermediate(tmp, hdr_arr[count], history_str, scan, hdr_arr[count]['PHIDATID'], file_suffix, vrs, out_dir, bunit = 'I_CONT', btype = 'STOKES unrec')
+            unrec_f= create_output_filenames(scan, hdr_arr[count]['PHIDATID'], version = vrs, gzip = True)[0].replace('stokes','unrec')
+            
+            hdr_unrec = hdr_arr[count].copy()
+            hdr_unrec['DATE'] = ntime.strftime("%Y-%m-%dT%H:%M:%S")
+            hdr_unrec['FILENAME'] = unrec_f
+            hdr_unrec['LEVEL'] = 'L2'
+            hdr_unrec['BTYPE'] = 'STOKES unreconstructed'
+            hdr_unrec['BUNIT'] = 'I_CONT'
+            hdr_unrec['DATAMIN'] = round(np.min(data_not_deconvolved[:,:,:,:,count]),1)
+            hdr_unrec['DATAMAX'] = round(np.max(data_not_deconvolved[:,:,:,:,count]),1)
+            if cavity_c:
+                hdr_unrec['CAL_CAVM'] = cavity_f
+            hdr_unrec = data_hdr_kw(hdr_unrec, data_not_deconvolved[:,:,:,:,count]) #add datamedn, datamean etc
+            
+            hdr_unrec['HISTORY'] = f"Version: {version}. Dark: {dark_c}. Prefilter: {prefilter_c}. Flat: {flat_c}, Unsharp: {clean_f}. Flat norm: {norm_f}. I->QUV ctalk: {ItoQUV}. PSF deconvolution: False."
+            
+            with fits.open(scan) as hdu_list:
+                print(f"Writing out stokes file as: {unrec_f}")
+                tmp = data_not_deconvolved[:,:,:,:,count].astype(np.float32)
+                hdu_list[0].data = np.moveaxis(tmp, [-1,-2], [0,1]) #want, 6,4,y,x to be consistent with FDT
+                hdu_list[0].header = hdr_unrec #update the calibration keywords
+                hdu_list[0].header.comments['NAXIS3'] = 'number of Stokes parameters (I, Q, U, V)'
+                hdu_list[0].header.comments['NAXIS4'] = 'number of sampled wavelengths'
+                hdu_list.writeto(out_dir + unrec_f, overwrite=True)  
+
         
     if out_ancillary:
         print(" ")
@@ -1336,8 +1362,8 @@ def phihrt_pipe(input_json_file):
             hdr_arr[count]['LEVEL'] = 'L2'
             hdr_arr[count]['BTYPE'] = 'STOKES'
             hdr_arr[count]['BUNIT'] = 'I_CONT'
-            hdr_arr[count]['DATAMIN'] = int(np.min(data[:,:,:,:,count]))
-            hdr_arr[count]['DATAMAX'] = int(np.max(data[:,:,:,:,count]))
+            hdr_arr[count]['DATAMIN'] = round(np.min(data[:,:,:,:,count]),1)
+            hdr_arr[count]['DATAMAX'] = round(np.max(data[:,:,:,:,count]),1)
             if cavity_c:
                 hdr_arr[count]['CAL_CAVM'] = cavity_f
             hdr_arr[count] = data_hdr_kw(hdr_arr[count], data[:,:,:,:,count]) #add datamedn, datamean etc
