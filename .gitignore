@@ -72,3 +72,6 @@ rte_inter.py
 csv/2023_PD_result_*.csv
 p-milos*
 p-milos*/
+test_ind_functions.ipynb
+pymilos/milos.bob
+2022-10-12_hardi_V12.json
